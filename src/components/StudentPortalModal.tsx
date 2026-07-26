@@ -26,8 +26,10 @@ import {
   LogOut,
   SlidersHorizontal,
   Check,
-  Volume2
+  Volume2,
+  Loader2
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface StudentPortalModalProps {
   isOpen: boolean;
@@ -76,163 +78,6 @@ interface NotificationItem {
   read: boolean;
 }
 
-const MENU_ITEMS: FoodItem[] = [
-  // Counter A - Main Meals
-  {
-    id: 'item-1',
-    name: 'Special Chicken Biryani',
-    counter: 'Counter A',
-    counterName: 'Counter A (Main Meals)',
-    price: 160,
-    prepTime: '8 mins',
-    rating: 4.9,
-    category: 'Main Meals',
-    description: 'Aromatic Dum Biryani served with spicy Mirchi ka Salan & chilled Onion Raita.',
-    image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=600&q=80',
-    popular: true,
-  },
-  {
-    id: 'item-2',
-    name: 'Paneer Butter Masala Thali',
-    counter: 'Counter A',
-    counterName: 'Counter A (Main Meals)',
-    price: 140,
-    prepTime: '7 mins',
-    rating: 4.8,
-    category: 'Main Meals',
-    description: 'Creamy Paneer Butter Masala, 2 Butter Phulkas, Dal Tadka, Jeera Rice & Gulab Jamun.',
-    image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&q=80',
-  },
-  {
-    id: 'item-3',
-    name: 'Chole Bhature Combo',
-    counter: 'Counter A',
-    counterName: 'Counter A (Main Meals)',
-    price: 110,
-    prepTime: '6 mins',
-    rating: 4.7,
-    category: 'Main Meals',
-    description: '2 Fluffy Golden Bhatures served with authentic Amritsari Chole & fried green chilli.',
-    image: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=600&q=80',
-  },
-
-  // Counter B - Fast Food
-  {
-    id: 'item-4',
-    name: 'Cheese Veg Burger',
-    counter: 'Counter B',
-    counterName: 'Counter B (Fast Food)',
-    price: 110,
-    prepTime: '6 mins',
-    rating: 4.8,
-    category: 'Fast Food',
-    description: 'Crispy herb potato patty topped with molten cheddar cheese, mayo & fresh lettuce.',
-    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&q=80',
-    popular: true,
-  },
-  {
-    id: 'item-5',
-    name: 'Loaded Peri Peri Fries',
-    counter: 'Counter B',
-    counterName: 'Counter B (Fast Food)',
-    price: 90,
-    prepTime: '5 mins',
-    rating: 4.9,
-    category: 'Fast Food',
-    description: 'Golden skin-on fries tossed in hot spicy Peri Peri seasoning drizzled with jalapeno cheese.',
-    image: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=600&q=80',
-  },
-  {
-    id: 'item-6',
-    name: 'Woodfired Pizza Slice',
-    counter: 'Counter B',
-    counterName: 'Counter B (Fast Food)',
-    price: 130,
-    prepTime: '8 mins',
-    rating: 4.8,
-    category: 'Fast Food',
-    description: 'Artisanal sourdough base topped with fresh mozzarella, sun-dried tomatoes & fresh basil.',
-    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=80',
-  },
-
-  // Counter C - Tea & Coffee
-  {
-    id: 'item-7',
-    name: 'Special Cold Coffee w/ Ice Cream',
-    counter: 'Counter C',
-    counterName: 'Counter C (Tea & Coffee)',
-    price: 75,
-    prepTime: '3 mins',
-    rating: 4.9,
-    category: 'Beverages',
-    description: 'Thick espresso blend topped with a scoop of Madagascar vanilla ice cream & chocolate fudge.',
-    image: 'https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=600&q=80',
-    popular: true,
-  },
-  {
-    id: 'item-8',
-    name: 'Kullad Masala Chai',
-    counter: 'Counter C',
-    counterName: 'Counter C (Tea & Coffee)',
-    price: 25,
-    prepTime: '2 mins',
-    rating: 4.9,
-    category: 'Beverages',
-    description: 'Authentic clay-pot brewed tea infused with fresh ginger, cardamom & crushed cloves.',
-    image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=600&q=80',
-  },
-  {
-    id: 'item-9',
-    name: 'Iced Matcha Vanilla Latte',
-    counter: 'Counter C',
-    counterName: 'Counter C (Tea & Coffee)',
-    price: 95,
-    prepTime: '3 mins',
-    rating: 4.8,
-    category: 'Beverages',
-    description: 'Japanese ceremonial grade matcha whisked with oat milk and Madagascar vanilla syrup.',
-    image: 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=600&q=80',
-  },
-
-  // Counter D - Desserts & South Indian
-  {
-    id: 'item-10',
-    name: 'Butter Masala Dosa',
-    counter: 'Counter D',
-    counterName: 'Counter D (South Indian & Desserts)',
-    price: 80,
-    prepTime: '5 mins',
-    rating: 4.9,
-    category: 'South Indian',
-    description: 'Golden crispy crepe cooked in pure Amul butter, filled with spiced potato masala & chutney combo.',
-    image: 'https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=600&q=80',
-    popular: true,
-  },
-  {
-    id: 'item-11',
-    name: 'Fresh Watermelon Juice',
-    counter: 'Counter D',
-    counterName: 'Counter D (South Indian & Desserts)',
-    price: 50,
-    prepTime: '2 mins',
-    rating: 4.8,
-    category: 'Juices',
-    description: '100% cold-pressed watermelon juice garnished with fresh mint & black salt.',
-    image: 'https://images.unsplash.com/photo-1589733955941-5eeaf752f6dd?w=600&q=80',
-  },
-  {
-    id: 'item-12',
-    name: 'Sizzling Brownie with Ice Cream',
-    counter: 'Counter D',
-    counterName: 'Counter D (South Indian & Desserts)',
-    price: 110,
-    prepTime: '5 mins',
-    rating: 4.9,
-    category: 'Desserts',
-    description: 'Warm walnut brownie served on a sizzling hot cast iron plate with vanilla ice cream & dark fudge.',
-    image: 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=600&q=80',
-  }
-];
 
 export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   isOpen,
@@ -249,74 +94,92 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
-  // Cart & Order
-  const [cart, setCart] = useState<{ item: FoodItem; quantity: number }[]>([
-    { item: MENU_ITEMS[0], quantity: 1 }
-  ]);
+  const [menuItems, setMenuItems] = useState<FoodItem[]>([]);
+  const [cart, setCart] = useState<{ item: FoodItem; quantity: number }[]>([]);
   const [isRazorpayModalOpen, setIsRazorpayModalOpen] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'wallet' | 'netbanking'>('upi');
   const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
 
   // Active Order State
-  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>({
-    orderId: 'FDX-849201',
-    counter: 'Counter B',
-    lockerNumber: 'Locker #04',
-    items: [
-      { name: 'Cheese Veg Burger', quantity: 1, price: 110 },
-      { name: 'Loaded Peri Peri Fries', quantity: 1, price: 90 },
-    ],
-    total: 200,
-    qrCode: 'FOODEXA-FDX-849201-CHRKNG2026',
-    status: 'Preparing',
-    createdAt: Date.now() - 25000, // 25s ago
-    timeRemaining: '5 mins',
-    queuePosition: 2,
-  });
+  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
 
   // Past Orders History
-  const [orderHistory, setOrderHistory] = useState<ActiveOrder[]>([
-    {
-      orderId: 'FDX-710492',
-      counter: 'Counter A',
-      lockerNumber: 'Locker #09',
-      items: [{ name: 'Special Chicken Biryani', quantity: 1, price: 160 }],
-      total: 160,
-      qrCode: 'FOODEXA-FDX-710492-CHRKNG2026',
-      status: 'Collected',
-      createdAt: Date.now() - 86400000,
-      timeRemaining: '0 mins',
-      queuePosition: 0,
-    }
-  ]);
+  const [orderHistory, setOrderHistory] = useState<ActiveOrder[]>([]);
 
   // Notifications
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: 'n1',
-      title: 'Counter B Ready for Pickup',
-      message: 'Order #FDX-849201 is currently being prepared at Counter B (Locker #04).',
-      time: '10 mins ago',
-      type: 'order',
-      read: false,
-    },
-    {
-      id: 'n2',
-      title: 'Exam Special 20% OFF Offer',
-      message: 'Use coupon EXAM20 at Counter B Fast Food to get 20% flat discount!',
-      time: '1 hour ago',
-      type: 'offer',
-      read: true,
-    },
-    {
-      id: 'n3',
-      title: 'New QR Pod Lockers Installed',
-      message: '30 new contact-free QR pickup lockers are now active at Block 3 Dining Hall.',
-      time: '1 day ago',
-      type: 'announcement',
-      read: true,
-    }
-  ]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
+  // Data Fetching
+  const [loadingData, setLoadingData] = useState(true);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const fetchData = async () => {
+      setLoadingData(true);
+      try {
+        const [{ data: menu }, { data: orders }, { data: notifs }] = await Promise.all([
+          supabase.from('menu_items').select('*'),
+          supabase.from('orders').select('*').order('created_at', { ascending: false }),
+          supabase.from('notifications').select('*').order('created_at', { ascending: false })
+        ]);
+        
+        if (menu) {
+          setMenuItems(menu.map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            counter: m.counter,
+            counterName: m.counter_name || m.counter,
+            price: m.price,
+            prepTime: m.prep_time || '5 mins',
+            rating: m.rating || 4.5,
+            category: m.category,
+            description: m.description,
+            image: m.image_url,
+            popular: m.popular || false
+          })));
+        }
+        
+        if (orders) {
+          const parsedOrders = orders.map((o: any) => ({
+            orderId: o.order_id || o.id,
+            counter: o.counter,
+            lockerNumber: o.locker_number,
+            items: o.items || [],
+            total: o.total_amount,
+            qrCode: o.qr_code,
+            status: o.status,
+            createdAt: new Date(o.created_at).getTime(),
+            timeRemaining: '5 mins',
+            queuePosition: 2
+          }));
+          
+          const active = parsedOrders.filter((o: any) => o.status !== 'Collected' && o.status !== 'Cancelled');
+          const past = parsedOrders.filter((o: any) => o.status === 'Collected' || o.status === 'Cancelled');
+          
+          setActiveOrder(active.length > 0 ? active[0] : null);
+          setOrderHistory(past);
+        }
+        
+        if (notifs) {
+          setNotifications(notifs.map((n: any) => ({
+            id: n.id,
+            title: n.title,
+            message: n.message,
+            time: new Date(n.created_at).toLocaleTimeString(),
+            type: n.type || 'announcement',
+            read: n.read || false
+          })));
+        }
+      } catch (err) {
+        console.error('Error fetching portal data:', err);
+      } finally {
+        setLoadingData(false);
+      }
+    };
+    
+    fetchData();
+  }, [isOpen]);
 
   // Cancellation Timer calculation
   const [secondsSinceOrder, setSecondsSinceOrder] = useState<number>(30);
@@ -339,7 +202,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   if (!isOpen) return null;
 
   // Filtered Food items
-  const filteredItems = MENU_ITEMS.filter((item) => {
+  const filteredItems = menuItems.filter((item) => {
     const matchesCounter = selectedCounter === 'ALL' || item.counter === selectedCounter;
     const matchesCategory = selectedCategory === 'ALL' || item.category === selectedCategory;
     const matchesSearch =
@@ -381,48 +244,65 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
 
   const handleRazorpayPayment = () => {
     setIsProcessingPayment(true);
-    setTimeout(() => {
-      setIsProcessingPayment(false);
-      setIsRazorpayModalOpen(false);
-
+    setTimeout(async () => {
       const randomOrderId = 'FDX-' + Math.floor(100000 + Math.random() * 900000);
       const firstCounter = cart[0]?.item.counter || 'Counter B';
       const lockerNum = Math.floor(1 + Math.random() * 12);
 
-      const newOrder: ActiveOrder = {
-        orderId: randomOrderId,
+      const newOrderData = {
+        order_id: randomOrderId,
         counter: firstCounter,
-        lockerNumber: `Locker #${lockerNum < 10 ? '0' + lockerNum : lockerNum}`,
+        locker_number: `Locker #${lockerNum < 10 ? '0' + lockerNum : lockerNum}`,
         items: cart.map((c) => ({ name: c.item.name, quantity: c.quantity, price: c.item.price })),
-        total: cartTotal,
-        qrCode: `FOODEXA-${randomOrderId}-${institutionCode}`,
-        status: 'Order Received',
-        createdAt: Date.now(),
-        timeRemaining: '7 mins',
-        queuePosition: 3,
+        total_amount: cartTotal,
+        qr_code: `FOODEXA-${randomOrderId}-${institutionCode}`,
+        status: 'Order Received'
       };
 
-      setActiveOrder(newOrder);
-      setSecondsSinceOrder(0);
-      setCart([]);
-      setActiveTab('orders');
+      try {
+        await supabase.from('orders').insert([newOrderData]);
+        
+        const newOrder: ActiveOrder = {
+          orderId: newOrderData.order_id,
+          counter: newOrderData.counter,
+          lockerNumber: newOrderData.locker_number,
+          items: newOrderData.items,
+          total: newOrderData.total_amount,
+          qrCode: newOrderData.qr_code,
+          status: newOrderData.status as OrderStatus,
+          createdAt: Date.now(),
+          timeRemaining: '7 mins',
+          queuePosition: 3,
+        };
 
-      // Add Notification
-      setNotifications((prev) => [
-        {
-          id: 'n-' + Date.now(),
-          title: `Order #${randomOrderId} Placed`,
-          message: `Your payment of ₹${cartTotal} was verified by Razorpay. Sent to ${firstCounter}.`,
-          time: 'Just now',
-          type: 'order',
-          read: false,
-        },
-        ...prev,
-      ]);
+        setActiveOrder(newOrder);
+        setSecondsSinceOrder(0);
+        setCart([]);
+        setActiveTab('orders');
+
+        // Add Notification locally (could also insert to DB)
+        setNotifications((prev) => [
+          {
+            id: 'n-' + Date.now(),
+            title: `Order #${randomOrderId} Placed`,
+            message: `Your payment of ₹${cartTotal} was verified by Razorpay. Sent to ${firstCounter}.`,
+            time: 'Just now',
+            type: 'order',
+            read: false,
+          },
+          ...prev,
+        ]);
+      } catch (err) {
+        console.error("Payment sync to DB failed", err);
+        alert('Failed to process order. Please try again.');
+      } finally {
+        setIsProcessingPayment(false);
+        setIsRazorpayModalOpen(false);
+      }
     }, 1600);
   };
 
-  const handleCancelOrder = () => {
+  const handleCancelOrder = async () => {
     if (!activeOrder) return;
 
     const secondsPassed = (Date.now() - activeOrder.createdAt) / 1000;
@@ -431,21 +311,31 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
       return;
     }
 
-    const cancelledOrder = { ...activeOrder, status: 'Cancelled' as OrderStatus };
-    setOrderHistory((prev) => [cancelledOrder, ...prev]);
-    setActiveOrder(null);
+    try {
+      await supabase
+        .from('orders')
+        .update({ status: 'Cancelled' })
+        .eq('order_id', activeOrder.orderId);
 
-    setNotifications((prev) => [
-      {
-        id: 'n-' + Date.now(),
-        title: `Order #${cancelledOrder.orderId} Cancelled`,
-        message: `Refund of ₹${cancelledOrder.total} initiated back to your original payment method.`,
-        time: 'Just now',
-        type: 'order',
-        read: false,
-      },
-      ...prev,
-    ]);
+      const cancelledOrder = { ...activeOrder, status: 'Cancelled' as OrderStatus };
+      setOrderHistory((prev) => [cancelledOrder, ...prev]);
+      setActiveOrder(null);
+
+      setNotifications((prev) => [
+        {
+          id: 'n-' + Date.now(),
+          title: `Order #${cancelledOrder.orderId} Cancelled`,
+          message: `Refund of ₹${cancelledOrder.total} initiated back to your original payment method.`,
+          time: 'Just now',
+          type: 'order',
+          read: false,
+        },
+        ...prev,
+      ]);
+    } catch (err) {
+      console.error("Cancellation failed", err);
+      alert("Failed to cancel order.");
+    }
   };
 
   const advanceKitchenStatus = (nextStatus: OrderStatus) => {
@@ -481,15 +371,15 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
     setLxMessage(`Student: "${cmd}"`);
 
     setTimeout(() => {
-      if (cmd.toLowerCase().includes('biryani')) {
-        addToCart(MENU_ITEMS[0]);
-        setLxMessage(`LX AI: "Added Special Chicken Biryani from Counter A to your cart. Pickup ready in 8 mins!"`);
-      } else if (cmd.toLowerCase().includes('burger')) {
-        addToCart(MENU_ITEMS[3]);
-        setLxMessage(`LX AI: "Added Cheese Veg Burger from Counter B to your cart. Pickup ready in 6 mins!"`);
-      } else {
-        addToCart(MENU_ITEMS[7]);
-        setLxMessage(`LX AI: "Found recommendation at Counter C and added Kullad Masala Chai to your order!"`);
+      if (cmd.toLowerCase().includes('biryani') && menuItems.length > 0) {
+        addToCart(menuItems[0]);
+        setLxMessage(`LX AI: "Added ${menuItems[0].name} to your cart."`);
+      } else if (cmd.toLowerCase().includes('burger') && menuItems.length > 3) {
+        addToCart(menuItems[3]);
+        setLxMessage(`LX AI: "Added ${menuItems[3].name} to your cart."`);
+      } else if (menuItems.length > 0) {
+        addToCart(menuItems[0]);
+        setLxMessage(`LX AI: "Found recommendation and added it to your order!"`);
       }
       setIsLxVoiceActive(false);
     }, 1100);
@@ -699,7 +589,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
               <div className="space-y-3">
                 <h3 className="text-sm font-bold text-white">Recommended for Your Campus Break</h3>
                 <div className="grid sm:grid-cols-3 gap-4">
-                  {MENU_ITEMS.slice(0, 3).map((food) => (
+                  {menuItems.slice(0, 3).map((food) => (
                     <div
                       key={food.id}
                       className="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 space-y-3 hover:border-emerald-500/40 transition-all flex flex-col justify-between"

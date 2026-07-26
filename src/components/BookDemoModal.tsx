@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, CheckCircle2, ArrowRight, Building2, Sparkles } from 'lucide-react';
+import { X, CheckCircle2, ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import { DemoFormData } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface BookDemoModalProps {
   isOpen: boolean;
@@ -9,25 +10,66 @@ interface BookDemoModalProps {
 
 export const BookDemoModal: React.FC<BookDemoModalProps> = ({ isOpen, onClose }) => {
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<DemoFormData>({
-    fullName: 'Alex Paul',
-    email: 'alex@gmail.com',
+    fullName: '',
+    email: '',
     role: 'University Admin',
-    institutionName: 'Christ (Deemed to be University) - Kengeri Campus',
+    institutionName: '',
     campusStudentCount: '5,000 - 10,000 Students',
     preferredDate: '',
-    notes: 'We would like to digitize campus food ordering, implement QR pickup, and manage multiple campus food courts with Foodexa.',
+    notes: '',
   });
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setError(null);
+    setLoading(true);
+
+    try {
+      const { error: supabaseError } = await supabase
+        .from('demo_requests')
+        .insert([
+          {
+            full_name: formData.fullName,
+            email: formData.email,
+            role: formData.role,
+            institution_name: formData.institutionName,
+            campus_student_count: formData.campusStudentCount,
+            preferred_date: formData.preferredDate || null,
+            notes: formData.notes || null,
+            status: 'pending',
+            submitted_at: new Date().toISOString(),
+          },
+        ]);
+
+      if (supabaseError) {
+        throw new Error(supabaseError.message);
+      }
+
+      setSubmitted(true);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to submit demo request. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleReset = () => {
     setSubmitted(false);
+    setError(null);
+    setFormData({
+      fullName: '',
+      email: '',
+      role: 'University Admin',
+      institutionName: '',
+      campusStudentCount: '5,000 - 10,000 Students',
+      preferredDate: '',
+      notes: '',
+    });
     onClose();
   };
 
@@ -59,6 +101,13 @@ export const BookDemoModal: React.FC<BookDemoModalProps> = ({ isOpen, onClose })
               </p>
             </div>
 
+            {/* Error Message */}
+            {error && (
+              <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
+                {error}
+              </div>
+            )}
+
             <div className="space-y-3 pt-2">
               
               <div>
@@ -80,7 +129,7 @@ export const BookDemoModal: React.FC<BookDemoModalProps> = ({ isOpen, onClose })
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="e.g. alex@gmail.com"
+                  placeholder="e.g. admin@christuniversity.in"
                   className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
                 />
               </div>
@@ -107,7 +156,7 @@ export const BookDemoModal: React.FC<BookDemoModalProps> = ({ isOpen, onClose })
                     required
                     value={formData.institutionName}
                     onChange={(e) => setFormData({ ...formData, institutionName: e.target.value })}
-                    placeholder="Christ (Deemed to be University) - Kengeri Campus"
+                    placeholder="e.g. Christ University"
                     className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
                   />
                 </div>
@@ -133,7 +182,7 @@ export const BookDemoModal: React.FC<BookDemoModalProps> = ({ isOpen, onClose })
                   rows={3}
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="We would like to digitize campus food ordering, implement QR pickup, and manage multiple campus food courts with Foodexa."
+                  placeholder="Describe your campus dining goals, number of food courts, etc."
                   className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
                 />
               </div>
@@ -142,10 +191,20 @@ export const BookDemoModal: React.FC<BookDemoModalProps> = ({ isOpen, onClose })
 
             <button
               type="submit"
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer shadow-lg shadow-emerald-500/20"
+              disabled={loading}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer shadow-lg shadow-emerald-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <span>Confirm Demo Booking</span>
-              <ArrowRight className="w-4 h-4 text-slate-950" />
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                  <span>Submitting…</span>
+                </>
+              ) : (
+                <>
+                  <span>Confirm Demo Booking</span>
+                  <ArrowRight className="w-4 h-4 text-slate-950" />
+                </>
+              )}
             </button>
 
           </form>
@@ -156,7 +215,7 @@ export const BookDemoModal: React.FC<BookDemoModalProps> = ({ isOpen, onClose })
             </div>
             <h3 className="text-2xl font-extrabold text-white">Demo Request Confirmed!</h3>
             <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
-              Thank you, <strong className="text-white">{formData.fullName}</strong>. A FOODEXA Campus Director will contact you at <strong className="text-emerald-300">{formData.email}</strong> within 24 hours to schedule your live demonstration for Christ University.
+              Thank you, <strong className="text-white">{formData.fullName}</strong>. A FOODEXA Campus Director will contact you at <strong className="text-emerald-300">{formData.email}</strong> within 24 hours to schedule your live demonstration.
             </p>
             <button
               onClick={handleReset}

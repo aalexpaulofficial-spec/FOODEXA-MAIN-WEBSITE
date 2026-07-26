@@ -46,26 +46,25 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
     setLoading(true);
 
     try {
+      // Build address from campus + city + state + country fields
+      const addressParts = [formData.campus, formData.city, formData.state, formData.country]
+        .filter(Boolean)
+        .join(', ');
+
+      // Real institution_requests columns (verified from live Supabase schema):
+      // id (auto), institution_name, institution_type, address, contact_person,
+      // admin_email, phone, status (default: pending), rejection_reason, created_at, updated_at
       const { error: supabaseError } = await supabase
         .from('institution_requests')
         .insert([
           {
             institution_name: formData.institutionName,
-            campus: formData.campus,
-            city: formData.city,
-            state: formData.state,
-            country: formData.country,
-            institution_email: formData.institutionEmail,
+            institution_type: formData.role, // role maps to institution_type
+            address: addressParts || formData.city || formData.state || 'Not specified',
             contact_person: formData.contactPerson,
-            role: formData.role,
-            phone_number: formData.phoneNumber,
-            institution_website: formData.institutionWebsite || null,
-            student_population: formData.studentPopulation,
-            food_courts_count: parseInt(formData.foodCourtsCount) || 1,
-            vendors_count: parseInt(formData.vendorsCount) || 1,
-            message: formData.message || null,
+            admin_email: formData.institutionEmail,
+            phone: formData.phoneNumber,
             status: 'pending',
-            submitted_at: new Date().toISOString(),
           },
         ]);
 
@@ -80,6 +79,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
       setLoading(false);
     }
   };
+
 
   const handleClose = () => {
     setSubmitted(false);

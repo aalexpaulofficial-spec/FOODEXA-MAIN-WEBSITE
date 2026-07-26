@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2 } from 'lucide-react';
+import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Loader2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -16,6 +17,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 }) => {
   const [mode, setMode] = useState<'login' | 'create'>(initialMode);
   const [step, setStep] = useState<'form' | 'otp' | 'success'>('form');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Login state
   const [loginEmail, setLoginEmail] = useState('');
@@ -23,7 +26,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [rememberMe, setRememberMe] = useState(false);
 
   // OTP state
-  const [otpCode, setOtpCode] = useState('849201');
+  const [otpCode, setOtpCode] = useState('');
 
   // Create Student Account state
   const [studentForm, setStudentForm] = useState({
@@ -31,65 +34,189 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     universityEmail: '',
     phone: '',
     programme: '',
-    department: '',
-    semester: '',
-    campusBlock: '',
-    institutionCode: 'CHRKNG2026',
+    institutionCode: '',
     password: '',
     confirmPassword: '',
   });
 
+  // Holds the resolved profile after login/register
+  const [resolvedProfile, setResolvedProfile] = useState<{
+    studentName: string;
+    email: string;
+    code: string;
+  } | null>(null);
+
   if (!isOpen) return null;
-
-  const handleLoginSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setStep('success');
-  };
-
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (studentForm.password !== studentForm.confirmPassword) {
-      alert('Passwords do not match');
-      return;
-    }
-    // Advance to OTP verification
-    setStep('otp');
-  };
-
-  const handleVerifyOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (otpCode.length < 6) {
-      alert('Please enter a valid 6-digit OTP code');
-      return;
-    }
-    setStep('success');
-  };
-
-  const handleDemoStudentLogin = () => {
-    const demoData = {
-      studentName: 'Alex Paul',
-      email: 'alex.paul@christuniversity.in',
-      code: 'CHRKNG2026',
-    };
-    onClose();
-    if (onLoginSuccess) {
-      onLoginSuccess(demoData);
-    }
-  };
 
   const handleReset = () => {
     setStep('form');
+    setError(null);
+    setOtpCode('');
     onClose();
   };
 
+  // ─── LOGIN ─────────────────────────────────────────────────────────────────
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword,
+      });
+
+      if (authError) throw new Error(authError.message);
+
+      const user = data.user;
+      const profile = {
+        studentName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student',
+        email: user?.email || loginEmail,
+        code: user?.user_metadata?.institution_code || '',
+      };
+      setResolvedProfile(profile);
+      setStep('success');
+    } catch (err: any) {
+      setError(err?.message || 'Login failed. Please check your credentials and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── REGISTER (Send OTP) ───────────────────────────────────────────────────
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (studentForm.password !== studentForm.confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+    if (!studentForm.institutionCode.trim()) {
+      setError('Institution Code is required.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Create the user account in Supabase Auth
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: studentForm.universityEmail,
+        password: studentForm.password,
+        options: {
+          data: {
+            full_name: studentForm.fullName,
+            phone: studentForm.phone,
+            programme: studentForm.programme,
+            institution_code: studentForm.institutionCode.toUpperCase(),
+          },
+          emailRedirectTo: undefined, // use OTP flow, not magic link
+        },
+      });
+
+      if (signUpError) throw new Error(signUpError.message);
+
+      // Also insert the student profile into the students table for the institution portal
+      if (data.user) {
+        await supabase.from('students').insert([
+          {
+            auth_user_id: data.user.id,
+            full_name: studentForm.fullName,
+            email: studentForm.universityEmail,
+            phone: studentForm.phone,
+            programme: studentForm.programme,
+            institution_code: studentForm.institutionCode.toUpperCase(),
+            status: 'pending',
+            created_at: new Date().toISOString(),
+          },
+        ]);
+      }
+
+      // Move to OTP verification step
+      setStep('otp');
+    } catch (err: any) {
+      setError(err?.message || 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── VERIFY OTP ────────────────────────────────────────────────────────────
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (otpCode.trim().length < 6) {
+      setError('Please enter the complete 6-digit OTP code.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email: studentForm.universityEmail,
+        token: otpCode.trim(),
+        type: 'signup',
+      });
+
+      if (verifyError) throw new Error(verifyError.message);
+
+      const user = data.user;
+      setResolvedProfile({
+        studentName: studentForm.fullName || user?.email?.split('@')[0] || 'Student',
+        email: studentForm.universityEmail,
+        code: studentForm.institutionCode.toUpperCase(),
+      });
+      setStep('success');
+    } catch (err: any) {
+      setError(err?.message || 'OTP verification failed. Please check the code and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── RESEND OTP ────────────────────────────────────────────────────────────
+  const handleResendOtp = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: studentForm.universityEmail,
+      });
+      if (resendError) throw new Error(resendError.message);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to resend OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── FORGOT PASSWORD ───────────────────────────────────────────────────────
+  const handleForgotPassword = async () => {
+    if (!loginEmail) {
+      setError('Please enter your university email above first, then click Forgot Password.');
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(loginEmail);
+      if (resetError) throw new Error(resetError.message);
+      setError(null);
+      alert(`Password reset instructions sent to ${loginEmail}`);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to send reset email.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── CONTINUE TO PORTAL ────────────────────────────────────────────────────
   const handleContinueToPortal = () => {
     onClose();
-    if (onLoginSuccess) {
-      onLoginSuccess({
-        studentName: studentForm.fullName || 'Alex Paul',
-        email: mode === 'login' ? (loginEmail || 'alex.paul@christuniversity.in') : (studentForm.universityEmail || 'alex.paul@christuniversity.in'),
-        code: studentForm.institutionCode || 'CHRKNG2026',
-      });
+    if (onLoginSuccess && resolvedProfile) {
+      onLoginSuccess(resolvedProfile);
     }
   };
 
@@ -105,6 +232,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
+        {/* ── STEP 1: FORM ── */}
         {step === 'form' && (
           <div>
             {mode === 'login' ? (
@@ -121,6 +249,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Sign in to your FOODEXA student account to order food, manage orders, access QR pickup, and use LX AI.
                   </p>
                 </div>
+
+                {/* Error */}
+                {error && (
+                  <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
+                    {error}
+                  </div>
+                )}
 
                 {/* Login Form */}
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
@@ -160,8 +295,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </label>
                     <button
                       type="button"
-                      onClick={() => alert('Password reset instructions sent to your university email.')}
-                      className="text-emerald-400 font-medium hover:underline cursor-pointer"
+                      onClick={handleForgotPassword}
+                      disabled={loading}
+                      className="text-emerald-400 font-medium hover:underline cursor-pointer disabled:opacity-50"
                     >
                       Forgot Password?
                     </button>
@@ -169,10 +305,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <button
                     type="submit"
-                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                    disabled={loading}
+                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <span>Login</span>
-                    <ArrowRight className="w-4 h-4 text-slate-950" />
+                    {loading ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                    ) : (
+                      <>
+                        <span>Login</span>
+                        <ArrowRight className="w-4 h-4 text-slate-950" />
+                      </>
+                    )}
                   </button>
 
                   {/* Institution Administrator Redirect Link */}
@@ -193,7 +336,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Don't have an account?{' '}
                     <button
                       type="button"
-                      onClick={() => setMode('create')}
+                      onClick={() => { setMode('create'); setError(null); }}
                       className="text-emerald-400 font-bold hover:underline cursor-pointer"
                     >
                       Create Student Account
@@ -213,6 +356,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <h3 className="text-2xl font-extrabold text-white">Create Student Account</h3>
                   <p className="text-xs text-slate-300">Sign up for instant queue skipping, express pickup, and LX AI dining recommendations.</p>
                 </div>
+
+                {/* Error */}
+                {error && (
+                  <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
+                    {error}
+                  </div>
+                )}
 
                 <form onSubmit={handleCreateSubmit} className="space-y-3">
                   <div>
@@ -271,7 +421,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={studentForm.institutionCode}
                         onChange={(e) => setStudentForm({ ...studentForm, institutionCode: e.target.value })}
-                        placeholder="CHRKNG2026"
+                        placeholder="e.g. CHRKNG2026"
                         className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
                       />
                     </div>
@@ -283,6 +433,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <input
                         type="password"
                         required
+                        minLength={6}
                         value={studentForm.password}
                         onChange={(e) => setStudentForm({ ...studentForm, password: e.target.value })}
                         placeholder="••••••••"
@@ -294,6 +445,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <input
                         type="password"
                         required
+                        minLength={6}
                         value={studentForm.confirmPassword}
                         onChange={(e) => setStudentForm({ ...studentForm, confirmPassword: e.target.value })}
                         placeholder="••••••••"
@@ -304,17 +456,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <button
                     type="submit"
-                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md"
+                    disabled={loading}
+                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <span>Proceed to OTP Email Verification</span>
-                    <ArrowRight className="w-4 h-4 text-slate-950" />
+                    {loading ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                    ) : (
+                      <>
+                        <span>Proceed to OTP Email Verification</span>
+                        <ArrowRight className="w-4 h-4 text-slate-950" />
+                      </>
+                    )}
                   </button>
 
                   <div className="pt-2 text-center text-xs text-slate-400">
                     Already have an account?{' '}
                     <button
                       type="button"
-                      onClick={() => setMode('login')}
+                      onClick={() => { setMode('login'); setError(null); }}
                       className="text-emerald-400 font-bold hover:underline cursor-pointer"
                     >
                       Login
@@ -326,7 +485,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         )}
 
-        {/* STEP 2: OTP EMAIL VERIFICATION */}
+        {/* ── STEP 2: OTP EMAIL VERIFICATION ── */}
         {step === 'otp' && (
           <div className="space-y-5">
             <div className="space-y-1 text-center">
@@ -336,9 +495,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <h3 className="text-xl font-extrabold text-white">Verify Your Email OTP</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
                 We sent a 6-digit security code to{' '}
-                <strong className="text-emerald-400">{studentForm.universityEmail || 'alex.paul@christuniversity.in'}</strong>
+                <strong className="text-emerald-400">{studentForm.universityEmail}</strong>
               </p>
             </div>
+
+            {/* Error */}
+            {error && (
+              <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
+                {error}
+              </div>
+            )}
 
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div>
@@ -347,10 +513,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </label>
                 <input
                   type="text"
+                  inputMode="numeric"
                   maxLength={6}
                   required
                   value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value)}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                   className="w-full bg-slate-950 border border-emerald-500/60 focus:border-emerald-400 rounded-2xl py-3 text-center text-xl font-mono tracking-[0.5em] text-emerald-300 font-bold focus:outline-none shadow-inner"
                 />
               </div>
@@ -358,24 +525,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-2 text-xs text-slate-400">
                 <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>
-                  Institution Target: <strong className="text-white">CHRIST (Deemed to be University)</strong> Code: <strong className="text-emerald-400">{studentForm.institutionCode || 'CHRKNG2026'}</strong>
+                  Institution Code: <strong className="text-emerald-400">{studentForm.institutionCode.toUpperCase()}</strong>
                 </span>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                disabled={loading}
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <ShieldCheck className="w-4 h-4 text-slate-950" />
-                <span>Verify & Join Campus Portal</span>
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4 text-slate-950" />
+                    <span>Verify &amp; Join Campus Portal</span>
+                  </>
+                )}
               </button>
 
               <div className="text-center text-xs text-slate-400">
                 Didn't receive code?{' '}
                 <button
                   type="button"
-                  onClick={() => alert('New OTP code re-sent to your university email.')}
-                  className="text-emerald-400 font-bold hover:underline cursor-pointer"
+                  onClick={handleResendOtp}
+                  disabled={loading}
+                  className="text-emerald-400 font-bold hover:underline cursor-pointer disabled:opacity-50"
                 >
                   Resend OTP
                 </button>
@@ -384,7 +559,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         )}
 
-        {/* STEP 3: SUCCESS CONFIRMATION */}
+        {/* ── STEP 3: SUCCESS CONFIRMATION ── */}
         {step === 'success' && (
           <div className="text-center py-6 space-y-4">
             <div className="w-16 h-16 mx-auto rounded-full bg-emerald-950 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shadow-xl">
@@ -394,12 +569,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <h3 className="text-2xl font-extrabold text-white">
                 {mode === 'login' ? 'Logged In Successfully!' : 'Email Verified & Account Joined!'}
               </h3>
-              <p className="text-xs text-emerald-400 font-mono font-semibold">
-                Joined: CHRIST (Deemed to be University) - Kengeri Campus ({studentForm.institutionCode || 'CHRKNG2026'})
-              </p>
+              {resolvedProfile?.code && (
+                <p className="text-xs text-emerald-400 font-mono font-semibold">
+                  Institution Code: {resolvedProfile.code}
+                </p>
+              )}
             </div>
             <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
-              You now have access to Counter A, B, C & D menus, instant Razorpay checkout, and QR pickup lockers for your campus.
+              Welcome, <strong className="text-white">{resolvedProfile?.studentName}</strong>. You now have access to your campus food ordering portal, Razorpay checkout, and QR pickup lockers.
             </p>
             <button
               onClick={handleContinueToPortal}

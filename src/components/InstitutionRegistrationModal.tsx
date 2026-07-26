@@ -1,47 +1,90 @@
 import React, { useState } from 'react';
-import { X, CheckCircle2, ArrowRight, Building2, Sparkles, ShieldCheck } from 'lucide-react';
+import { X, CheckCircle2, ArrowRight, Building2, Loader2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface InstitutionRegistrationModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+const INITIAL_FORM = {
+  institutionName: '',
+  campus: '',
+  city: '',
+  state: '',
+  country: 'India',
+  institutionEmail: '',
+  contactPerson: '',
+  role: 'Institution Administrator',
+  phoneNumber: '',
+  institutionWebsite: '',
+  studentPopulation: '5,000–10,000',
+  foodCourtsCount: '2',
+  vendorsCount: '8',
+  message: '',
+  termsAgreed: false,
+};
+
 export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModalProps> = ({
   isOpen,
   onClose,
 }) => {
   const [submitted, setSubmitted] = useState(false);
-  const [formData, setFormData] = useState({
-    institutionName: '',
-    campus: '',
-    city: '',
-    state: '',
-    country: 'India',
-    institutionEmail: '',
-    contactPerson: '',
-    role: 'Institution Administrator',
-    phoneNumber: '',
-    institutionWebsite: '',
-    studentPopulation: '5,000–10,000',
-    foodCourtsCount: '2',
-    vendorsCount: '8',
-    message: '',
-    termsAgreed: false,
-  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [formData, setFormData] = useState(INITIAL_FORM);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.termsAgreed) {
-      alert('Please agree to Foodexa Terms to proceed.');
+      setError('Please agree to Foodexa Terms & Conditions to proceed.');
       return;
     }
-    setSubmitted(true);
+    setError(null);
+    setLoading(true);
+
+    try {
+      const { error: supabaseError } = await supabase
+        .from('institution_requests')
+        .insert([
+          {
+            institution_name: formData.institutionName,
+            campus: formData.campus,
+            city: formData.city,
+            state: formData.state,
+            country: formData.country,
+            institution_email: formData.institutionEmail,
+            contact_person: formData.contactPerson,
+            role: formData.role,
+            phone_number: formData.phoneNumber,
+            institution_website: formData.institutionWebsite || null,
+            student_population: formData.studentPopulation,
+            food_courts_count: parseInt(formData.foodCourtsCount) || 1,
+            vendors_count: parseInt(formData.vendorsCount) || 1,
+            message: formData.message || null,
+            status: 'pending',
+            submitted_at: new Date().toISOString(),
+          },
+        ]);
+
+      if (supabaseError) {
+        throw new Error(supabaseError.message);
+      }
+
+      setSubmitted(true);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to submit registration. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleClose = () => {
     setSubmitted(false);
+    setError(null);
+    setFormData(INITIAL_FORM);
     onClose();
   };
 
@@ -69,9 +112,16 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                 Register Your Institution
               </h3>
               <p className="text-xs text-slate-300">
-                Digitize your entire campus food court ecosystem with Foodexa AI & Smart Pickups.
+                Digitize your entire campus food court ecosystem with Foodexa AI &amp; Smart Pickups.
               </p>
             </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
+                {error}
+              </div>
+            )}
 
             <div className="grid sm:grid-cols-2 gap-4">
               {/* Institution Name */}
@@ -302,17 +352,27 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                 className="w-4 h-4 rounded bg-slate-950 border-slate-800 text-emerald-400 focus:ring-emerald-500"
               />
               <label htmlFor="agree-terms" className="text-xs text-slate-300 cursor-pointer">
-                I agree to Foodexa Terms & Conditions and Privacy Policy.
+                I agree to Foodexa Terms &amp; Conditions and Privacy Policy.
               </label>
             </div>
 
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer"
+              disabled={loading}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <span>Submit Registration</span>
-              <ArrowRight className="w-4 h-4 text-slate-950" />
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                  <span>Submitting Registration…</span>
+                </>
+              ) : (
+                <>
+                  <span>Submit Registration</span>
+                  <ArrowRight className="w-4 h-4 text-slate-950" />
+                </>
+              )}
             </button>
 
           </form>
@@ -323,7 +383,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
             </div>
             <h3 className="text-2xl font-extrabold text-white">Registration Submitted Successfully.</h3>
             <p className="text-xs text-slate-300 leading-relaxed max-w-md mx-auto">
-              Our team will review your institution and contact you shortly to configure your customized campus portal.
+              Our team will review your institution and contact you at <strong className="text-emerald-400">{formData.institutionEmail}</strong> to configure your customized campus portal.
             </p>
             <button
               onClick={handleClose}

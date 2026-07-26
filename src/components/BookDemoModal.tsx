@@ -17,7 +17,7 @@ export const BookDemoModal: React.FC<BookDemoModalProps> = ({ isOpen, onClose })
     email: '',
     role: 'University Admin',
     institutionName: '',
-    campusStudentCount: '5,000 - 10,000 Students',
+    campusStudentCount: '',
     preferredDate: '',
     notes: '',
   });

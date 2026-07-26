@@ -24,8 +24,6 @@ import {
   AlertCircle,
   Ban,
   LogOut,
-  SlidersHorizontal,
-  Check,
   Volume2,
   Loader2
 } from 'lucide-react';
@@ -338,34 +336,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
     }
   };
 
-  const advanceKitchenStatus = (nextStatus: OrderStatus) => {
-    if (!activeOrder) return;
-    if (nextStatus === 'Collected') {
-      const completedOrder = { ...activeOrder, status: 'Collected' as OrderStatus };
-      setOrderHistory((prev) => [completedOrder, ...prev]);
-      setActiveOrder(null);
-    } else {
-      setActiveOrder({
-        ...activeOrder,
-        status: nextStatus,
-        timeRemaining: nextStatus === 'Preparing' ? '4 mins' : 'Ready Now!',
-        queuePosition: nextStatus === 'Preparing' ? 1 : 0,
-      });
-    }
-
-    setNotifications((prev) => [
-      {
-        id: 'n-' + Date.now(),
-        title: `Order Status: ${nextStatus}`,
-        message: `Order #${activeOrder.orderId} updated to ${nextStatus}.`,
-        time: 'Just now',
-        type: 'order',
-        read: false,
-      },
-      ...prev,
-    ]);
-  };
-
   const handleLxVoiceCommand = (cmd: string) => {
     setIsLxVoiceActive(true);
     setLxMessage(`Student: "${cmd}"`);
@@ -560,26 +530,19 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 </div>
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {[
-                    { id: 'Counter A', name: 'Counter A', label: 'Main Meals', status: 'Live • 6-8 mins', color: 'border-emerald-500/40' },
-                    { id: 'Counter B', name: 'Counter B', label: 'Fast Food', status: 'Live • 5 mins', color: 'border-teal-500/40' },
-                    { id: 'Counter C', name: 'Counter C', label: 'Tea & Coffee', status: 'Live • 2 mins', color: 'border-amber-500/40' },
-                    { id: 'Counter D', name: 'Counter D', label: 'Desserts & South', status: 'Live • 5 mins', color: 'border-indigo-500/40' },
-                  ].map((c) => (
+                  {[...new Set(menuItems.map((m) => m.counter))].map((counter) => (
                     <div
-                      key={c.id}
+                      key={counter}
                       onClick={() => {
-                        setSelectedCounter(c.id);
+                        setSelectedCounter(counter);
                         setActiveTab('menu');
                       }}
-                      className={`bg-slate-950 border ${c.color} p-4 rounded-2xl hover:bg-slate-900/80 transition-all cursor-pointer space-y-2 group`}
+                      className="bg-slate-950 border border-slate-800 hover:border-emerald-500/40 p-4 rounded-2xl hover:bg-slate-900/80 transition-all cursor-pointer space-y-2 group"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white group-hover:text-emerald-400">{c.name}</span>
-                        <span className="text-[10px] text-emerald-400 font-mono font-semibold">{c.status}</span>
+                        <span className="text-xs font-bold text-white group-hover:text-emerald-400">{counter}</span>
                       </div>
-                      <p className="text-xs font-semibold text-slate-300">{c.label}</p>
-                      <p className="text-[11px] text-slate-400">Unlimited digital queue management</p>
+                      <p className="text-xs font-semibold text-slate-300">{menuItems.filter((m) => m.counter === counter).length} items available</p>
                     </div>
                   ))}
                 </div>
@@ -649,13 +612,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
 
                   {/* Counter Filter Tabs */}
                   <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                    {[
-                      { id: 'ALL', label: 'All Campus Items' },
-                      { id: 'Counter A', label: 'Counter A (Main Meals)' },
-                      { id: 'Counter B', label: 'Counter B (Fast Food)' },
-                      { id: 'Counter C', label: 'Counter C (Tea & Coffee)' },
-                      { id: 'Counter D', label: 'Counter D (Desserts & South)' },
-                    ].map((tab) => (
+                    {[{ id: 'ALL', label: 'All Campus Items' }, ...Array.from(new Set(menuItems.map(m => m.counter))).map(c => ({ id: c, label: c }))].map((tab) => (
                       <button
                         key={tab.id}
                         onClick={() => setSelectedCounter(tab.id)}
@@ -934,34 +891,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                         </div>
                       )}
 
-                      {/* KITCHEN STAFF SIMULATOR CONTROLS (For Testing) */}
-                      <div className="pt-2 border-t border-slate-800 flex items-center gap-2">
-                        <span className="text-[10px] text-slate-500 font-mono">Kitchen Simulator:</span>
-                        {activeOrder.status === 'Order Received' && (
-                          <button
-                            onClick={() => advanceKitchenStatus('Preparing')}
-                            className="text-[10px] bg-slate-900 border border-slate-800 hover:border-emerald-500 text-slate-300 px-2 py-1 rounded"
-                          >
-                            Set "Preparing"
-                          </button>
-                        )}
-                        {activeOrder.status === 'Preparing' && (
-                          <button
-                            onClick={() => advanceKitchenStatus('Ready')}
-                            className="text-[10px] bg-slate-900 border border-slate-800 hover:border-emerald-500 text-emerald-400 px-2 py-1 rounded font-bold"
-                          >
-                            Set "Ready at Locker"
-                          </button>
-                        )}
-                        {activeOrder.status === 'Ready' && (
-                          <button
-                            onClick={() => advanceKitchenStatus('Collected')}
-                            className="text-[10px] bg-emerald-500 text-slate-950 px-2 py-1 rounded font-bold"
-                          >
-                            Mark "Collected"
-                          </button>
-                        )}
-                      </div>
+
 
                     </div>
 
@@ -1068,7 +998,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 <div>
                   <h3 className="text-lg font-extrabold text-white">{studentName}</h3>
                   <p className="text-xs text-emerald-400 font-mono">{universityEmail}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">B.Tech Computer Science & Engineering • Sem 5</p>
                 </div>
               </div>
 
@@ -1181,10 +1110,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                     <span>Credit / Debit Card</span>
                   </button>
                 </div>
-              </div>
-
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-[11px] text-slate-400 font-mono">
-                💡 Demo Mode: Real Razorpay Gateway Sandbox test transaction for {institutionCode}. No real money deducted.
               </div>
 
               <button

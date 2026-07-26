@@ -1,5 +1,3 @@
-import { CampusVendor, FaqItem, PlatformFeature, PricingPlan } from '../types';
-
 export const PARTNER_UNIVERSITIES = [
   {
     name: 'CHRIST (Deemed to be University)',
@@ -17,58 +15,7 @@ export const HERO_STATS = [
   { value: '28,000 hrs', label: 'Student Line-time Saved' },
 ];
 
-export const CAMPUS_VENDORS: CampusVendor[] = [
-  {
-    id: 'vendor-1',
-    name: 'Science Quad Bistro',
-    location: 'Science & Tech Building - 1st Floor',
-    category: 'Healthy Bowls & Wraps',
-    rating: 4.9,
-    avgPrepTime: '3-5 min',
-    currentRush: 'Low',
-    popularItem: 'Avo-Quinoa Power Bowl',
-    image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80',
-    tags: ['High Protein', 'Gluten-Free', 'Halal Option'],
-  },
-  {
-    id: 'vendor-2',
-    name: 'Library Artisan Roast & Cafe',
-    location: 'Main Library Plaza',
-    category: 'Specialty Coffee & Bakery',
-    rating: 4.8,
-    avgPrepTime: '2 min',
-    currentRush: 'Medium',
-    popularItem: 'Iced Oat Vanilla Matcha',
-    image: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=600&q=80',
-    tags: ['Express Barista', 'Vegan Snacks', 'Study Fuel'],
-  },
-  {
-    id: 'vendor-3',
-    name: 'North Union Noodle House',
-    location: 'Student Union Food Court',
-    category: 'Asian Street Food & Ramen',
-    rating: 4.9,
-    avgPrepTime: '6-8 min',
-    currentRush: 'High',
-    popularItem: 'Spicy Sesame Tofu Tan Tan',
-    image: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=600&q=80',
-    tags: ['Vegan Friendly', 'Custom Spice', 'Student Deal'],
-  },
-  {
-    id: 'vendor-4',
-    name: 'Dorm Commons Pizza & Grill',
-    location: 'West Campus Resident Hall',
-    category: 'Artisanal Pizza & Wings',
-    rating: 4.7,
-    avgPrepTime: '8 min',
-    currentRush: 'Low',
-    popularItem: 'Truffle Mushroom Flatbread',
-    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=80',
-    tags: ['Group Cart Fav', 'Late Night', 'Split Bill'],
-  },
-];
-
-export const PLATFORM_FEATURES: PlatformFeature[] = [
+export const PLATFORM_FEATURES = [
   {
     id: 'feat-1',
     title: 'LX AI Student Companion',
@@ -146,7 +93,7 @@ export const PLATFORM_FEATURES: PlatformFeature[] = [
   }
 ];
 
-export const PRICING_PLANS: PricingPlan[] = [
+export const PRICING_PLANS = [
   {
     id: 'student-free',
     name: 'Student Pass',
@@ -201,7 +148,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   }
 ];
 
-export const FAQ_ITEMS: FaqItem[] = [
+export const FAQ_ITEMS = [
   {
     id: 'faq-1',
     category: 'general',

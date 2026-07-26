@@ -60,13 +60,13 @@ export const LxChatDrawer: React.FC<LxChatDrawerProps> = ({ isOpen, onClose, onO
       setMessages((prev) => [...prev, lxMsg]);
     } catch (err) {
       console.error("Error querying LX:", err);
-      const fallbackMsg: LXChatMessage = {
+      const errorMsg: LXChatMessage = {
         id: `lx-err-${Date.now()}`,
         sender: 'lx',
-        text: "⚡ **LX Recommendation:**\n\nTry the **Avo-Quinoa Power Bowl** @ *Science Quad Bistro* ($7.80, 3 min prep). Express pickup ready at Locker #2!",
+        text: "⚠️ **LX is temporarily unavailable.**\n\nPlease try again later or check that the GEMINI_API_KEY is configured on the server.",
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
-      setMessages((prev) => [...prev, fallbackMsg]);
+      setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
     }

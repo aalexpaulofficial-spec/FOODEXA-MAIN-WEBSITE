@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-main: #020617;
+    --text-main: #f8fafc;
+    color-scheme: dark;
+  }
+
+  html.light {
+    --bg-main: #f8fafc;
+    --text-main: #0f172a;
+    color-scheme: light;
+  }
+
+  html.dark {
+    --bg-main: #020617;
+    --text-main: #f8fafc;
+    color-scheme: dark;
+  }
+}
+
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+img, video, canvas, svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Smooth transition when switching themes */
+body {
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Light Mode global style adaptations */
+html.light body {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html.light .bg-slate-950 {
+  background-color: #f8fafc !important;
+}
+
+html.light .bg-slate-900 {
+  background-color: #ffffff !important;
+}
+
+html.light .bg-slate-900\/60,
+html.light .bg-slate-900\/80,
+html.light .bg-slate-900\/90,
+html.light .bg-slate-900\/95 {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+}
+
+html.light .bg-slate-950\/80,
+html.light .bg-slate-950\/90,
+html.light .bg-slate-950\/95 {
+  background-color: rgba(248, 250, 252, 0.94) !important;
+}
+
+html.light .border-slate-800,
+html.light .border-slate-800\/80,
+html.light .border-slate-800\/90,
+html.light .border-slate-700 {
+  border-color: #e2e8f0 !important;
+}
+
+html.light .text-white,
+html.light .text-slate-100,
+html.light .text-slate-200 {
+  color: #0f172a !important;
+}
+
+html.light .text-slate-300,
+html.light .text-slate-400 {
+  color: #475569 !important;
+}
+
+html.light .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* Light mode card shadows */
+html.light .bg-slate-900,
+html.light .bg-slate-950 {
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+}
+
+/* Accent adjustments for Light Mode */
+html.light .text-emerald-400 {
+  color: #059669 !important; /* Emerald 600 */
+}
+
+html.light .bg-emerald-950,
+html.light .bg-emerald-950\/90 {
+  background-color: #ecfdf5 !important;
+  color: #065f46 !important;
+}
+
+html.light .border-emerald-500\/40,
+html.light .border-emerald-500\/50,
+html.light .border-emerald-500\/30 {
+  border-color: #a7f3d0 !important;
+}
+
+/* Hide scrollbars cleanly when requested */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

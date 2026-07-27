@@ -85,4 +85,5 @@ export interface InstitutionRequestInsert {
   food_courts: number;
   vendors: number;
   message: string;
+  status: 'pending';
 }

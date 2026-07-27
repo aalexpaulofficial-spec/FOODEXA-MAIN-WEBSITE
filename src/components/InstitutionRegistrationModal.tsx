@@ -90,6 +90,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
         food_courts: parseRequiredCount(formData.foodCourtsCount, 'Food courts'),
         vendors: parseRequiredCount(formData.vendorsCount, 'Vendors'),
         message: formData.message.trim(),
+        status: 'pending',
       };
 
       const { error: supabaseError } = await supabase

@@ -114,33 +114,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setLoading(true);
     try {
-      // Create the user account in Supabase Auth
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const response = await supabase.auth.signInWithOtp({
         email: studentForm.universityEmail,
-        password: studentForm.password,
         options: {
-          data: {
-            full_name: studentForm.fullName,
-            phone: studentForm.phone,
-            programme: studentForm.programme,
-            institution_code: studentForm.institutionCode.toUpperCase(),
-          },
-          emailRedirectTo: undefined, // use OTP flow, not magic link
+          shouldCreateUser: true,
         },
       });
-      console.log('[Foodexa Auth] OTP send response:', { data, error: signUpError });
 
-      if (signUpError) {
-        console.error('[Foodexa Auth] OTP send error:', signUpError);
-        throw new Error(signUpError.message);
+      console.log('OTP Response', response);
+      console.log('OTP Error', response.error);
+      console.log('OTP Data', response.data);
+
+      if (response.error) {
+        console.error('[Foodexa Auth] OTP send error:', response.error);
+        setError(response.error.message);
+        return;
       }
 
       setSuccessMessage('OTP sent successfully.');
       setOtpCode('');
-      setOtpEmail(data.user?.email || studentForm.universityEmail);
-      setOtpInstitutionCode(
-        data.user?.user_metadata?.institution_code || studentForm.institutionCode.toUpperCase()
-      );
+      setOtpEmail(studentForm.universityEmail);
+      setOtpInstitutionCode(studentForm.institutionCode.toUpperCase());
       setOtpExpiresAt(Date.now() + 10 * 60 * 1000);
       setStep('otp');
     } catch (err: any) {
@@ -167,7 +161,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
         email: studentForm.universityEmail,
         token: otpCode.trim(),
-        type: 'signup',
+        type: 'email',
       });
       console.log('[Foodexa Auth] OTP verify response:', { data, error: verifyError });
 
@@ -218,14 +212,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setSuccessMessage(null);
     setLoading(true);
     try {
-      const { data, error: resendError } = await supabase.auth.resend({
-        type: 'signup',
+      const response = await supabase.auth.signInWithOtp({
         email: studentForm.universityEmail,
+        options: {
+          shouldCreateUser: true,
+        },
       });
-      console.log('[Foodexa Auth] Resend OTP response:', { data, error: resendError });
-      if (resendError) {
-        console.error('[Foodexa Auth] Resend OTP error:', resendError);
-        throw new Error(resendError.message);
+      console.log('OTP Response', response);
+      console.log('OTP Error', response.error);
+      console.log('OTP Data', response.data);
+      if (response.error) {
+        console.error('[Foodexa Auth] Resend OTP error:', response.error);
+        setError(response.error.message);
+        return;
       }
       setOtpCode('');
       setOtpExpiresAt(Date.now() + 10 * 60 * 1000);

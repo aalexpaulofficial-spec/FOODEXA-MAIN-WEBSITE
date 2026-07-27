@@ -69,3 +69,20 @@ export interface DemoFormData {
   preferredDate: string;
   notes: string;
 }
+
+export interface InstitutionRequestInsert {
+  institution_name: string;
+  campus: string;
+  city: string;
+  state: string;
+  country: string;
+  institution_email: string;
+  contact_person: string;
+  role: string;
+  phone_number: string;
+  institution_website: string;
+  student_population: string;
+  food_courts: number;
+  vendors: number;
+  message: string;
+}

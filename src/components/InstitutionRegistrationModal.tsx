@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, CheckCircle2, ArrowRight, Building2, Loader2 } from 'lucide-react';
+import type { InstitutionRequestInsert } from '../types';
 import { supabase } from '../lib/supabase';
 
 interface InstitutionRegistrationModalProps {
@@ -7,7 +8,25 @@ interface InstitutionRegistrationModalProps {
   onClose: () => void;
 }
 
-const INITIAL_FORM = {
+interface InstitutionFormData {
+  institutionName: string;
+  campus: string;
+  city: string;
+  state: string;
+  country: string;
+  institutionEmail: string;
+  contactPerson: string;
+  role: string;
+  phoneNumber: string;
+  institutionWebsite: string;
+  studentPopulation: string;
+  foodCourtsCount: string;
+  vendorsCount: string;
+  message: string;
+  termsAgreed: boolean;
+}
+
+const INITIAL_FORM: InstitutionFormData = {
   institutionName: '',
   campus: '',
   city: '',
@@ -25,6 +44,16 @@ const INITIAL_FORM = {
   termsAgreed: false,
 };
 
+const parseRequiredCount = (value: string, label: string): number => {
+  const count = Number.parseInt(value, 10);
+
+  if (!Number.isFinite(count) || count < 1) {
+    throw new Error(`${label} must be at least 1.`);
+  }
+
+  return count;
+};
+
 export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModalProps> = ({
   isOpen,
   onClose,
@@ -32,7 +61,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState(INITIAL_FORM);
+  const [formData, setFormData] = useState<InstitutionFormData>(INITIAL_FORM);
 
   if (!isOpen) return null;
 
@@ -46,27 +75,26 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
     setLoading(true);
 
     try {
-      // Build address from campus + city + state + country fields
-      const addressParts = [formData.campus, formData.city, formData.state, formData.country]
-        .filter(Boolean)
-        .join(', ');
+      const institutionRequest: InstitutionRequestInsert = {
+        institution_name: formData.institutionName.trim(),
+        campus: formData.campus.trim(),
+        city: formData.city.trim(),
+        state: formData.state.trim(),
+        country: formData.country.trim(),
+        institution_email: formData.institutionEmail.trim(),
+        contact_person: formData.contactPerson.trim(),
+        role: formData.role,
+        phone_number: formData.phoneNumber.trim(),
+        institution_website: formData.institutionWebsite.trim(),
+        student_population: formData.studentPopulation,
+        food_courts: parseRequiredCount(formData.foodCourtsCount, 'Food courts'),
+        vendors: parseRequiredCount(formData.vendorsCount, 'Vendors'),
+        message: formData.message.trim(),
+      };
 
-      // Real institution_requests columns (verified from live Supabase schema):
-      // id (auto), institution_name, institution_type, address, contact_person,
-      // admin_email, phone, status (default: pending), rejection_reason, created_at, updated_at
       const { error: supabaseError } = await supabase
         .from('institution_requests')
-        .insert([
-          {
-            institution_name: formData.institutionName,
-            institution_type: formData.role, // role maps to institution_type
-            address: addressParts || formData.city || formData.state || 'Not specified',
-            contact_person: formData.contactPerson,
-            admin_email: formData.institutionEmail,
-            phone: formData.phoneNumber,
-            status: 'pending',
-          },
-        ]);
+        .insert([institutionRequest]);
 
       if (supabaseError) {
         throw new Error(supabaseError.message);

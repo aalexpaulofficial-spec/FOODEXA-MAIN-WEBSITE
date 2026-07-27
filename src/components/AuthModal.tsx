@@ -146,8 +146,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     e.preventDefault();
     setError(null);
 
-    if (otpCode.trim().length < 6) {
-      setError('Please enter the complete 6-digit OTP code.');
+    if (otpCode.trim().length < 8) {
+      setError('Please enter the complete 8-digit OTP code.');
       return;
     }
 
@@ -494,7 +494,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
               <h3 className="text-xl font-extrabold text-white">Verify Your Email OTP</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                We sent a 6-digit security code to{' '}
+                We sent an 8-digit security code to{' '}
                 <strong className="text-emerald-400">{studentForm.universityEmail}</strong>
               </p>
             </div>
@@ -509,12 +509,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 mb-1 block text-center">
-                  6-Digit Verification Code
+                  8-Digit Verification Code
                 </label>
                 <input
                   type="text"
                   inputMode="numeric"
-                  maxLength={6}
+                  maxLength={8}
                   required
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}

@@ -19,6 +19,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [step, setStep] = useState<'form' | 'otp' | 'success'>('form');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [otpExpiresAt, setOtpExpiresAt] = useState<number | null>(null);
 
   // Login state
   const [loginEmail, setLoginEmail] = useState('');
@@ -27,6 +29,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // OTP state
   const [otpCode, setOtpCode] = useState('');
+  const [otpEmail, setOtpEmail] = useState('');
+  const [otpInstitutionCode, setOtpInstitutionCode] = useState('');
 
   // Create Student Account state
   const [studentForm, setStudentForm] = useState({
@@ -51,7 +55,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleReset = () => {
     setStep('form');
     setError(null);
+    setSuccessMessage(null);
     setOtpCode('');
+    setOtpEmail('');
+    setOtpInstitutionCode('');
+    setOtpExpiresAt(null);
     onClose();
   };
 
@@ -59,14 +67,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
     setLoading(true);
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: loginEmail,
         password: loginPassword,
       });
+      console.log('[Foodexa Auth] Login response:', { data, error: authError });
 
-      if (authError) throw new Error(authError.message);
+      if (authError) {
+        console.error('[Foodexa Auth] Login error:', authError);
+        throw new Error(authError.message);
+      }
 
       const user = data.user;
       const profile = {
@@ -77,6 +90,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setResolvedProfile(profile);
       setStep('success');
     } catch (err: any) {
+      console.error('[Foodexa Auth] Login exception:', err);
       setError(err?.message || 'Login failed. Please check your credentials and try again.');
     } finally {
       setLoading(false);
@@ -87,6 +101,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
 
     if (studentForm.password !== studentForm.confirmPassword) {
       setError('Passwords do not match.');
@@ -113,28 +128,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           emailRedirectTo: undefined, // use OTP flow, not magic link
         },
       });
+      console.log('[Foodexa Auth] OTP send response:', { data, error: signUpError });
 
-      if (signUpError) throw new Error(signUpError.message);
-
-      // Also insert the student profile into the students table for the institution portal
-      if (data.user) {
-        await supabase.from('students').insert([
-          {
-            auth_user_id: data.user.id,
-            full_name: studentForm.fullName,
-            email: studentForm.universityEmail,
-            phone: studentForm.phone,
-            programme: studentForm.programme,
-            institution_code: studentForm.institutionCode.toUpperCase(),
-            status: 'pending',
-            created_at: new Date().toISOString(),
-          },
-        ]);
+      if (signUpError) {
+        console.error('[Foodexa Auth] OTP send error:', signUpError);
+        throw new Error(signUpError.message);
       }
 
-      // Move to OTP verification step
+      setSuccessMessage('OTP sent successfully.');
+      setOtpCode('');
+      setOtpEmail(data.user?.email || studentForm.universityEmail);
+      setOtpInstitutionCode(
+        data.user?.user_metadata?.institution_code || studentForm.institutionCode.toUpperCase()
+      );
+      setOtpExpiresAt(Date.now() + 10 * 60 * 1000);
       setStep('otp');
     } catch (err: any) {
+      console.error('[Foodexa Auth] OTP send exception:', err);
       setError(err?.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
@@ -145,6 +155,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
 
     if (otpCode.trim().length < 8) {
       setError('Please enter the complete 8-digit OTP code.');
@@ -158,17 +169,43 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         token: otpCode.trim(),
         type: 'signup',
       });
+      console.log('[Foodexa Auth] OTP verify response:', { data, error: verifyError });
 
-      if (verifyError) throw new Error(verifyError.message);
+      if (verifyError) {
+        console.error('[Foodexa Auth] OTP verify error:', verifyError);
+        throw new Error(verifyError.message);
+      }
 
       const user = data.user;
+      if (user) {
+        const { data: studentData, error: studentError } = await supabase.from('students').insert([
+          {
+            auth_user_id: user.id,
+            full_name: studentForm.fullName,
+            email: user.email || otpEmail || studentForm.universityEmail,
+            phone: studentForm.phone,
+            programme: studentForm.programme,
+            institution_code: otpInstitutionCode || studentForm.institutionCode.toUpperCase(),
+            status: 'verified',
+            created_at: new Date().toISOString(),
+          },
+        ]);
+        console.log('[Foodexa Auth] Student profile insert response:', { data: studentData, error: studentError });
+        if (studentError) {
+          console.error('[Foodexa Auth] Student profile insert error:', studentError);
+          throw new Error(studentError.message);
+        }
+      }
+
       setResolvedProfile({
         studentName: studentForm.fullName || user?.email?.split('@')[0] || 'Student',
-        email: studentForm.universityEmail,
-        code: studentForm.institutionCode.toUpperCase(),
+        email: user?.email || otpEmail || studentForm.universityEmail,
+        code: otpInstitutionCode || studentForm.institutionCode.toUpperCase(),
       });
+      setOtpExpiresAt(null);
       setStep('success');
     } catch (err: any) {
+      console.error('[Foodexa Auth] OTP verify exception:', err);
       setError(err?.message || 'OTP verification failed. Please check the code and try again.');
     } finally {
       setLoading(false);
@@ -178,14 +215,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // ─── RESEND OTP ────────────────────────────────────────────────────────────
   const handleResendOtp = async () => {
     setError(null);
+    setSuccessMessage(null);
     setLoading(true);
     try {
-      const { error: resendError } = await supabase.auth.resend({
+      const { data, error: resendError } = await supabase.auth.resend({
         type: 'signup',
         email: studentForm.universityEmail,
       });
-      if (resendError) throw new Error(resendError.message);
+      console.log('[Foodexa Auth] Resend OTP response:', { data, error: resendError });
+      if (resendError) {
+        console.error('[Foodexa Auth] Resend OTP error:', resendError);
+        throw new Error(resendError.message);
+      }
+      setOtpCode('');
+      setOtpExpiresAt(Date.now() + 10 * 60 * 1000);
+      setSuccessMessage('A new verification code has been sent to your email.');
     } catch (err: any) {
+      console.error('[Foodexa Auth] Resend OTP exception:', err);
       setError(err?.message || 'Failed to resend OTP. Please try again.');
     } finally {
       setLoading(false);
@@ -199,13 +245,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
     setError(null);
+    setSuccessMessage(null);
     setLoading(true);
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(loginEmail);
+      console.log('[Foodexa Auth] Password reset response:', { error: resetError });
       if (resetError) throw new Error(resetError.message);
       setError(null);
       alert(`Password reset instructions sent to ${loginEmail}`);
     } catch (err: any) {
+      console.error('[Foodexa Auth] Password reset error:', err);
       setError(err?.message || 'Failed to send reset email.');
     } finally {
       setLoading(false);
@@ -336,7 +385,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Don't have an account?{' '}
                     <button
                       type="button"
-                      onClick={() => { setMode('create'); setError(null); }}
+                      onClick={() => { setMode('create'); setError(null); setSuccessMessage(null); }}
                       className="text-emerald-400 font-bold hover:underline cursor-pointer"
                     >
                       Create Student Account
@@ -473,7 +522,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Already have an account?{' '}
                     <button
                       type="button"
-                      onClick={() => { setMode('login'); setError(null); }}
+                      onClick={() => { setMode('login'); setError(null); setSuccessMessage(null); }}
                       className="text-emerald-400 font-bold hover:underline cursor-pointer"
                     >
                       Login
@@ -495,7 +544,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <h3 className="text-xl font-extrabold text-white">Verify Your Email OTP</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
                 We sent an 8-digit security code to{' '}
-                <strong className="text-emerald-400">{studentForm.universityEmail}</strong>
+                <strong className="text-emerald-400">{otpEmail || studentForm.universityEmail}</strong>
               </p>
             </div>
 
@@ -503,6 +552,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {error && (
               <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
                 {error}
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-xs text-emerald-300">
+                {successMessage}
               </div>
             )}
 
@@ -525,7 +580,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-2 text-xs text-slate-400">
                 <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>
-                  Institution Code: <strong className="text-emerald-400">{studentForm.institutionCode.toUpperCase()}</strong>
+                  Institution Code: <strong className="text-emerald-400">{otpInstitutionCode || studentForm.institutionCode.toUpperCase()}</strong>
                 </span>
               </div>
 

@@ -156,7 +156,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'user_id',
-          merge: true,
         });
       
       await fetchProfile(userId);

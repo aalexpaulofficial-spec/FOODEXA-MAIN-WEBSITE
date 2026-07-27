@@ -60,6 +60,8 @@ export default function App() {
   };
 
   const handleOpenLogin = () => {
+    setIsRoleSelectionOpen(false);
+    setIsPortalAccessOpen(false);
     setAuthInitialMode('login');
     setIsAuthOpen(true);
   };
@@ -72,6 +74,8 @@ export default function App() {
   };
 
   const handleOpenStudentRegister = () => {
+    setIsAuthOpen(false);
+    setIsPortalAccessOpen(false);
     setIsRoleSelectionOpen(true);
   };
 
@@ -108,7 +112,7 @@ export default function App() {
         onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
         onOpenLogin={handleOpenLogin}
         onOpenDownload={() => setIsDownloadOpen(true)}
-        onOpenGetStarted={() => setIsPortalAccessOpen(true)}
+        onOpenGetStarted={handleOpenStudentRegister}
       />
 
       {/* Main Content Sections */}
@@ -119,7 +123,7 @@ export default function App() {
           onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
           onOpenLogin={handleOpenLogin}
           onOpenDownload={() => setIsDownloadOpen(true)}
-          onOpenGetStarted={() => setIsPortalAccessOpen(true)}
+          onOpenGetStarted={handleOpenStudentRegister}
           onOpenRegisterInstitution={() => setIsInstitutionRegistrationOpen(true)}
           onOpenCreateAccount={handleOpenStudentRegister}
           onSelectPrompt={handleSelectPrompt}

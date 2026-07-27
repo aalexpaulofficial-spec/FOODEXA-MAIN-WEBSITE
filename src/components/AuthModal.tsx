@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -81,6 +81,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    setMode(initialMode);
+    setStep('form');
+    setCurrentEmail('');
+    setOtpCode('849201');
+  }, [initialMode, isOpen]);
+
   if (!isOpen) return null;
 
   const handleLoginSubmit = (e: React.FormEvent) => {
@@ -151,6 +159,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleReset = () => {
     setStep('form');
+    setMode(initialMode);
     onClose();
   };
 

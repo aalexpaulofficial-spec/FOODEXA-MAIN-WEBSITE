@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, GraduationCap, ArrowRight, Sparkles, Lock, ExternalLink } from 'lucide-react';
+import { X, GraduationCap, ArrowRight, Sparkles, Lock, ExternalLink, User } from 'lucide-react';
 
 interface PortalAccessModalProps {
   isOpen: boolean;
@@ -7,6 +7,7 @@ interface PortalAccessModalProps {
   onOpenStudentRegister: () => void;
   onOpenInstitutionRegister?: () => void;
   onOpenLogin: () => void;
+  onOpenCreateAccount?: () => void;
 }
 
 export const PortalAccessModal: React.FC<PortalAccessModalProps> = ({
@@ -14,6 +15,7 @@ export const PortalAccessModal: React.FC<PortalAccessModalProps> = ({
   onClose,
   onOpenStudentRegister,
   onOpenLogin,
+  onOpenCreateAccount,
 }) => {
   if (!isOpen) return null;
 
@@ -67,7 +69,50 @@ export const PortalAccessModal: React.FC<PortalAccessModalProps> = ({
               <span>Sign In</span>
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
+            {onOpenCreateAccount && (
+              <div className="pt-2 text-center text-xs text-slate-400">
+                Don't have an account?{' '}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClose();
+                    onOpenCreateAccount();
+                  }}
+                  className="text-emerald-400 font-bold hover:underline cursor-pointer"
+                >
+                  Create Account
+                </button>
+              </div>
+            )}
           </button>
+
+          {/* Create Account Option */}
+          {onOpenCreateAccount && (
+            <button
+              onClick={() => {
+                onClose();
+                onOpenCreateAccount();
+              }}
+              className="group bg-slate-950 border border-slate-800 hover:border-teal-500 p-5 rounded-2xl text-left space-y-3 transition-all cursor-pointer hover:scale-[1.02]"
+            >
+              <div className="w-10 h-10 rounded-xl bg-teal-950 border border-teal-500/30 flex items-center justify-center text-teal-400 group-hover:scale-110 transition-transform">
+                <User className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white group-hover:text-teal-300 transition-colors">
+                  Create Account
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                  Create your FOODEXA account as Student, Faculty, or Guest.
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-1 text-xs font-bold text-teal-400 pt-1">
+                <span>Get Started</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </button>
+          )}
 
           {/* Student Registration Option */}
           <button

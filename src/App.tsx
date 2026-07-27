@@ -17,6 +17,7 @@ import { AuthModal } from './components/AuthModal';
 import { StudentPortalModal } from './components/StudentPortalModal';
 import { DownloadModal } from './components/DownloadModal';
 import { PortalAccessModal } from './components/PortalAccessModal';
+import { RoleSelectionModal } from './components/RoleSelectionModal';
 import { LxChatDrawer } from './components/LxChatDrawer';
 import { VoiceAssistantModal } from './components/VoiceAssistantModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
@@ -34,11 +35,13 @@ export default function App() {
   const [isLxDrawerOpen, setIsLxDrawerOpen] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isStudentPortalOpen, setIsStudentPortalOpen] = useState(false);
+  const [isRoleSelectionOpen, setIsRoleSelectionOpen] = useState(false);
   const [portalData, setPortalData] = useState({
     studentName: 'Alex Paul',
     email: 'alex.paul@christuniversity.in',
     code: 'CHRKNG2026',
   });
+  const [selectedRole, setSelectedRole] = useState<'student' | 'faculty' | 'guest'>('student');
   const [activePrompt, setActivePrompt] = useState<string>('');
 
   // Toast System State
@@ -64,7 +67,13 @@ export default function App() {
   };
 
   const handleOpenStudentRegister = () => {
+    setIsRoleSelectionOpen(true);
+  };
+
+  const handleRoleSelected = (role: 'student' | 'faculty' | 'guest') => {
+    setIsRoleSelectionOpen(false);
     setAuthInitialMode('create');
+    setSelectedRole(role);
     setIsAuthOpen(true);
   };
 
@@ -106,6 +115,7 @@ export default function App() {
           onOpenDownload={() => setIsDownloadOpen(true)}
           onOpenGetStarted={() => setIsPortalAccessOpen(true)}
           onOpenRegisterInstitution={() => setIsInstitutionRegistrationOpen(true)}
+          onOpenCreateAccount={handleOpenStudentRegister}
           onSelectPrompt={handleSelectPrompt}
         />
 
@@ -195,10 +205,17 @@ export default function App() {
         }}
       />
 
+      <RoleSelectionModal
+        isOpen={isRoleSelectionOpen}
+        onClose={() => setIsRoleSelectionOpen(false)}
+        onRoleSelected={handleRoleSelected}
+      />
+
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         initialMode={authInitialMode}
+        selectedRole={selectedRole}
         onLoginSuccess={(data) => {
           setPortalData(data);
           setIsStudentPortalOpen(true);
@@ -228,6 +245,7 @@ export default function App() {
         onOpenStudentRegister={handleOpenStudentRegister}
         onOpenInstitutionRegister={() => setIsInstitutionRegistrationOpen(true)}
         onOpenLogin={handleOpenLogin}
+        onOpenCreateAccount={handleOpenStudentRegister}
       />
 
       <LxChatDrawer

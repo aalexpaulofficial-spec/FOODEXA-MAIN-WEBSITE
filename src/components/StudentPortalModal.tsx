@@ -24,10 +24,13 @@ import {
   AlertCircle,
   Ban,
   LogOut,
+  SlidersHorizontal,
+  Check,
   Volume2,
   Loader2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 
 interface StudentPortalModalProps {
   isOpen: boolean;
@@ -65,6 +68,7 @@ interface ActiveOrder {
   createdAt: number;
   timeRemaining: string;
   queuePosition: number;
+  role: 'student' | 'faculty' | 'guest';
 }
 
 interface NotificationItem {
@@ -85,6 +89,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   institutionCode = 'CHRKNG2026',
   institutionName = 'CHRIST (Deemed to be University) - Kengeri Campus',
 }) => {
+  const { profile, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<'home' | 'menu' | 'orders' | 'profile' | 'notifications'>('home');
   
   // Menu Filters
@@ -197,6 +202,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   const [lxMessage, setLxMessage] = useState<string>('');
   const [isLxVoiceActive, setIsLxVoiceActive] = useState<boolean>(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      refreshProfile();
+    }
+  }, [isOpen, refreshProfile]);
+
   if (!isOpen) return null;
 
   // Filtered Food items
@@ -246,6 +257,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
       const randomOrderId = 'FDX-' + Math.floor(100000 + Math.random() * 900000);
       const firstCounter = cart[0]?.item.counter || 'Counter B';
       const lockerNum = Math.floor(1 + Math.random() * 12);
+      const orderRole = profile?.role || 'student';
 
       const newOrderData = {
         order_id: randomOrderId,
@@ -254,7 +266,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
         items: cart.map((c) => ({ name: c.item.name, quantity: c.quantity, price: c.item.price })),
         total_amount: cartTotal,
         qr_code: `FOODEXA-${randomOrderId}-${institutionCode}`,
-        status: 'Order Received'
+        status: 'Order Received',
+        role: orderRole,
       };
 
       try {
@@ -271,6 +284,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
           createdAt: Date.now(),
           timeRemaining: '7 mins',
           queuePosition: 3,
+          role: orderRole,
         };
 
         setActiveOrder(newOrder);
@@ -365,19 +379,19 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-slate-950 font-extrabold text-lg shadow-lg">
               FX
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-extrabold text-white tracking-tight">
-                  {institutionName}
-                </h3>
-                <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-800 font-mono font-bold">
-                  Code: {institutionCode}
-                </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-extrabold text-white tracking-tight">
+                    {institutionName}
+                  </h3>
+                  <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-800 font-mono font-bold">
+                    Code: {institutionCode}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Logged in as <span className="text-slate-200 font-semibold">{profile?.full_name || studentName}</span> ({profile?.email || universityEmail})
+                </p>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Logged in as <span className="text-slate-200 font-semibold">{studentName}</span> ({universityEmail})
-              </p>
-            </div>
           </div>
 
           <div className="flex items-center gap-2">

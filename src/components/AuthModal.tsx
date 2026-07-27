@@ -6,6 +6,7 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: 'login' | 'create';
+  selectedRole?: 'student' | 'faculty' | 'guest';
   onLoginSuccess?: (data: { studentName: string; email: string; code: string }) => void;
 }
 
@@ -13,6 +14,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   initialMode = 'login',
+  selectedRole = 'student',
   onLoginSuccess,
 }) => {
   const [mode, setMode] = useState<'login' | 'create'>(initialMode);
@@ -27,6 +29,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [loginPassword, setLoginPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
 
+  // Track the email used for the current OTP flow
+  const [currentEmail, setCurrentEmail] = useState('');
+
   // OTP state
   const [otpCode, setOtpCode] = useState('');
   const [otpEmail, setOtpEmail] = useState('');
@@ -38,6 +43,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     universityEmail: '',
     phone: '',
     programme: '',
+    institutionCode: '',
+    password: '',
+    confirmPassword: '',
+  });
+
+  // Create Faculty Account state
+  const [facultyForm, setFacultyForm] = useState({
+    fullName: '',
+    universityEmail: '',
+    phone: '',
+    department: '',
+    designation: '',
+    institutionCode: '',
+    password: '',
+    confirmPassword: '',
+  });
+
+  // Create Guest Account state
+  const [guestForm, setGuestForm] = useState({
+    fullName: '',
+    universityEmail: '',
+    phone: '',
     institutionCode: '',
     password: '',
     confirmPassword: '',
@@ -70,6 +97,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setSuccessMessage(null);
     setLoading(true);
     try {
+      setCurrentEmail(loginEmail);
       console.log('[Foodexa Auth] Login request:', { email: loginEmail });
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: loginEmail,
@@ -104,27 +132,54 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setError(null);
     setSuccessMessage(null);
 
-    if (studentForm.password !== studentForm.confirmPassword) {
+    const currentForm =
+      selectedRole === 'student'
+        ? studentForm
+        : selectedRole === 'faculty'
+          ? facultyForm
+          : guestForm;
+
+    if (currentForm.password !== currentForm.confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
-    if (!studentForm.institutionCode.trim()) {
+    if (!currentForm.institutionCode.trim()) {
       setError('Institution Code is required.');
       return;
     }
 
+    setCurrentEmail(currentForm.universityEmail);
     setLoading(true);
     try {
+      const roleLabel =
+        selectedRole === 'student'
+          ? 'Student'
+          : selectedRole === 'faculty'
+            ? 'Faculty'
+            : 'Guest';
+
       console.log('OTP Request', {
-        email: studentForm.universityEmail,
+        email: currentForm.universityEmail,
         options: {
           shouldCreateUser: true,
+          data: {
+            full_name: currentForm.fullName,
+            role: selectedRole,
+            institution_code: currentForm.institutionCode.toUpperCase(),
+            phone: currentForm.phone,
+          },
         },
       });
       const response = await supabase.auth.signInWithOtp({
-        email: studentForm.universityEmail,
+        email: currentForm.universityEmail,
         options: {
           shouldCreateUser: true,
+          data: {
+            full_name: currentForm.fullName,
+            role: selectedRole,
+            institution_code: currentForm.institutionCode.toUpperCase(),
+            phone: currentForm.phone,
+          },
         },
       });
 
@@ -140,8 +195,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       setSuccessMessage('OTP sent successfully.');
       setOtpCode('');
-      setOtpEmail(studentForm.universityEmail);
-      setOtpInstitutionCode(studentForm.institutionCode.toUpperCase());
+      setOtpEmail(currentForm.universityEmail);
+      setOtpInstitutionCode(currentForm.institutionCode.toUpperCase());
       setOtpExpiresAt(Date.now() + 10 * 60 * 1000);
       setStep('otp');
     } catch (err: any) {
@@ -165,13 +220,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setLoading(true);
     try {
+      const emailToVerify = currentEmail || otpEmail || studentForm.universityEmail;
       console.log('[Foodexa Auth] OTP verify request:', {
-        email: studentForm.universityEmail,
+        email: emailToVerify,
         token: otpCode.trim(),
         type: 'email',
       });
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
-        email: studentForm.universityEmail,
+        email: emailToVerify,
         token: otpCode.trim(),
         type: 'email',
       });
@@ -196,6 +252,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         throw new Error('Authenticated user not found.');
       }
 
+      const userMetadata = user.user_metadata || {};
+      const roleFromMeta = (userMetadata.role as 'student' | 'faculty' | 'guest') || 'student';
+
       console.log('[Foodexa Auth] profiles select request:', { user_id: user.id });
       const profileResponse = await supabase
         .from('profiles')
@@ -215,10 +274,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           user_id: user.id,
           email: user.email,
           full_name:
-            user.user_metadata?.full_name ||
-            user.user_metadata?.name ||
+            userMetadata.full_name ||
+            userMetadata.name ||
             null,
-          role: 'student',
+          phone: userMetadata.phone || null,
+          role: roleFromMeta,
+          institution_id: null,
+          institution_code: userMetadata.institution_code || otpInstitutionCode || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         };
         console.log('[Foodexa Auth] profiles insert request:', newProfile);
         const insertProfileResponse = await supabase
@@ -234,12 +298,46 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         }
 
         profile = insertProfileResponse.data;
+      } else {
+        const updatedProfile = {
+          ...profile,
+          full_name:
+            profile.full_name ||
+            userMetadata.full_name ||
+            userMetadata.name ||
+            null,
+          phone: profile.phone || userMetadata.phone || null,
+          role: profile.role || roleFromMeta,
+          institution_code:
+            profile.institution_code || userMetadata.institution_code || otpInstitutionCode || null,
+          updated_at: new Date().toISOString(),
+        };
+        console.log('[Foodexa Auth] profiles upsert request:', updatedProfile);
+        const upsertResponse = await supabase
+          .from('profiles')
+          .upsert(updatedProfile, { onConflict: 'user_id' })
+          .select('*')
+          .single();
+        console.log('[Foodexa Auth] profiles upsert response:', upsertResponse);
+
+        if (upsertResponse.error) {
+          console.error('[Foodexa Auth] profiles upsert error:', upsertResponse.error);
+          throw new Error(upsertResponse.error.message);
+        }
+
+        profile = upsertResponse.data;
       }
 
+      const resolvedName =
+        profile?.full_name ||
+        studentForm.fullName ||
+        user.email?.split('@')[0] ||
+        'Student';
+
       setResolvedProfile({
-        studentName: profile?.full_name || studentForm.fullName || user.email?.split('@')[0] || 'Student',
+        studentName: resolvedName,
         email: profile?.email || user.email || otpEmail || studentForm.universityEmail,
-        code: otpInstitutionCode || studentForm.institutionCode.toUpperCase(),
+        code: profile?.institution_code || otpInstitutionCode || studentForm.institutionCode.toUpperCase(),
       });
       setOtpExpiresAt(null);
       setStep('success');
@@ -257,16 +355,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setSuccessMessage(null);
     setLoading(true);
     try {
+      const currentForm =
+        selectedRole === 'student'
+          ? studentForm
+          : selectedRole === 'faculty'
+            ? facultyForm
+            : guestForm;
+      const emailToResend = currentEmail || currentForm.universityEmail;
       console.log('OTP Request', {
-        email: studentForm.universityEmail,
+        email: emailToResend,
         options: {
           shouldCreateUser: true,
+          data: {
+            full_name: currentForm.fullName,
+            role: selectedRole,
+            institution_code: currentForm.institutionCode.toUpperCase(),
+            phone: currentForm.phone,
+          },
         },
       });
       const response = await supabase.auth.signInWithOtp({
-        email: studentForm.universityEmail,
+        email: emailToResend,
         options: {
           shouldCreateUser: true,
+          data: {
+            full_name: currentForm.fullName,
+            role: selectedRole,
+            institution_code: currentForm.institutionCode.toUpperCase(),
+            phone: currentForm.phone,
+          },
         },
       });
       console.log('OTP Response', response);
@@ -342,7 +459,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="space-y-1.5">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 text-emerald-400 border border-emerald-500/30 text-[11px] font-mono">
                     <Lock className="w-3.5 h-3.5" />
-                    <span>Student Portal Login</span>
+                     <span>
+                       {selectedRole === 'faculty'
+                         ? 'Faculty Portal Login'
+                         : selectedRole === 'guest'
+                           ? 'Guest Portal Login'
+                           : 'Student Portal Login'}
+                     </span>
                   </div>
                   <h3 className="text-2xl font-extrabold text-white">Welcome Back</h3>
                   <p className="text-xs text-slate-300 leading-relaxed">
@@ -433,29 +556,51 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
 
                   <div className="pt-2 text-center text-xs text-slate-400">
-                    Don't have an account?{' '}
-                    <button
-                      type="button"
-                      onClick={() => { setMode('create'); setError(null); setSuccessMessage(null); }}
-                      className="text-emerald-400 font-bold hover:underline cursor-pointer"
-                    >
-                      Create Student Account
-                    </button>
+                     Don't have an account?{' '}
+                     <button
+                       type="button"
+                       onClick={() => { setMode('create'); setError(null); setSuccessMessage(null); }}
+                       className="text-emerald-400 font-bold hover:underline cursor-pointer"
+                     >
+                       {selectedRole === 'faculty'
+                         ? 'Create Faculty Account'
+                         : selectedRole === 'guest'
+                           ? 'Create Guest Account'
+                           : 'Create Student Account'}
+                     </button>
                   </div>
                 </form>
 
               </div>
             ) : (
-              /* Create Student Account View */
-              <div className="space-y-5">
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 text-emerald-400 border border-emerald-500/30 text-[11px] font-mono">
-                    <User className="w-3.5 h-3.5" />
-                    <span>Student Pass Registration</span>
-                  </div>
-                  <h3 className="text-2xl font-extrabold text-white">Create Student Account</h3>
-                  <p className="text-xs text-slate-300">Sign up for instant queue skipping, express pickup, and LX AI dining recommendations.</p>
-                </div>
+               /* Create Account View */
+               <div className="space-y-5">
+                 <div className="space-y-1">
+                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 text-emerald-400 border border-emerald-500/30 text-[11px] font-mono">
+                     <User className="w-3.5 h-3.5" />
+                     <span>
+                       {selectedRole === 'faculty'
+                         ? 'Faculty Registration'
+                         : selectedRole === 'guest'
+                           ? 'Guest Registration'
+                           : 'Student Pass Registration'}
+                     </span>
+                   </div>
+                   <h3 className="text-2xl font-extrabold text-white">
+                     {selectedRole === 'faculty'
+                       ? 'Create Faculty Account'
+                       : selectedRole === 'guest'
+                         ? 'Create Guest Account'
+                         : 'Create Student Account'}
+                   </h3>
+                   <p className="text-xs text-slate-300">
+                     {selectedRole === 'faculty'
+                       ? 'Register as faculty to access campus dining services with your staff credentials.'
+                       : selectedRole === 'guest'
+                         ? 'Register as a guest to explore campus dining options and place orders.'
+                         : 'Sign up for instant queue skipping, express pickup, and LX AI dining recommendations.'}
+                   </p>
+                 </div>
 
                 {/* Error */}
                 {error && (
@@ -470,8 +615,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <input
                       type="text"
                       required
-                      value={studentForm.fullName}
-                      onChange={(e) => setStudentForm({ ...studentForm, fullName: e.target.value })}
+                      value={
+                        selectedRole === 'student'
+                          ? studentForm.fullName
+                          : selectedRole === 'faculty'
+                            ? facultyForm.fullName
+                            : guestForm.fullName
+                      }
+                      onChange={(e) => {
+                        if (selectedRole === 'student') setStudentForm({ ...studentForm, fullName: e.target.value });
+                        else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, fullName: e.target.value });
+                        else setGuestForm({ ...guestForm, fullName: e.target.value });
+                      }}
                       placeholder="e.g. Alex Paul"
                       className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
                     />
@@ -479,12 +634,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">University Email</label>
+                      <label className="text-xs font-semibold text-slate-300 mb-1 block">
+                        {selectedRole === 'faculty' ? 'Staff Email' : 'University Email'}
+                      </label>
                       <input
                         type="email"
                         required
-                        value={studentForm.universityEmail}
-                        onChange={(e) => setStudentForm({ ...studentForm, universityEmail: e.target.value })}
+                        value={
+                          selectedRole === 'student'
+                            ? studentForm.universityEmail
+                            : selectedRole === 'faculty'
+                              ? facultyForm.universityEmail
+                              : guestForm.universityEmail
+                        }
+                        onChange={(e) => {
+                          if (selectedRole === 'student') setStudentForm({ ...studentForm, universityEmail: e.target.value });
+                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, universityEmail: e.target.value });
+                          else setGuestForm({ ...guestForm, universityEmail: e.target.value });
+                        }}
                         placeholder="e.g. alex@christuniversity.in"
                         className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
                       />
@@ -494,33 +661,96 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <input
                         type="tel"
                         required
-                        value={studentForm.phone}
-                        onChange={(e) => setStudentForm({ ...studentForm, phone: e.target.value })}
+                        value={
+                          selectedRole === 'student'
+                            ? studentForm.phone
+                            : selectedRole === 'faculty'
+                              ? facultyForm.phone
+                              : guestForm.phone
+                        }
+                        onChange={(e) => {
+                          if (selectedRole === 'student') setStudentForm({ ...studentForm, phone: e.target.value });
+                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, phone: e.target.value });
+                          else setGuestForm({ ...guestForm, phone: e.target.value });
+                        }}
                         placeholder="+91 9876543210"
                         className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Programme</label>
-                      <input
-                        type="text"
-                        required
-                        value={studentForm.programme}
-                        onChange={(e) => setStudentForm({ ...studentForm, programme: e.target.value })}
-                        placeholder="e.g. B.Tech Computer Science"
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                      />
+                  {selectedRole === 'student' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Programme</label>
+                        <input
+                          type="text"
+                          required
+                          value={studentForm.programme}
+                          onChange={(e) => setStudentForm({ ...studentForm, programme: e.target.value })}
+                          placeholder="e.g. B.Tech Computer Science"
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
+                        <input
+                          type="text"
+                          required
+                          value={studentForm.institutionCode}
+                          onChange={(e) => setStudentForm({ ...studentForm, institutionCode: e.target.value })}
+                          placeholder="e.g. CHRKNG2026"
+                          className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
+                        />
+                      </div>
                     </div>
+                  )}
+
+                  {selectedRole === 'faculty' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Department</label>
+                        <input
+                          type="text"
+                          required
+                          value={facultyForm.department}
+                          onChange={(e) => setFacultyForm({ ...facultyForm, department: e.target.value })}
+                          placeholder="e.g. Computer Science"
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Designation</label>
+                        <input
+                          type="text"
+                          required
+                          value={facultyForm.designation}
+                          onChange={(e) => setFacultyForm({ ...facultyForm, designation: e.target.value })}
+                          placeholder="e.g. Assistant Professor"
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
                       <input
                         type="text"
                         required
-                        value={studentForm.institutionCode}
-                        onChange={(e) => setStudentForm({ ...studentForm, institutionCode: e.target.value })}
+                        value={
+                          selectedRole === 'student'
+                            ? studentForm.institutionCode
+                            : selectedRole === 'faculty'
+                              ? facultyForm.institutionCode
+                              : guestForm.institutionCode
+                        }
+                        onChange={(e) => {
+                          if (selectedRole === 'student') setStudentForm({ ...studentForm, institutionCode: e.target.value });
+                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, institutionCode: e.target.value });
+                          else setGuestForm({ ...guestForm, institutionCode: e.target.value });
+                        }}
                         placeholder="e.g. CHRKNG2026"
                         className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
                       />
@@ -534,8 +764,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         type="password"
                         required
                         minLength={6}
-                        value={studentForm.password}
-                        onChange={(e) => setStudentForm({ ...studentForm, password: e.target.value })}
+                        value={
+                          selectedRole === 'student'
+                            ? studentForm.password
+                            : selectedRole === 'faculty'
+                              ? facultyForm.password
+                              : guestForm.password
+                        }
+                        onChange={(e) => {
+                          if (selectedRole === 'student') setStudentForm({ ...studentForm, password: e.target.value });
+                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, password: e.target.value });
+                          else setGuestForm({ ...guestForm, password: e.target.value });
+                        }}
                         placeholder="••••••••"
                         className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
                       />
@@ -546,8 +786,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         type="password"
                         required
                         minLength={6}
-                        value={studentForm.confirmPassword}
-                        onChange={(e) => setStudentForm({ ...studentForm, confirmPassword: e.target.value })}
+                        value={
+                          selectedRole === 'student'
+                            ? studentForm.confirmPassword
+                            : selectedRole === 'faculty'
+                              ? facultyForm.confirmPassword
+                              : guestForm.confirmPassword
+                        }
+                        onChange={(e) => {
+                          if (selectedRole === 'student') setStudentForm({ ...studentForm, confirmPassword: e.target.value });
+                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, confirmPassword: e.target.value });
+                          else setGuestForm({ ...guestForm, confirmPassword: e.target.value });
+                        }}
                         placeholder="••••••••"
                         className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
                       />

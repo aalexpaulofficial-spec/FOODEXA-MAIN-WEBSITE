@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, ArrowRight, Mic } from 'lucide-react';
+import { Menu, X, ArrowRight, Mic, LogOut } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
+import { useAuth } from '../context/AuthContext';
 
 interface NavbarProps {
   onOpenBookDemo: () => void;
@@ -19,8 +20,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenDownload,
   onOpenGetStarted,
 }) => {
+  const { user, profile, signOut } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+
+  const handleSignOut = async () => {
+    await signOut();
+    setShowProfile(false);
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -29,6 +37,11 @@ export const Navbar: React.FC<NavbarProps> = ({
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  const displayName = profile?.full_name || user?.email || 'Guest';
+  const displayRole = profile?.role || 'guest';
+  const roleLabel = displayRole === 'student' ? 'Student' : displayRole === 'faculty' ? 'Faculty' : 'Guest';
+  const roleColor = displayRole === 'student' ? 'text-emerald-400' : displayRole === 'faculty' ? 'text-blue-400' : 'text-amber-400';
 
   const navLinks = [
     { label: 'Platform', href: '#platform' },
@@ -85,23 +98,46 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right Action CTAs */}
           <div className="hidden lg:flex items-center gap-2">
-            {/* Theme Toggle (☀️ Light / 🌙 Dark / 💻 System) */}
+            {/* Theme Toggle */}
             <ThemeToggle />
 
-            <button
-              onClick={onOpenLogin}
-              className="px-4 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer"
-            >
-              Login
-            </button>
-            {/* Get Started Button */}
-            <button
-              onClick={onOpenGetStarted}
-              className="relative group inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 transition-all shadow-md shadow-emerald-500/20 hover:shadow-emerald-500/35 cursor-pointer shrink-0"
-            >
-              <span>Get Started</span>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-950 group-hover:translate-x-0.5 transition-transform" />
-            </button>
+            {user ? (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowProfile(!showProfile)}
+                  className="flex items-center gap-2 bg-slate-900/80 border border-slate-800 hover:border-slate-700 px-3 py-1.5 rounded-full transition-all cursor-pointer"
+                >
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-slate-950 font-extrabold text-[10px]">
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-xs font-semibold text-slate-200">{displayName}</span>
+                  <span className={`text-[10px] font-mono font-bold ${roleColor}`}>{roleLabel}</span>
+                </button>
+                <button
+                  onClick={handleSignOut}
+                  className="p-2 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  title="Logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={onOpenLogin}
+                  className="px-4 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer"
+                >
+                  Login
+                </button>
+                <button
+                  onClick={onOpenGetStarted}
+                  className="relative group inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold text-slate-950 bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 transition-all shadow-md shadow-emerald-500/20 hover:shadow-emerald-500/35 cursor-pointer shrink-0"
+                >
+                  <span>Get Started</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-950 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              </>
+            )}
           </div>
 
           {/* Mobile Right Controls */}
@@ -134,44 +170,67 @@ export const Navbar: React.FC<NavbarProps> = ({
             ))}
           </div>
           <div className="pt-4 border-t border-slate-800 grid grid-cols-2 gap-2">
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                onOpenLogin();
-              }}
-              className="flex items-center justify-center gap-1.5 bg-slate-900 border border-slate-700 text-white py-2.5 rounded-xl text-xs font-medium cursor-pointer"
-            >
-              Login
-            </button>
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                onOpenVoiceModal();
-              }}
-              className="flex items-center justify-center gap-1.5 bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 py-2.5 rounded-xl text-xs font-mono font-bold cursor-pointer"
-            >
-              <Mic className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-              Voice LX
-            </button>
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                onOpenBookDemo();
-              }}
-              className="flex items-center justify-center gap-1.5 bg-slate-900 border border-slate-700 text-white py-2.5 rounded-xl text-xs font-medium"
-            >
-              Book Demo
-            </button>
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                onOpenGetStarted();
-              }}
-              className="col-span-2 flex items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-400 to-teal-300 text-slate-950 py-2.5 rounded-xl text-xs font-bold"
-            >
-              <span>Get Started</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            {user ? (
+              <>
+                <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 text-white py-2.5 rounded-xl text-xs font-medium">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-slate-950 font-extrabold text-[10px]">
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="truncate">{displayName}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    handleSignOut();
+                  }}
+                  className="flex items-center justify-center gap-1.5 bg-slate-900 border border-slate-700 text-white py-2.5 rounded-xl text-xs font-medium cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenLogin();
+                  }}
+                  className="flex items-center justify-center gap-1.5 bg-slate-900 border border-slate-700 text-white py-2.5 rounded-xl text-xs font-medium cursor-pointer"
+                >
+                  Login
+                </button>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenVoiceModal();
+                  }}
+                  className="flex items-center justify-center gap-1.5 bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 py-2.5 rounded-xl text-xs font-mono font-bold cursor-pointer"
+                >
+                  <Mic className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                  Voice LX
+                </button>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenBookDemo();
+                  }}
+                  className="flex items-center justify-center gap-1.5 bg-slate-900 border border-slate-700 text-white py-2.5 rounded-xl text-xs font-medium"
+                >
+                  Book Demo
+                </button>
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenGetStarted();
+                  }}
+                  className="col-span-2 flex items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-400 to-teal-300 text-slate-950 py-2.5 rounded-xl text-xs font-bold"
+                >
+                  <span>Get Started</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

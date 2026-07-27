@@ -16,6 +16,7 @@ interface HeroProps {
   onOpenDownload: () => void;
   onOpenGetStarted: () => void;
   onOpenRegisterInstitution?: () => void;
+  onOpenCreateAccount?: () => void;
   onSelectPrompt: (promptText: string) => void;
 }
 
@@ -27,6 +28,8 @@ export const Hero: React.FC<HeroProps> = ({
   onOpenDownload,
   onOpenGetStarted,
   onOpenRegisterInstitution,
+  onOpenCreateAccount,
+  onSelectPrompt,
 }) => {
   return (
     <section className="relative pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden bg-slate-950">
@@ -76,7 +79,17 @@ export const Hero: React.FC<HeroProps> = ({
                 <ArrowRight className="w-4 h-4 text-slate-950" />
               </button>
 
-              {/* 2. Secondary: Student Login */}
+              {/* 2. Create Your Account */}
+              <button
+                onClick={onOpenCreateAccount || onOpenGetStarted}
+                className="px-6 py-3.5 rounded-2xl bg-slate-900 border border-emerald-500/40 hover:border-emerald-400 text-emerald-300 hover:text-white font-extrabold text-xs transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <span>Create Your Account</span>
+                <ArrowRight className="w-4 h-4 text-emerald-400" />
+              </button>
+
+              {/* 3. Student Login */}
               <button
                 onClick={onOpenLogin}
                 className="px-5 py-3.5 rounded-2xl bg-slate-900 border border-slate-700 hover:border-emerald-500/80 text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-md hover:bg-slate-800/80 cursor-pointer"

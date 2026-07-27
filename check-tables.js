@@ -8,7 +8,7 @@ const supabase = createClient(
 );
 
 async function checkTables() {
-  const tables = ['menu_items', 'orders', 'notifications', 'students'];
+  const tables = ['menu_items', 'orders', 'notifications', 'profiles'];
   for (const table of tables) {
     const { data, error } = await supabase.from(table).select('*').limit(1);
     console.log(`Table ${table}:`, error ? `Error: ${error.message}` : 'Exists, data:', data);

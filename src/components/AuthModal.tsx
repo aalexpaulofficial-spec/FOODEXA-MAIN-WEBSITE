@@ -70,6 +70,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setSuccessMessage(null);
     setLoading(true);
     try {
+      console.log('[Foodexa Auth] Login request:', { email: loginEmail });
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: loginEmail,
         password: loginPassword,
@@ -114,6 +115,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setLoading(true);
     try {
+      console.log('OTP Request', {
+        email: studentForm.universityEmail,
+        options: {
+          shouldCreateUser: true,
+        },
+      });
       const response = await supabase.auth.signInWithOtp({
         email: studentForm.universityEmail,
         options: {
@@ -158,6 +165,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setLoading(true);
     try {
+      console.log('[Foodexa Auth] OTP verify request:', {
+        email: studentForm.universityEmail,
+        token: otpCode.trim(),
+        type: 'email',
+      });
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
         email: studentForm.universityEmail,
         token: otpCode.trim(),
@@ -170,30 +182,63 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         throw new Error(verifyError.message);
       }
 
-      const user = data.user;
-      if (user) {
-        const { data: studentData, error: studentError } = await supabase.from('students').insert([
-          {
-            auth_user_id: user.id,
-            full_name: studentForm.fullName,
-            email: user.email || otpEmail || studentForm.universityEmail,
-            phone: studentForm.phone,
-            programme: studentForm.programme,
-            institution_code: otpInstitutionCode || studentForm.institutionCode.toUpperCase(),
-            status: 'verified',
-            created_at: new Date().toISOString(),
-          },
-        ]);
-        console.log('[Foodexa Auth] Student profile insert response:', { data: studentData, error: studentError });
-        if (studentError) {
-          console.error('[Foodexa Auth] Student profile insert error:', studentError);
-          throw new Error(studentError.message);
+      console.log('[Foodexa Auth] getUser request');
+      const getUserResponse = await supabase.auth.getUser();
+      console.log('[Foodexa Auth] getUser response:', getUserResponse);
+
+      if (getUserResponse.error) {
+        console.error('[Foodexa Auth] getUser error:', getUserResponse.error);
+        throw new Error(getUserResponse.error.message);
+      }
+
+      const user = getUserResponse.data.user;
+      if (!user) {
+        throw new Error('Authenticated user not found.');
+      }
+
+      console.log('[Foodexa Auth] profiles select request:', { user_id: user.id });
+      const profileResponse = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      console.log('[Foodexa Auth] profiles select response:', profileResponse);
+
+      let profile = profileResponse.data;
+      if (profileResponse.error && profileResponse.error.code !== 'PGRST116') {
+        console.error('[Foodexa Auth] profiles select error:', profileResponse.error);
+        throw new Error(profileResponse.error.message);
+      }
+
+      if (!profile) {
+        const newProfile = {
+          user_id: user.id,
+          email: user.email,
+          full_name:
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            null,
+          role: 'student',
+        };
+        console.log('[Foodexa Auth] profiles insert request:', newProfile);
+        const insertProfileResponse = await supabase
+          .from('profiles')
+          .insert([newProfile])
+          .select('*')
+          .single();
+        console.log('[Foodexa Auth] profiles insert response:', insertProfileResponse);
+
+        if (insertProfileResponse.error) {
+          console.error('[Foodexa Auth] profiles insert error:', insertProfileResponse.error);
+          throw new Error(insertProfileResponse.error.message);
         }
+
+        profile = insertProfileResponse.data;
       }
 
       setResolvedProfile({
-        studentName: studentForm.fullName || user?.email?.split('@')[0] || 'Student',
-        email: user?.email || otpEmail || studentForm.universityEmail,
+        studentName: profile?.full_name || studentForm.fullName || user.email?.split('@')[0] || 'Student',
+        email: profile?.email || user.email || otpEmail || studentForm.universityEmail,
         code: otpInstitutionCode || studentForm.institutionCode.toUpperCase(),
       });
       setOtpExpiresAt(null);
@@ -212,6 +257,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setSuccessMessage(null);
     setLoading(true);
     try {
+      console.log('OTP Request', {
+        email: studentForm.universityEmail,
+        options: {
+          shouldCreateUser: true,
+        },
+      });
       const response = await supabase.auth.signInWithOtp({
         email: studentForm.universityEmail,
         options: {
@@ -247,6 +298,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setSuccessMessage(null);
     setLoading(true);
     try {
+      console.log('[Foodexa Auth] Password reset request:', { email: loginEmail });
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(loginEmail);
       console.log('[Foodexa Auth] Password reset response:', { error: resetError });
       if (resetError) throw new Error(resetError.message);

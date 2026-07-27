@@ -22,7 +22,7 @@ echo ""
 echo "=== Table Column Discovery ==="
 
 # List of known tables from the codebase
-tables=(menu_items institution_requests demo_requests orders notifications students profiles menu_categories order_items institutions)
+tables=(menu_items institution_requests demo_requests orders notifications profiles menu_categories order_items institutions)
 
 for table in "${tables[@]}"; do
   echo -n "\n${table}: "

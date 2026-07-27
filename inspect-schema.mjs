@@ -35,7 +35,7 @@ async function getColumns(table) {
 }
 
 async function main() {
-  const tables = ['menu_items', 'institution_requests', 'orders', 'notifications', 'profiles', 'menu_categories', 'order_items', 'institutions', 'students', 'demo_requests'];
+  const tables = ['menu_items', 'institution_requests', 'orders', 'notifications', 'profiles', 'menu_categories', 'order_items', 'institutions', 'demo_requests'];
 
   for (const table of tables) {
     console.log(`\n=== ${table} ===`);

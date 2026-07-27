@@ -26,11 +26,10 @@ import {
   LogOut,
   SlidersHorizontal,
   Check,
-  Volume2,
-  Loader2
+  Volume2
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface StudentPortalModalProps {
   isOpen: boolean;
@@ -80,109 +79,252 @@ interface NotificationItem {
   read: boolean;
 }
 
+const MENU_ITEMS: FoodItem[] = [
+  // Counter A - Main Meals
+  {
+    id: 'item-1',
+    name: 'Special Chicken Biryani',
+    counter: 'Counter A',
+    counterName: 'Counter A (Main Meals)',
+    price: 160,
+    prepTime: '8 mins',
+    rating: 4.9,
+    category: 'Main Meals',
+    description: 'Aromatic Dum Biryani served with spicy Mirchi ka Salan & chilled Onion Raita.',
+    image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=600&q=80',
+    popular: true,
+  },
+  {
+    id: 'item-2',
+    name: 'Paneer Butter Masala Thali',
+    counter: 'Counter A',
+    counterName: 'Counter A (Main Meals)',
+    price: 140,
+    prepTime: '7 mins',
+    rating: 4.8,
+    category: 'Main Meals',
+    description: 'Creamy Paneer Butter Masala, 2 Butter Phulkas, Dal Tadka, Jeera Rice & Gulab Jamun.',
+    image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&q=80',
+  },
+  {
+    id: 'item-3',
+    name: 'Chole Bhature Combo',
+    counter: 'Counter A',
+    counterName: 'Counter A (Main Meals)',
+    price: 110,
+    prepTime: '6 mins',
+    rating: 4.7,
+    category: 'Main Meals',
+    description: '2 Fluffy Golden Bhatures served with authentic Amritsari Chole & fried green chilli.',
+    image: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=600&q=80',
+  },
+
+  // Counter B - Fast Food
+  {
+    id: 'item-4',
+    name: 'Cheese Veg Burger',
+    counter: 'Counter B',
+    counterName: 'Counter B (Fast Food)',
+    price: 110,
+    prepTime: '6 mins',
+    rating: 4.8,
+    category: 'Fast Food',
+    description: 'Crispy herb potato patty topped with molten cheddar cheese, mayo & fresh lettuce.',
+    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&q=80',
+    popular: true,
+  },
+  {
+    id: 'item-5',
+    name: 'Loaded Peri Peri Fries',
+    counter: 'Counter B',
+    counterName: 'Counter B (Fast Food)',
+    price: 90,
+    prepTime: '5 mins',
+    rating: 4.9,
+    category: 'Fast Food',
+    description: 'Golden skin-on fries tossed in hot spicy Peri Peri seasoning drizzled with jalapeno cheese.',
+    image: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=600&q=80',
+  },
+  {
+    id: 'item-6',
+    name: 'Woodfired Pizza Slice',
+    counter: 'Counter B',
+    counterName: 'Counter B (Fast Food)',
+    price: 130,
+    prepTime: '8 mins',
+    rating: 4.8,
+    category: 'Fast Food',
+    description: 'Artisanal sourdough base topped with fresh mozzarella, sun-dried tomatoes & fresh basil.',
+    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=80',
+  },
+
+  // Counter C - Tea & Coffee
+  {
+    id: 'item-7',
+    name: 'Special Cold Coffee w/ Ice Cream',
+    counter: 'Counter C',
+    counterName: 'Counter C (Tea & Coffee)',
+    price: 75,
+    prepTime: '3 mins',
+    rating: 4.9,
+    category: 'Beverages',
+    description: 'Thick espresso blend topped with a scoop of Madagascar vanilla ice cream & chocolate fudge.',
+    image: 'https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=600&q=80',
+    popular: true,
+  },
+  {
+    id: 'item-8',
+    name: 'Kullad Masala Chai',
+    counter: 'Counter C',
+    counterName: 'Counter C (Tea & Coffee)',
+    price: 25,
+    prepTime: '2 mins',
+    rating: 4.9,
+    category: 'Beverages',
+    description: 'Authentic clay-pot brewed tea infused with fresh ginger, cardamom & crushed cloves.',
+    image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=600&q=80',
+  },
+  {
+    id: 'item-9',
+    name: 'Iced Matcha Vanilla Latte',
+    counter: 'Counter C',
+    counterName: 'Counter C (Tea & Coffee)',
+    price: 95,
+    prepTime: '3 mins',
+    rating: 4.8,
+    category: 'Beverages',
+    description: 'Japanese ceremonial grade matcha whisked with oat milk and Madagascar vanilla syrup.',
+    image: 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=600&q=80',
+  },
+
+  // Counter D - Desserts & South Indian
+  {
+    id: 'item-10',
+    name: 'Butter Masala Dosa',
+    counter: 'Counter D',
+    counterName: 'Counter D (South Indian & Desserts)',
+    price: 80,
+    prepTime: '5 mins',
+    rating: 4.9,
+    category: 'South Indian',
+    description: 'Golden crispy crepe cooked in pure Amul butter, filled with spiced potato masala & chutney combo.',
+    image: 'https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=600&q=80',
+    popular: true,
+  },
+  {
+    id: 'item-11',
+    name: 'Fresh Watermelon Juice',
+    counter: 'Counter D',
+    counterName: 'Counter D (South Indian & Desserts)',
+    price: 50,
+    prepTime: '2 mins',
+    rating: 4.8,
+    category: 'Juices',
+    description: '100% cold-pressed watermelon juice garnished with fresh mint & black salt.',
+    image: 'https://images.unsplash.com/photo-1589733955941-5eeaf752f6dd?w=600&q=80',
+  },
+  {
+    id: 'item-12',
+    name: 'Sizzling Brownie with Ice Cream',
+    counter: 'Counter D',
+    counterName: 'Counter D (South Indian & Desserts)',
+    price: 110,
+    prepTime: '5 mins',
+    rating: 4.9,
+    category: 'Desserts',
+    description: 'Warm walnut brownie served on a sizzling hot cast iron plate with vanilla ice cream & dark fudge.',
+    image: 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=600&q=80',
+  }
+];
 
 export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   isOpen,
   onClose,
   studentName = 'Alex Paul',
   universityEmail = 'alex.paul@christuniversity.in',
-  institutionCode = 'CHRKNG2026',
-  institutionName = 'CHRIST (Deemed to be University) - Kengeri Campus',
+  institutionCode,
+  institutionName,
 }) => {
   const { profile, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<'home' | 'menu' | 'orders' | 'profile' | 'notifications'>('home');
+  const [institutionData, setInstitutionData] = useState<{ id: string; name: string; campus: string; code: string } | null>(null);
+  const [institutionLoading, setInstitutionLoading] = useState(false);
   
   // Menu Filters
   const [selectedCounter, setSelectedCounter] = useState<string>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
-  const [menuItems, setMenuItems] = useState<FoodItem[]>([]);
-  const [cart, setCart] = useState<{ item: FoodItem; quantity: number }[]>([]);
+  // Cart & Order
+  const [cart, setCart] = useState<{ item: FoodItem; quantity: number }[]>([
+    { item: MENU_ITEMS[0], quantity: 1 }
+  ]);
   const [isRazorpayModalOpen, setIsRazorpayModalOpen] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'wallet' | 'netbanking'>('upi');
   const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
 
   // Active Order State
-  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
+  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>({
+    orderId: 'FDX-849201',
+    counter: 'Counter B',
+    lockerNumber: 'Locker #04',
+    items: [
+      { name: 'Cheese Veg Burger', quantity: 1, price: 110 },
+      { name: 'Loaded Peri Peri Fries', quantity: 1, price: 90 },
+    ],
+    total: 200,
+    qrCode: `FOODEXA-FDX-849201-${institutionCode || ''}`,
+    status: 'Preparing',
+    createdAt: Date.now() - 25000, // 25s ago
+    timeRemaining: '5 mins',
+    queuePosition: 2,
+    role: 'student',
+  });
 
   // Past Orders History
-  const [orderHistory, setOrderHistory] = useState<ActiveOrder[]>([]);
+  const [orderHistory, setOrderHistory] = useState<ActiveOrder[]>([
+    {
+      orderId: 'FDX-710492',
+      counter: 'Counter A',
+      lockerNumber: 'Locker #09',
+      items: [{ name: 'Special Chicken Biryani', quantity: 1, price: 160 }],
+      total: 160,
+      qrCode: 'FOODEXA-FDX-710492-CHRKNG2026',
+      status: 'Collected',
+      createdAt: Date.now() - 86400000,
+      timeRemaining: '0 mins',
+      queuePosition: 0,
+      role: 'student',
+    }
+  ]);
 
   // Notifications
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-
-  // Data Fetching
-  const [loadingData, setLoadingData] = useState(true);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    const fetchData = async () => {
-      setLoadingData(true);
-      try {
-        const [{ data: menu }, { data: orders }, { data: notifs }] = await Promise.all([
-          supabase.from('menu_items').select('*'),
-          supabase.from('orders').select('*').order('created_at', { ascending: false }),
-          supabase.from('notifications').select('*').order('created_at', { ascending: false })
-        ]);
-        
-        if (menu) {
-          setMenuItems(menu.map((m: any) => ({
-            id: m.id,
-            name: m.name,
-            counter: m.counter,
-            counterName: m.counter_name || m.counter,
-            price: m.price,
-            prepTime: m.prep_time || '5 mins',
-            rating: m.rating || 4.5,
-            category: m.category,
-            description: m.description,
-            image: m.image_url,
-            popular: m.popular || false
-          })));
-        }
-        
-        if (orders) {
-          const parsedOrders = orders.map((o: any) => ({
-            orderId: o.order_id || o.id,
-            counter: o.counter,
-            lockerNumber: o.locker_number,
-            items: o.items || [],
-            total: o.total_amount,
-            qrCode: o.qr_code,
-            status: o.status,
-            createdAt: new Date(o.created_at).getTime(),
-            timeRemaining: '5 mins',
-            queuePosition: 2
-          }));
-          
-          const active = parsedOrders.filter((o: any) => o.status !== 'Collected' && o.status !== 'Cancelled');
-          const past = parsedOrders.filter((o: any) => o.status === 'Collected' || o.status === 'Cancelled');
-          
-          setActiveOrder(active.length > 0 ? active[0] : null);
-          setOrderHistory(past);
-        }
-        
-        if (notifs) {
-          setNotifications(notifs.map((n: any) => ({
-            id: n.id,
-            title: n.title,
-            message: n.message,
-            time: new Date(n.created_at).toLocaleTimeString(),
-            type: n.type || 'announcement',
-            read: n.read || false
-          })));
-        }
-      } catch (err) {
-        console.error('Error fetching portal data:', err);
-      } finally {
-        setLoadingData(false);
-      }
-    };
-    
-    fetchData();
-  }, [isOpen]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([
+    {
+      id: 'n1',
+      title: 'Counter B Ready for Pickup',
+      message: 'Order #FDX-849201 is currently being prepared at Counter B (Locker #04).',
+      time: '10 mins ago',
+      type: 'order',
+      read: false,
+    },
+    {
+      id: 'n2',
+      title: 'Exam Special 20% OFF Offer',
+      message: 'Use coupon EXAM20 at Counter B Fast Food to get 20% flat discount!',
+      time: '1 hour ago',
+      type: 'offer',
+      read: true,
+    },
+    {
+      id: 'n3',
+      title: 'New QR Pod Lockers Installed',
+      message: '30 new contact-free QR pickup lockers are now active at Block 3 Dining Hall.',
+      time: '1 day ago',
+      type: 'announcement',
+      read: true,
+    }
+  ]);
 
   // Cancellation Timer calculation
   const [secondsSinceOrder, setSecondsSinceOrder] = useState<number>(30);
@@ -208,10 +350,36 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
     }
   }, [isOpen, refreshProfile]);
 
+  useEffect(() => {
+    if (isOpen) {
+      const fetchInstitution = async () => {
+        const code = profile?.institution_code || institutionCode;
+        if (code) {
+          setInstitutionLoading(true);
+          try {
+            const { data } = await supabase
+              .from('institutions')
+              .select('id, name, campus, code')
+              .eq('code', code.trim().toUpperCase())
+              .single();
+            if (data) {
+              setInstitutionData({ id: data.id, name: data.name, campus: data.campus, code: data.code });
+            }
+          } catch {
+            // silently fail, fall back to props or placeholders
+          } finally {
+            setInstitutionLoading(false);
+          }
+        }
+      };
+      fetchInstitution();
+    }
+  }, [isOpen, profile?.institution_code, institutionCode]);
+
   if (!isOpen) return null;
 
   // Filtered Food items
-  const filteredItems = menuItems.filter((item) => {
+  const filteredItems = MENU_ITEMS.filter((item) => {
     const matchesCounter = selectedCounter === 'ALL' || item.counter === selectedCounter;
     const matchesCategory = selectedCategory === 'ALL' || item.category === selectedCategory;
     const matchesSearch =
@@ -253,68 +421,49 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
 
   const handleRazorpayPayment = () => {
     setIsProcessingPayment(true);
-    setTimeout(async () => {
+    setTimeout(() => {
+      setIsProcessingPayment(false);
+      setIsRazorpayModalOpen(false);
+
       const randomOrderId = 'FDX-' + Math.floor(100000 + Math.random() * 900000);
       const firstCounter = cart[0]?.item.counter || 'Counter B';
       const lockerNum = Math.floor(1 + Math.random() * 12);
-      const orderRole = profile?.role || 'student';
 
-      const newOrderData = {
-        order_id: randomOrderId,
+      const newOrder: ActiveOrder = {
+        orderId: randomOrderId,
         counter: firstCounter,
-        locker_number: `Locker #${lockerNum < 10 ? '0' + lockerNum : lockerNum}`,
+        lockerNumber: `Locker #${lockerNum < 10 ? '0' + lockerNum : lockerNum}`,
         items: cart.map((c) => ({ name: c.item.name, quantity: c.quantity, price: c.item.price })),
-        total_amount: cartTotal,
-        qr_code: `FOODEXA-${randomOrderId}-${institutionCode}`,
+        total: cartTotal,
+        qrCode: `FOODEXA-${randomOrderId}-${institutionData?.code || institutionCode || ''}`,
         status: 'Order Received',
-        role: orderRole,
+        createdAt: Date.now(),
+        timeRemaining: '7 mins',
+        queuePosition: 3,
+        role: profile?.role || 'student',
       };
 
-      try {
-        await supabase.from('orders').insert([newOrderData]);
-        
-        const newOrder: ActiveOrder = {
-          orderId: newOrderData.order_id,
-          counter: newOrderData.counter,
-          lockerNumber: newOrderData.locker_number,
-          items: newOrderData.items,
-          total: newOrderData.total_amount,
-          qrCode: newOrderData.qr_code,
-          status: newOrderData.status as OrderStatus,
-          createdAt: Date.now(),
-          timeRemaining: '7 mins',
-          queuePosition: 3,
-          role: orderRole,
-        };
+      setActiveOrder(newOrder);
+      setSecondsSinceOrder(0);
+      setCart([]);
+      setActiveTab('orders');
 
-        setActiveOrder(newOrder);
-        setSecondsSinceOrder(0);
-        setCart([]);
-        setActiveTab('orders');
-
-        // Add Notification locally (could also insert to DB)
-        setNotifications((prev) => [
-          {
-            id: 'n-' + Date.now(),
-            title: `Order #${randomOrderId} Placed`,
-            message: `Your payment of ₹${cartTotal} was verified by Razorpay. Sent to ${firstCounter}.`,
-            time: 'Just now',
-            type: 'order',
-            read: false,
-          },
-          ...prev,
-        ]);
-      } catch (err) {
-        console.error("Payment sync to DB failed", err);
-        alert('Failed to process order. Please try again.');
-      } finally {
-        setIsProcessingPayment(false);
-        setIsRazorpayModalOpen(false);
-      }
+      // Add Notification
+      setNotifications((prev) => [
+        {
+          id: 'n-' + Date.now(),
+          title: `Order #${randomOrderId} Placed`,
+          message: `Your payment of ₹${cartTotal} was verified by Razorpay. Sent to ${firstCounter}.`,
+          time: 'Just now',
+          type: 'order',
+          read: false,
+        },
+        ...prev,
+      ]);
     }, 1600);
   };
 
-  const handleCancelOrder = async () => {
+  const handleCancelOrder = () => {
     if (!activeOrder) return;
 
     const secondsPassed = (Date.now() - activeOrder.createdAt) / 1000;
@@ -323,31 +472,49 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
       return;
     }
 
-    try {
-      await supabase
-        .from('orders')
-        .update({ status: 'Cancelled' })
-        .eq('order_id', activeOrder.orderId);
+    const cancelledOrder = { ...activeOrder, status: 'Cancelled' as OrderStatus };
+    setOrderHistory((prev) => [cancelledOrder, ...prev]);
+    setActiveOrder(null);
 
-      const cancelledOrder = { ...activeOrder, status: 'Cancelled' as OrderStatus };
-      setOrderHistory((prev) => [cancelledOrder, ...prev]);
+    setNotifications((prev) => [
+      {
+        id: 'n-' + Date.now(),
+        title: `Order #${cancelledOrder.orderId} Cancelled`,
+        message: `Refund of ₹${cancelledOrder.total} initiated back to your original payment method.`,
+        time: 'Just now',
+        type: 'order',
+        read: false,
+      },
+      ...prev,
+    ]);
+  };
+
+  const advanceKitchenStatus = (nextStatus: OrderStatus) => {
+    if (!activeOrder) return;
+    if (nextStatus === 'Collected') {
+      const completedOrder = { ...activeOrder, status: 'Collected' as OrderStatus };
+      setOrderHistory((prev) => [completedOrder, ...prev]);
       setActiveOrder(null);
-
-      setNotifications((prev) => [
-        {
-          id: 'n-' + Date.now(),
-          title: `Order #${cancelledOrder.orderId} Cancelled`,
-          message: `Refund of ₹${cancelledOrder.total} initiated back to your original payment method.`,
-          time: 'Just now',
-          type: 'order',
-          read: false,
-        },
-        ...prev,
-      ]);
-    } catch (err) {
-      console.error("Cancellation failed", err);
-      alert("Failed to cancel order.");
+    } else {
+      setActiveOrder({
+        ...activeOrder,
+        status: nextStatus,
+        timeRemaining: nextStatus === 'Preparing' ? '4 mins' : 'Ready Now!',
+        queuePosition: nextStatus === 'Preparing' ? 1 : 0,
+      });
     }
+
+    setNotifications((prev) => [
+      {
+        id: 'n-' + Date.now(),
+        title: `Order Status: ${nextStatus}`,
+        message: `Order #${activeOrder.orderId} updated to ${nextStatus}.`,
+        time: 'Just now',
+        type: 'order',
+        read: false,
+      },
+      ...prev,
+    ]);
   };
 
   const handleLxVoiceCommand = (cmd: string) => {
@@ -355,15 +522,15 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
     setLxMessage(`Student: "${cmd}"`);
 
     setTimeout(() => {
-      if (cmd.toLowerCase().includes('biryani') && menuItems.length > 0) {
-        addToCart(menuItems[0]);
-        setLxMessage(`LX AI: "Added ${menuItems[0].name} to your cart."`);
-      } else if (cmd.toLowerCase().includes('burger') && menuItems.length > 3) {
-        addToCart(menuItems[3]);
-        setLxMessage(`LX AI: "Added ${menuItems[3].name} to your cart."`);
-      } else if (menuItems.length > 0) {
-        addToCart(menuItems[0]);
-        setLxMessage(`LX AI: "Found recommendation and added it to your order!"`);
+      if (cmd.toLowerCase().includes('biryani')) {
+        addToCart(MENU_ITEMS[0]);
+        setLxMessage(`LX AI: "Added Special Chicken Biryani from Counter A to your cart. Pickup ready in 8 mins!"`);
+      } else if (cmd.toLowerCase().includes('burger')) {
+        addToCart(MENU_ITEMS[3]);
+        setLxMessage(`LX AI: "Added Cheese Veg Burger from Counter B to your cart. Pickup ready in 6 mins!"`);
+      } else {
+        addToCart(MENU_ITEMS[7]);
+        setLxMessage(`LX AI: "Found recommendation at Counter C and added Kullad Masala Chai to your order!"`);
       }
       setIsLxVoiceActive(false);
     }, 1100);
@@ -379,19 +546,19 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-slate-950 font-extrabold text-lg shadow-lg">
               FX
             </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-extrabold text-white tracking-tight">
-                    {institutionName}
-                  </h3>
-                  <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-800 font-mono font-bold">
-                    Code: {institutionCode}
-                  </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-extrabold text-white tracking-tight">
+                      {institutionData?.name || institutionName || 'Campus Portal'}
+                    </h3>
+                    <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-800 font-mono font-bold">
+                      Code: {institutionData?.code || profile?.institution_code || institutionCode || '—'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Logged in as <span className="text-slate-200 font-semibold">{profile?.full_name || studentName}</span> ({profile?.email || universityEmail})
+                  </p>
                 </div>
-                <p className="text-[11px] text-slate-400">
-                  Logged in as <span className="text-slate-200 font-semibold">{profile?.full_name || studentName}</span> ({profile?.email || universityEmail})
-                </p>
-              </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -461,6 +628,22 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
           {activeTab === 'home' && (
             <div className="space-y-6">
               
+              {/* Welcome Back Banner */}
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-slate-950 font-black text-sm shadow-lg">
+                  {(profile?.full_name || studentName).charAt(0)}
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-white">
+                    Welcome Back, {profile?.full_name || studentName}
+                  </h3>
+<p className="text-[11px] text-slate-400">
+  {profile?.role === 'faculty' ? 'Faculty' : profile?.role === 'guest' ? 'Guest' : 'Student'} • {institutionData?.name || institutionName}
+  {institutionData?.campus ? ` — ${institutionData.campus}` : ''}
+</p>
+                </div>
+              </div>
+
               {/* Campus Offer Hero Banner */}
               <div className="relative rounded-3xl bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 border border-emerald-500/30 p-6 overflow-hidden shadow-xl">
                 <div className="relative z-10 max-w-xl space-y-3">
@@ -544,19 +727,26 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 </div>
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {[...new Set(menuItems.map((m) => m.counter))].map((counter) => (
+                  {[
+                    { id: 'Counter A', name: 'Counter A', label: 'Main Meals', status: 'Live • 6-8 mins', color: 'border-emerald-500/40' },
+                    { id: 'Counter B', name: 'Counter B', label: 'Fast Food', status: 'Live • 5 mins', color: 'border-teal-500/40' },
+                    { id: 'Counter C', name: 'Counter C', label: 'Tea & Coffee', status: 'Live • 2 mins', color: 'border-amber-500/40' },
+                    { id: 'Counter D', name: 'Counter D', label: 'Desserts & South', status: 'Live • 5 mins', color: 'border-indigo-500/40' },
+                  ].map((c) => (
                     <div
-                      key={counter}
+                      key={c.id}
                       onClick={() => {
-                        setSelectedCounter(counter);
+                        setSelectedCounter(c.id);
                         setActiveTab('menu');
                       }}
-                      className="bg-slate-950 border border-slate-800 hover:border-emerald-500/40 p-4 rounded-2xl hover:bg-slate-900/80 transition-all cursor-pointer space-y-2 group"
+                      className={`bg-slate-950 border ${c.color} p-4 rounded-2xl hover:bg-slate-900/80 transition-all cursor-pointer space-y-2 group`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white group-hover:text-emerald-400">{counter}</span>
+                        <span className="text-xs font-bold text-white group-hover:text-emerald-400">{c.name}</span>
+                        <span className="text-[10px] text-emerald-400 font-mono font-semibold">{c.status}</span>
                       </div>
-                      <p className="text-xs font-semibold text-slate-300">{menuItems.filter((m) => m.counter === counter).length} items available</p>
+                      <p className="text-xs font-semibold text-slate-300">{c.label}</p>
+                      <p className="text-[11px] text-slate-400">Unlimited digital queue management</p>
                     </div>
                   ))}
                 </div>
@@ -566,7 +756,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
               <div className="space-y-3">
                 <h3 className="text-sm font-bold text-white">Recommended for Your Campus Break</h3>
                 <div className="grid sm:grid-cols-3 gap-4">
-                  {menuItems.slice(0, 3).map((food) => (
+                  {MENU_ITEMS.slice(0, 3).map((food) => (
                     <div
                       key={food.id}
                       className="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 space-y-3 hover:border-emerald-500/40 transition-all flex flex-col justify-between"
@@ -626,7 +816,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
 
                   {/* Counter Filter Tabs */}
                   <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                    {[{ id: 'ALL', label: 'All Campus Items' }, ...Array.from(new Set(menuItems.map(m => m.counter))).map(c => ({ id: c, label: c }))].map((tab) => (
+                    {[
+                      { id: 'ALL', label: 'All Campus Items' },
+                      { id: 'Counter A', label: 'Counter A (Main Meals)' },
+                      { id: 'Counter B', label: 'Counter B (Fast Food)' },
+                      { id: 'Counter C', label: 'Counter C (Tea & Coffee)' },
+                      { id: 'Counter D', label: 'Counter D (Desserts & South)' },
+                    ].map((tab) => (
                       <button
                         key={tab.id}
                         onClick={() => setSelectedCounter(tab.id)}
@@ -905,7 +1101,34 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                         </div>
                       )}
 
-
+                      {/* KITCHEN STAFF SIMULATOR CONTROLS (For Testing) */}
+                      <div className="pt-2 border-t border-slate-800 flex items-center gap-2">
+                        <span className="text-[10px] text-slate-500 font-mono">Kitchen Simulator:</span>
+                        {activeOrder.status === 'Order Received' && (
+                          <button
+                            onClick={() => advanceKitchenStatus('Preparing')}
+                            className="text-[10px] bg-slate-900 border border-slate-800 hover:border-emerald-500 text-slate-300 px-2 py-1 rounded"
+                          >
+                            Set "Preparing"
+                          </button>
+                        )}
+                        {activeOrder.status === 'Preparing' && (
+                          <button
+                            onClick={() => advanceKitchenStatus('Ready')}
+                            className="text-[10px] bg-slate-900 border border-slate-800 hover:border-emerald-500 text-emerald-400 px-2 py-1 rounded font-bold"
+                          >
+                            Set "Ready at Locker"
+                          </button>
+                        )}
+                        {activeOrder.status === 'Ready' && (
+                          <button
+                            onClick={() => advanceKitchenStatus('Collected')}
+                            className="text-[10px] bg-emerald-500 text-slate-950 px-2 py-1 rounded font-bold"
+                          >
+                            Mark "Collected"
+                          </button>
+                        )}
+                      </div>
 
                     </div>
 
@@ -1007,27 +1230,53 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
               {/* Profile Card Header */}
               <div className="bg-slate-950 border border-slate-800 rounded-3xl p-6 flex items-center gap-4">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg">
-                  {studentName.charAt(0)}
+                  {(profile?.full_name || studentName).charAt(0)}
                 </div>
                 <div>
-                  <h3 className="text-lg font-extrabold text-white">{studentName}</h3>
-                  <p className="text-xs text-emerald-400 font-mono">{universityEmail}</p>
+                  <h3 className="text-lg font-extrabold text-white">{profile?.full_name || studentName}</h3>
+                  <p className="text-xs text-emerald-400 font-mono">{profile?.email || universityEmail}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {profile?.role === 'faculty' ? 'Faculty' : profile?.role === 'guest' ? 'Guest' : 'Student'} • {institutionData?.name || institutionName}
+                    {institutionData?.campus ? ` — ${institutionData.campus}` : ''}
+                  </p>
                 </div>
               </div>
 
-              {/* Institution Identity */}
+              {/* Institutional Identity */}
               <div className="bg-slate-950 border border-slate-800 rounded-3xl p-6 space-y-4">
                 <h4 className="text-xs font-bold text-white uppercase tracking-wider text-slate-400">Institutional Identity</h4>
                 
                 <div className="grid sm:grid-cols-2 gap-4 text-xs font-mono">
                   <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                    <span className="text-slate-500 text-[10px] block">Full Name:</span>
+                    <span className="text-white font-bold">{profile?.full_name || studentName}</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                    <span className="text-slate-500 text-[10px] block">Role:</span>
+                    <span className="text-emerald-400 font-bold">
+                      {profile?.role === 'faculty' ? 'Faculty' : profile?.role === 'guest' ? 'Guest' : 'Student'}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
                     <span className="text-slate-500 text-[10px] block">Registered Campus:</span>
-                    <span className="text-white font-bold">{institutionName}</span>
+                    <span className="text-white font-bold">{institutionData?.name || institutionName}</span>
                   </div>
 
                   <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
                     <span className="text-slate-500 text-[10px] block">Campus Access Code:</span>
-                    <span className="text-emerald-400 font-bold">{institutionCode}</span>
+                    <span className="text-emerald-400 font-bold">{institutionData?.code || profile?.institution_code || institutionCode || '—'}</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                    <span className="text-slate-500 text-[10px] block">Email:</span>
+                    <span className="text-white font-bold">{profile?.email || universityEmail}</span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                    <span className="text-slate-500 text-[10px] block">Phone:</span>
+                    <span className="text-white font-bold">{profile?.phone || 'Not provided'}</span>
                   </div>
                 </div>
               </div>
@@ -1124,6 +1373,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                     <span>Credit / Debit Card</span>
                   </button>
                 </div>
+              </div>
+
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-[11px] text-slate-400 font-mono">
+                💡 Demo Mode: Real Razorpay Gateway Sandbox test transaction for {institutionCode}. No real money deducted.
               </div>
 
               <button

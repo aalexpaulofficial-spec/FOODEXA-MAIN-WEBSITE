@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: 'login' | 'create';
   selectedRole?: 'student' | 'faculty' | 'guest';
-  onLoginSuccess?: (data: { studentName: string; email: string; code: string }) => void;
+  onLoginSuccess?: (data: { studentName: string; email: string; code: string; institutionName?: string }) => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -30,7 +31,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [currentEmail, setCurrentEmail] = useState('');
 
   // OTP state
-  const [otpCode, setOtpCode] = useState('849201');
+  const [otpCode, setOtpCode] = useState('');
+
+  // Institution validation state
+  const [institutionData, setInstitutionData] = useState<{ id: string; name: string; campus: string; code: string } | null>(null);
+  const [institutionLoading, setInstitutionLoading] = useState(false);
+  const [institutionError, setInstitutionError] = useState<string | null>(null);
 
   // Create Student Account state
   const [studentForm, setStudentForm] = useState({
@@ -41,7 +47,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     department: '',
     semester: '',
     campusBlock: '',
-    institutionCode: 'CHRKNG2026',
+    institutionCode: '',
     password: '',
     confirmPassword: '',
   });
@@ -53,7 +59,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     phone: '',
     department: '',
     designation: '',
-    institutionCode: 'CHRKNG2026',
+    institutionCode: '',
     password: '',
     confirmPassword: '',
   });
@@ -63,7 +69,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     fullName: '',
     universityEmail: '',
     phone: '',
-    institutionCode: 'CHRKNG2026',
+    institutionCode: '',
     password: '',
     confirmPassword: '',
   });
@@ -83,30 +89,66 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
+  const validateInstitutionCode = async (code: string) => {
+    if (!code || !code.trim()) {
+      setInstitutionError('Institution Code is required.');
+      return null;
+    }
+    setInstitutionLoading(true);
+    setInstitutionError(null);
+    try {
+      const { data, error } = await supabase
+        .from('institutions')
+        .select('id, name, campus, code')
+        .eq('code', code.trim().toUpperCase())
+        .single();
+
+      if (error || !data) {
+        setInstitutionError('Invalid Institution Code. Please check and try again.');
+        setInstitutionData(null);
+        return null;
+      }
+
+      setInstitutionData({ id: data.id, name: data.name, campus: data.campus, code: data.code });
+      return data;
+    } catch (err) {
+      setInstitutionError('Failed to validate institution code. Please try again.');
+      setInstitutionData(null);
+      return null;
+    } finally {
+      setInstitutionLoading(false);
+    }
+  };
+
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentEmail(loginEmail);
     setStep('success');
   };
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const currentForm = selectedRole === 'student' ? studentForm : selectedRole === 'faculty' ? facultyForm : guestForm;
-    
+
     if (currentForm.password !== currentForm.confirmPassword) {
       alert('Passwords do not match');
       return;
     }
-    
+
+    const institution = await validateInstitutionCode(currentForm.institutionCode);
+    if (!institution) {
+      return;
+    }
+
     setCurrentEmail(currentForm.universityEmail);
-    
+
     // Store form data in user metadata for OTP verification
     // This will be used in the verifyOtp call from AuthContext
     localStorage.setItem('tempFormData', JSON.stringify({
       ...currentForm,
       role: selectedRole,
     }));
-    
+
     // Call signInWithOtp with role and additional data
     signInWithOtp(currentForm.universityEmail, currentForm.fullName, selectedRole, currentForm.institutionCode, currentForm.phone)
       .then(({ error }) => {
@@ -120,11 +162,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleVerifyOtp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (otpCode.length < 6) {
-      alert('Please enter a valid 6-digit OTP code');
+    if (otpCode.length !== 8) {
+      alert('Please enter a valid 8-digit OTP code');
       return;
     }
-    
+
     // Use the AuthContext's verifyOtp function which will create the profile
     verifyOtp(currentEmail, otpCode)
       .then(({ error }) => {
@@ -161,7 +203,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onLoginSuccess({
         studentName: currentForm.fullName || 'Alex Paul',
         email: mode === 'login' ? (loginEmail || 'alex.paul@christuniversity.in') : (currentForm.universityEmail || 'alex.paul@christuniversity.in'),
-        code: currentForm.institutionCode || 'CHRKNG2026',
+        code: currentForm.institutionCode || '—',
+        institutionName: institutionData?.name || undefined,
       });
     }
   };
@@ -353,7 +396,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                             required
                             value={studentForm.institutionCode}
                             onChange={(e) => setStudentForm({ ...studentForm, institutionCode: e.target.value })}
-                            placeholder="CHRKNG2026"
+                            placeholder="e.g. YAWEHH264881"
                             className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
                           />
                         </div>
@@ -432,7 +475,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           required
                           value={facultyForm.institutionCode}
                           onChange={(e) => setFacultyForm({ ...facultyForm, institutionCode: e.target.value })}
-                          placeholder="CHRKNG2026"
+                          placeholder="e.g. YAWEHH264881"
                           className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
                         />
                       </div>
@@ -447,7 +490,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={guestForm.institutionCode}
                         onChange={(e) => setGuestForm({ ...guestForm, institutionCode: e.target.value })}
-                        placeholder="CHRKNG2026"
+                        placeholder="e.g. YAWEHH264881"
                         className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
                       />
                     </div>
@@ -508,7 +551,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
               <h3 className="text-xl font-extrabold text-white">Verify Your Email OTP</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                We sent a 6-digit security code to{' '}
+                We sent an 8-digit security code to{' '}
                 <strong className="text-emerald-400">{currentEmail || 'alex.paul@christuniversity.in'}</strong>
               </p>
             </div>
@@ -516,11 +559,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 mb-1 block text-center">
-                  6-Digit Verification Code
+                  8-Digit Verification Code
                 </label>
                 <input
                   type="text"
-                  maxLength={6}
+                  maxLength={8}
                   required
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value)}
@@ -528,12 +571,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 />
               </div>
 
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-2 text-xs text-slate-400">
-                <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>
-                  Institution Target: <strong className="text-white">CHRIST (Deemed to be University)</strong> Code: <strong className="text-emerald-400">{getCurrentForm().institutionCode || 'CHRKNG2026'}</strong>
-                </span>
-              </div>
+              {institutionLoading ? (
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-2 text-xs text-slate-400">
+                  <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Validating institution...</span>
+                </div>
+              ) : institutionError ? (
+                <div className="p-3 bg-slate-950 border border-red-500/40 rounded-xl flex items-center gap-2 text-xs text-red-300">
+                  <Building2 className="w-4 h-4 text-red-400 shrink-0" />
+                  <span>{institutionError}</span>
+                </div>
+              ) : institutionData ? (
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-2 text-xs text-slate-400">
+                  <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    Institution: <strong className="text-white">{institutionData.name}</strong>
+                    {institutionData.campus ? ` — ${institutionData.campus}` : ''}
+                    <br />
+                    Code: <strong className="text-emerald-400">{institutionData.code}</strong>
+                  </span>
+                </div>
+              ) : (
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-2 text-xs text-slate-400">
+                  <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    Institution Code: <strong className="text-emerald-400">{getCurrentForm().institutionCode || '—'}</strong>
+                  </span>
+                </div>
+              )}
 
               <button
                 type="submit"
@@ -568,7 +633,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {mode === 'login' ? 'Logged In Successfully!' : 'Email Verified & Account Joined!'}
               </h3>
               <p className="text-xs text-emerald-400 font-mono font-semibold">
-                Joined: CHRIST (Deemed to be University) - Kengeri Campus ({getCurrentForm().institutionCode || 'CHRKNG2026'})
+                Joined: {institutionData ? institutionData.name : 'Institution'}
+                {institutionData?.campus ? ` — ${institutionData.campus}` : ''}
+                ({getCurrentForm().institutionCode || '—'})
               </p>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">

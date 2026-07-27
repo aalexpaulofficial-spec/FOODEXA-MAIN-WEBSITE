@@ -20,7 +20,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string, role: 'student' | 'faculty' | 'guest', institutionCode?: string) => Promise<{ error: Error | null }>;
-  signInWithOtp: (email: string, fullName: string, role: 'student' | 'faculty' | 'guest', institutionCode?: string, phone?: string) => Promise<{ error: Error | null }>;
+  signInWithOtp: (email: string, fullName: string, role: 'student' | 'faculty' | 'guest', institutionCode?: string) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
@@ -142,6 +142,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const institutionCode = userData.institution_code || null;
       const phone = userData.phone || null;
       
+      let institutionId = null;
+      
+      if (institutionCode) {
+        const { data: institution } = await supabase
+          .from('institutions')
+          .select('id')
+          .eq('code', institutionCode.trim().toUpperCase())
+          .single();
+        
+        if (institution) {
+          institutionId = institution.id;
+        }
+      }
+      
       await supabase
         .from('profiles')
         .upsert({
@@ -150,7 +164,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           full_name: fullName,
           phone,
           role,
-          institution_id: null,
+          institution_id: institutionId,
           institution_code: institutionCode,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),

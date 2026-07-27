@@ -40,6 +40,7 @@ export default function App() {
     studentName: 'Alex Paul',
     email: 'alex.paul@christuniversity.in',
     code: 'CHRKNG2026',
+    institutionName: '',
   });
   const [selectedRole, setSelectedRole] = useState<'student' | 'faculty' | 'guest'>('student');
   const [activePrompt, setActivePrompt] = useState<string>('');
@@ -225,7 +226,7 @@ export default function App() {
         onLoginSuccess={(data) => {
           setPortalData(data);
           setIsStudentPortalOpen(true);
-          addToast('Logged in to Campus Portal', `Welcome to CHRIST University (${data.code})`, 'success');
+          addToast('Logged in to Campus Portal', `Welcome to ${data.institutionName || 'your institution'} (${data.code})`, 'success');
         }}
       />
 
@@ -235,6 +236,7 @@ export default function App() {
         studentName={portalData.studentName}
         universityEmail={portalData.email}
         institutionCode={portalData.code}
+        institutionName={portalData.institutionName}
       />
 
       <DownloadModal

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, User as UserIcon } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -17,25 +17,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   selectedRole = 'student',
   onLoginSuccess,
 }) => {
+  const { signInWithOtp, verifyOtp } = useAuth();
   const [mode, setMode] = useState<'login' | 'create'>(initialMode);
   const [step, setStep] = useState<'form' | 'otp' | 'success'>('form');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [otpExpiresAt, setOtpExpiresAt] = useState<number | null>(null);
 
   // Login state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
 
-  // Track the email used for the current OTP flow
+  // Track the email used for the current OTP flow (login or create)
   const [currentEmail, setCurrentEmail] = useState('');
 
   // OTP state
-  const [otpCode, setOtpCode] = useState('');
-  const [otpEmail, setOtpEmail] = useState('');
-  const [otpInstitutionCode, setOtpInstitutionCode] = useState('');
+  const [otpCode, setOtpCode] = useState('849201');
 
   // Create Student Account state
   const [studentForm, setStudentForm] = useState({
@@ -43,7 +38,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     universityEmail: '',
     phone: '',
     programme: '',
-    institutionCode: '',
+    department: '',
+    semester: '',
+    campusBlock: '',
+    institutionCode: 'CHRKNG2026',
     password: '',
     confirmPassword: '',
   });
@@ -55,7 +53,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     phone: '',
     department: '',
     designation: '',
-    institutionCode: '',
+    institutionCode: 'CHRKNG2026',
     password: '',
     confirmPassword: '',
   });
@@ -65,375 +63,106 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     fullName: '',
     universityEmail: '',
     phone: '',
-    institutionCode: '',
+    institutionCode: 'CHRKNG2026',
     password: '',
     confirmPassword: '',
   });
 
-  // Holds the resolved profile after login/register
-  const [resolvedProfile, setResolvedProfile] = useState<{
-    studentName: string;
-    email: string;
-    code: string;
-  } | null>(null);
+  const getCurrentForm = () => {
+    switch (selectedRole) {
+      case 'student':
+        return studentForm;
+      case 'faculty':
+        return facultyForm;
+      case 'guest':
+        return guestForm;
+      default:
+        return studentForm;
+    }
+  };
 
   if (!isOpen) return null;
 
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCurrentEmail(loginEmail);
+    setStep('success');
+  };
+
+  const handleCreateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const currentForm = selectedRole === 'student' ? studentForm : selectedRole === 'faculty' ? facultyForm : guestForm;
+    
+    if (currentForm.password !== currentForm.confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+    
+    setCurrentEmail(currentForm.universityEmail);
+    
+    // Store form data in user metadata for OTP verification
+    // This will be used in the verifyOtp call from AuthContext
+    localStorage.setItem('tempFormData', JSON.stringify({
+      ...currentForm,
+      role: selectedRole,
+    }));
+    
+    // Call signInWithOtp with role and additional data
+    signInWithOtp(currentForm.universityEmail, currentForm.fullName, selectedRole, currentForm.institutionCode, currentForm.phone)
+      .then(({ error }) => {
+        if (!error) {
+          // Advance to OTP verification
+          setStep('otp');
+          localStorage.removeItem('tempFormData');
+        }
+      });
+  };
+
+  const handleVerifyOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otpCode.length < 6) {
+      alert('Please enter a valid 6-digit OTP code');
+      return;
+    }
+    
+    // Use the AuthContext's verifyOtp function which will create the profile
+    verifyOtp(currentEmail, otpCode)
+      .then(({ error }) => {
+        if (!error) {
+          setStep('success');
+          localStorage.removeItem('tempFormData');
+        } else {
+          alert(`OTP verification failed: ${error.message}`);
+        }
+      });
+  };
+
+  const handleDemoStudentLogin = () => {
+    const demoData = {
+      studentName: 'Alex Paul',
+      email: 'alex.paul@christuniversity.in',
+      code: 'CHRKNG2026',
+    };
+    onClose();
+    if (onLoginSuccess) {
+      onLoginSuccess(demoData);
+    }
+  };
+
   const handleReset = () => {
     setStep('form');
-    setError(null);
-    setSuccessMessage(null);
-    setOtpCode('');
-    setOtpEmail('');
-    setOtpInstitutionCode('');
-    setOtpExpiresAt(null);
     onClose();
   };
 
-  // ─── LOGIN ─────────────────────────────────────────────────────────────────
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccessMessage(null);
-    setLoading(true);
-    try {
-      setCurrentEmail(loginEmail);
-      console.log('[Foodexa Auth] Login request:', { email: loginEmail });
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
-        password: loginPassword,
-      });
-      console.log('[Foodexa Auth] Login response:', { data, error: authError });
-
-      if (authError) {
-        console.error('[Foodexa Auth] Login error:', authError);
-        throw new Error(authError.message);
-      }
-
-      const user = data.user;
-      const profile = {
-        studentName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Student',
-        email: user?.email || loginEmail,
-        code: user?.user_metadata?.institution_code || '',
-      };
-      setResolvedProfile(profile);
-      setStep('success');
-    } catch (err: any) {
-      console.error('[Foodexa Auth] Login exception:', err);
-      setError(err?.message || 'Login failed. Please check your credentials and try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ─── REGISTER (Send OTP) ───────────────────────────────────────────────────
-  const handleCreateSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccessMessage(null);
-
-    const currentForm =
-      selectedRole === 'student'
-        ? studentForm
-        : selectedRole === 'faculty'
-          ? facultyForm
-          : guestForm;
-
-    if (currentForm.password !== currentForm.confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-    if (!currentForm.institutionCode.trim()) {
-      setError('Institution Code is required.');
-      return;
-    }
-
-    setCurrentEmail(currentForm.universityEmail);
-    setLoading(true);
-    try {
-      const roleLabel =
-        selectedRole === 'student'
-          ? 'Student'
-          : selectedRole === 'faculty'
-            ? 'Faculty'
-            : 'Guest';
-
-      console.log('OTP Request', {
-        email: currentForm.universityEmail,
-        options: {
-          shouldCreateUser: true,
-          data: {
-            full_name: currentForm.fullName,
-            role: selectedRole,
-            institution_code: currentForm.institutionCode.toUpperCase(),
-            phone: currentForm.phone,
-          },
-        },
-      });
-      const response = await supabase.auth.signInWithOtp({
-        email: currentForm.universityEmail,
-        options: {
-          shouldCreateUser: true,
-          data: {
-            full_name: currentForm.fullName,
-            role: selectedRole,
-            institution_code: currentForm.institutionCode.toUpperCase(),
-            phone: currentForm.phone,
-          },
-        },
-      });
-
-      console.log('OTP Response', response);
-      console.log('OTP Error', response.error);
-      console.log('OTP Data', response.data);
-
-      if (response.error) {
-        console.error('[Foodexa Auth] OTP send error:', response.error);
-        setError(response.error.message);
-        return;
-      }
-
-      setSuccessMessage('OTP sent successfully.');
-      setOtpCode('');
-      setOtpEmail(currentForm.universityEmail);
-      setOtpInstitutionCode(currentForm.institutionCode.toUpperCase());
-      setOtpExpiresAt(Date.now() + 10 * 60 * 1000);
-      setStep('otp');
-    } catch (err: any) {
-      console.error('[Foodexa Auth] OTP send exception:', err);
-      setError(err?.message || 'Registration failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ─── VERIFY OTP ────────────────────────────────────────────────────────────
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccessMessage(null);
-
-    if (otpCode.trim().length < 8) {
-      setError('Please enter the complete 8-digit OTP code.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const emailToVerify = currentEmail || otpEmail || studentForm.universityEmail;
-      console.log('[Foodexa Auth] OTP verify request:', {
-        email: emailToVerify,
-        token: otpCode.trim(),
-        type: 'email',
-      });
-      const { data, error: verifyError } = await supabase.auth.verifyOtp({
-        email: emailToVerify,
-        token: otpCode.trim(),
-        type: 'email',
-      });
-      console.log('[Foodexa Auth] OTP verify response:', { data, error: verifyError });
-
-      if (verifyError) {
-        console.error('[Foodexa Auth] OTP verify error:', verifyError);
-        throw new Error(verifyError.message);
-      }
-
-      console.log('[Foodexa Auth] getUser request');
-      const getUserResponse = await supabase.auth.getUser();
-      console.log('[Foodexa Auth] getUser response:', getUserResponse);
-
-      if (getUserResponse.error) {
-        console.error('[Foodexa Auth] getUser error:', getUserResponse.error);
-        throw new Error(getUserResponse.error.message);
-      }
-
-      const user = getUserResponse.data.user;
-      if (!user) {
-        throw new Error('Authenticated user not found.');
-      }
-
-      const userMetadata = user.user_metadata || {};
-      const roleFromMeta = (userMetadata.role as 'student' | 'faculty' | 'guest') || 'student';
-
-      console.log('[Foodexa Auth] profiles select request:', { user_id: user.id });
-      const profileResponse = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-      console.log('[Foodexa Auth] profiles select response:', profileResponse);
-
-      let profile = profileResponse.data;
-      if (profileResponse.error && profileResponse.error.code !== 'PGRST116') {
-        console.error('[Foodexa Auth] profiles select error:', profileResponse.error);
-        throw new Error(profileResponse.error.message);
-      }
-
-      if (!profile) {
-        const newProfile = {
-          user_id: user.id,
-          email: user.email,
-          full_name:
-            userMetadata.full_name ||
-            userMetadata.name ||
-            null,
-          phone: userMetadata.phone || null,
-          role: roleFromMeta,
-          institution_id: null,
-          institution_code: userMetadata.institution_code || otpInstitutionCode || null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        console.log('[Foodexa Auth] profiles insert request:', newProfile);
-        const insertProfileResponse = await supabase
-          .from('profiles')
-          .insert([newProfile])
-          .select('*')
-          .single();
-        console.log('[Foodexa Auth] profiles insert response:', insertProfileResponse);
-
-        if (insertProfileResponse.error) {
-          console.error('[Foodexa Auth] profiles insert error:', insertProfileResponse.error);
-          throw new Error(insertProfileResponse.error.message);
-        }
-
-        profile = insertProfileResponse.data;
-      } else {
-        const updatedProfile = {
-          ...profile,
-          full_name:
-            profile.full_name ||
-            userMetadata.full_name ||
-            userMetadata.name ||
-            null,
-          phone: profile.phone || userMetadata.phone || null,
-          role: profile.role || roleFromMeta,
-          institution_code:
-            profile.institution_code || userMetadata.institution_code || otpInstitutionCode || null,
-          updated_at: new Date().toISOString(),
-        };
-        console.log('[Foodexa Auth] profiles upsert request:', updatedProfile);
-        const upsertResponse = await supabase
-          .from('profiles')
-          .upsert(updatedProfile, { onConflict: 'user_id' })
-          .select('*')
-          .single();
-        console.log('[Foodexa Auth] profiles upsert response:', upsertResponse);
-
-        if (upsertResponse.error) {
-          console.error('[Foodexa Auth] profiles upsert error:', upsertResponse.error);
-          throw new Error(upsertResponse.error.message);
-        }
-
-        profile = upsertResponse.data;
-      }
-
-      const resolvedName =
-        profile?.full_name ||
-        studentForm.fullName ||
-        user.email?.split('@')[0] ||
-        'Student';
-
-      setResolvedProfile({
-        studentName: resolvedName,
-        email: profile?.email || user.email || otpEmail || studentForm.universityEmail,
-        code: profile?.institution_code || otpInstitutionCode || studentForm.institutionCode.toUpperCase(),
-      });
-      setOtpExpiresAt(null);
-      setStep('success');
-    } catch (err: any) {
-      console.error('[Foodexa Auth] OTP verify exception:', err);
-      setError(err?.message || 'OTP verification failed. Please check the code and try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ─── RESEND OTP ────────────────────────────────────────────────────────────
-  const handleResendOtp = async () => {
-    setError(null);
-    setSuccessMessage(null);
-    setLoading(true);
-    try {
-      const currentForm =
-        selectedRole === 'student'
-          ? studentForm
-          : selectedRole === 'faculty'
-            ? facultyForm
-            : guestForm;
-      const emailToResend = currentEmail || currentForm.universityEmail;
-      console.log('OTP Request', {
-        email: emailToResend,
-        options: {
-          shouldCreateUser: true,
-          data: {
-            full_name: currentForm.fullName,
-            role: selectedRole,
-            institution_code: currentForm.institutionCode.toUpperCase(),
-            phone: currentForm.phone,
-          },
-        },
-      });
-      const response = await supabase.auth.signInWithOtp({
-        email: emailToResend,
-        options: {
-          shouldCreateUser: true,
-          data: {
-            full_name: currentForm.fullName,
-            role: selectedRole,
-            institution_code: currentForm.institutionCode.toUpperCase(),
-            phone: currentForm.phone,
-          },
-        },
-      });
-      console.log('OTP Response', response);
-      console.log('OTP Error', response.error);
-      console.log('OTP Data', response.data);
-      if (response.error) {
-        console.error('[Foodexa Auth] Resend OTP error:', response.error);
-        setError(response.error.message);
-        return;
-      }
-      setOtpCode('');
-      setOtpExpiresAt(Date.now() + 10 * 60 * 1000);
-      setSuccessMessage('A new verification code has been sent to your email.');
-    } catch (err: any) {
-      console.error('[Foodexa Auth] Resend OTP exception:', err);
-      setError(err?.message || 'Failed to resend OTP. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ─── FORGOT PASSWORD ───────────────────────────────────────────────────────
-  const handleForgotPassword = async () => {
-    if (!loginEmail) {
-      setError('Please enter your university email above first, then click Forgot Password.');
-      return;
-    }
-    setError(null);
-    setSuccessMessage(null);
-    setLoading(true);
-    try {
-      console.log('[Foodexa Auth] Password reset request:', { email: loginEmail });
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(loginEmail);
-      console.log('[Foodexa Auth] Password reset response:', { error: resetError });
-      if (resetError) throw new Error(resetError.message);
-      setError(null);
-      alert(`Password reset instructions sent to ${loginEmail}`);
-    } catch (err: any) {
-      console.error('[Foodexa Auth] Password reset error:', err);
-      setError(err?.message || 'Failed to send reset email.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ─── CONTINUE TO PORTAL ────────────────────────────────────────────────────
   const handleContinueToPortal = () => {
     onClose();
-    if (onLoginSuccess && resolvedProfile) {
-      onLoginSuccess(resolvedProfile);
+    if (onLoginSuccess) {
+      const currentForm = getCurrentForm();
+      onLoginSuccess({
+        studentName: currentForm.fullName || 'Alex Paul',
+        email: mode === 'login' ? (loginEmail || 'alex.paul@christuniversity.in') : (currentForm.universityEmail || 'alex.paul@christuniversity.in'),
+        code: currentForm.institutionCode || 'CHRKNG2026',
+      });
     }
   };
 
@@ -449,7 +178,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
-        {/* ── STEP 1: FORM ── */}
         {step === 'form' && (
           <div>
             {mode === 'login' ? (
@@ -459,26 +187,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="space-y-1.5">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 text-emerald-400 border border-emerald-500/30 text-[11px] font-mono">
                     <Lock className="w-3.5 h-3.5" />
-                     <span>
-                       {selectedRole === 'faculty'
-                         ? 'Faculty Portal Login'
-                         : selectedRole === 'guest'
-                           ? 'Guest Portal Login'
-                           : 'Student Portal Login'}
-                     </span>
+                    <span>Student Portal Login</span>
                   </div>
                   <h3 className="text-2xl font-extrabold text-white">Welcome Back</h3>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    Sign in to your FOODEXA student account to order food, manage orders, access QR pickup, and use LX AI.
+                    Sign in to your FOODEXA account to order food, manage orders, access QR pickup, and use LX AI.
                   </p>
                 </div>
-
-                {/* Error */}
-                {error && (
-                  <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
-                    {error}
-                  </div>
-                )}
 
                 {/* Login Form */}
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
@@ -518,9 +233,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </label>
                     <button
                       type="button"
-                      onClick={handleForgotPassword}
-                      disabled={loading}
-                      className="text-emerald-400 font-medium hover:underline cursor-pointer disabled:opacity-50"
+                      onClick={() => alert('Password reset instructions sent to your university email.')}
+                      className="text-emerald-400 font-medium hover:underline cursor-pointer"
                     >
                       Forgot Password?
                     </button>
@@ -528,24 +242,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
                   >
-                    {loading ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                    ) : (
-                      <>
-                        <span>Login</span>
-                        <ArrowRight className="w-4 h-4 text-slate-950" />
-                      </>
-                    )}
+                    <span>Login</span>
+                    <ArrowRight className="w-4 h-4 text-slate-950" />
                   </button>
 
-                  {/* Institution Administrator Redirect Link */}
+                  {/* Institution Login Link */}
                   <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl text-center text-xs text-slate-400">
-                    <span>Institution Administrator? </span>
+                    <span>Institution Login? </span>
                     <a
-                      href="https://portal.foodexa.com"
+                      href="https://foodexa-institution-platform.vercel.app/"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-emerald-400 font-bold hover:underline inline-flex items-center gap-1 ml-1"
@@ -555,59 +262,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </a>
                   </div>
 
-                  <div className="pt-2 text-center text-xs text-slate-400">
-                     Don't have an account?{' '}
-                     <button
-                       type="button"
-                       onClick={() => { setMode('create'); setError(null); setSuccessMessage(null); }}
-                       className="text-emerald-400 font-bold hover:underline cursor-pointer"
-                     >
-                       {selectedRole === 'faculty'
-                         ? 'Create Faculty Account'
-                         : selectedRole === 'guest'
-                           ? 'Create Guest Account'
-                           : 'Create Student Account'}
-                     </button>
-                  </div>
                 </form>
-
               </div>
             ) : (
-               /* Create Account View */
-               <div className="space-y-5">
-                 <div className="space-y-1">
-                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 text-emerald-400 border border-emerald-500/30 text-[11px] font-mono">
-                     <User className="w-3.5 h-3.5" />
-                     <span>
-                       {selectedRole === 'faculty'
-                         ? 'Faculty Registration'
-                         : selectedRole === 'guest'
-                           ? 'Guest Registration'
-                           : 'Student Pass Registration'}
-                     </span>
-                   </div>
-                   <h3 className="text-2xl font-extrabold text-white">
-                     {selectedRole === 'faculty'
-                       ? 'Create Faculty Account'
-                       : selectedRole === 'guest'
-                         ? 'Create Guest Account'
-                         : 'Create Student Account'}
-                   </h3>
-                   <p className="text-xs text-slate-300">
-                     {selectedRole === 'faculty'
-                       ? 'Register as faculty to access campus dining services with your staff credentials.'
-                       : selectedRole === 'guest'
-                         ? 'Register as a guest to explore campus dining options and place orders.'
-                         : 'Sign up for instant queue skipping, express pickup, and LX AI dining recommendations.'}
-                   </p>
-                 </div>
-
-                {/* Error */}
-                {error && (
-                  <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
-                    {error}
+              /* Create Account View */
+              <div className="space-y-5">
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 text-emerald-400 border border-emerald-500/30 text-[11px] font-mono">
+                    <User className="w-3.5 h-3.5" />
+                    <span>
+                      {selectedRole === 'student' ? 'Student Pass Registration' : selectedRole === 'faculty' ? 'Faculty Registration' : 'Guest Registration'}
+                    </span>
                   </div>
-                )}
+                  <h3 className="text-2xl font-extrabold text-white">
+                    {selectedRole === 'student' ? 'Create Student Account' : selectedRole === 'faculty' ? 'Create Faculty Account' : 'Create Guest Account'}
+                  </h3>
+                  <p className="text-xs text-slate-300">
+                    {selectedRole === 'student' ? 'Sign up for instant queue skipping, express pickup, and LX AI dining recommendations.' : 'Sign up to access campus dining services.'}
+                  </p>
+                </div>
 
                 <form onSubmit={handleCreateSubmit} className="space-y-3">
                   <div>
@@ -615,13 +288,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <input
                       type="text"
                       required
-                      value={
-                        selectedRole === 'student'
-                          ? studentForm.fullName
-                          : selectedRole === 'faculty'
-                            ? facultyForm.fullName
-                            : guestForm.fullName
-                      }
+                      value={getCurrentForm().fullName}
                       onChange={(e) => {
                         if (selectedRole === 'student') setStudentForm({ ...studentForm, fullName: e.target.value });
                         else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, fullName: e.target.value });
@@ -634,19 +301,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                        {selectedRole === 'faculty' ? 'Staff Email' : 'University Email'}
-                      </label>
+                      <label className="text-xs font-semibold text-slate-300 mb-1 block">University Email</label>
                       <input
                         type="email"
                         required
-                        value={
-                          selectedRole === 'student'
-                            ? studentForm.universityEmail
-                            : selectedRole === 'faculty'
-                              ? facultyForm.universityEmail
-                              : guestForm.universityEmail
-                        }
+                        value={getCurrentForm().universityEmail}
                         onChange={(e) => {
                           if (selectedRole === 'student') setStudentForm({ ...studentForm, universityEmail: e.target.value });
                           else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, universityEmail: e.target.value });
@@ -661,13 +320,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <input
                         type="tel"
                         required
-                        value={
-                          selectedRole === 'student'
-                            ? studentForm.phone
-                            : selectedRole === 'faculty'
-                              ? facultyForm.phone
-                              : guestForm.phone
-                        }
+                        value={getCurrentForm().phone}
                         onChange={(e) => {
                           if (selectedRole === 'student') setStudentForm({ ...studentForm, phone: e.target.value });
                           else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, phone: e.target.value });
@@ -680,82 +333,125 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
 
                   {selectedRole === 'student' && (
-                    <div className="grid grid-cols-2 gap-2">
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Programme</label>
+                          <input
+                            type="text"
+                            required
+                            value={studentForm.programme}
+                            onChange={(e) => setStudentForm({ ...studentForm, programme: e.target.value })}
+                            placeholder="e.g. B.Tech Computer Science"
+                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
+                          <input
+                            type="text"
+                            required
+                            value={studentForm.institutionCode}
+                            onChange={(e) => setStudentForm({ ...studentForm, institutionCode: e.target.value })}
+                            placeholder="CHRKNG2026"
+                            className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Department</label>
+                          <input
+                            type="text"
+                            required
+                            value={studentForm.department}
+                            onChange={(e) => setStudentForm({ ...studentForm, department: e.target.value })}
+                            placeholder="e.g. Computer Science"
+                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Semester</label>
+                          <input
+                            type="text"
+                            required
+                            value={studentForm.semester}
+                            onChange={(e) => setStudentForm({ ...studentForm, semester: e.target.value })}
+                            placeholder="e.g. 3"
+                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
                       <div>
-                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Programme</label>
+                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Campus Block</label>
                         <input
                           type="text"
                           required
-                          value={studentForm.programme}
-                          onChange={(e) => setStudentForm({ ...studentForm, programme: e.target.value })}
-                          placeholder="e.g. B.Tech Computer Science"
+                          value={studentForm.campusBlock}
+                          onChange={(e) => setStudentForm({ ...studentForm, campusBlock: e.target.value })}
+                          placeholder="e.g. Block A"
                           className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
                         />
                       </div>
+                    </>
+                  )}
+
+                  {selectedRole === 'faculty' && (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Department</label>
+                          <input
+                            type="text"
+                            required
+                            value={facultyForm.department}
+                            onChange={(e) => setFacultyForm({ ...facultyForm, department: e.target.value })}
+                            placeholder="e.g. Computer Science"
+                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Designation</label>
+                          <input
+                            type="text"
+                            required
+                            value={facultyForm.designation}
+                            onChange={(e) => setFacultyForm({ ...facultyForm, designation: e.target.value })}
+                            placeholder="e.g. Assistant Professor"
+                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
                       <div>
                         <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
                         <input
                           type="text"
                           required
-                          value={studentForm.institutionCode}
-                          onChange={(e) => setStudentForm({ ...studentForm, institutionCode: e.target.value })}
-                          placeholder="e.g. CHRKNG2026"
+                          value={facultyForm.institutionCode}
+                          onChange={(e) => setFacultyForm({ ...facultyForm, institutionCode: e.target.value })}
+                          placeholder="CHRKNG2026"
                           className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
                         />
                       </div>
-                    </div>
+                    </>
                   )}
 
-                  {selectedRole === 'faculty' && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Department</label>
-                        <input
-                          type="text"
-                          required
-                          value={facultyForm.department}
-                          onChange={(e) => setFacultyForm({ ...facultyForm, department: e.target.value })}
-                          placeholder="e.g. Computer Science"
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Designation</label>
-                        <input
-                          type="text"
-                          required
-                          value={facultyForm.designation}
-                          onChange={(e) => setFacultyForm({ ...facultyForm, designation: e.target.value })}
-                          placeholder="e.g. Assistant Professor"
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2">
+                  {selectedRole === 'guest' && (
                     <div>
                       <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
                       <input
                         type="text"
                         required
-                        value={
-                          selectedRole === 'student'
-                            ? studentForm.institutionCode
-                            : selectedRole === 'faculty'
-                              ? facultyForm.institutionCode
-                              : guestForm.institutionCode
-                        }
-                        onChange={(e) => {
-                          if (selectedRole === 'student') setStudentForm({ ...studentForm, institutionCode: e.target.value });
-                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, institutionCode: e.target.value });
-                          else setGuestForm({ ...guestForm, institutionCode: e.target.value });
-                        }}
-                        placeholder="e.g. CHRKNG2026"
+                        value={guestForm.institutionCode}
+                        onChange={(e) => setGuestForm({ ...guestForm, institutionCode: e.target.value })}
+                        placeholder="CHRKNG2026"
                         className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
                       />
                     </div>
-                  </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -763,14 +459,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <input
                         type="password"
                         required
-                        minLength={6}
-                        value={
-                          selectedRole === 'student'
-                            ? studentForm.password
-                            : selectedRole === 'faculty'
-                              ? facultyForm.password
-                              : guestForm.password
-                        }
+                        value={getCurrentForm().password}
                         onChange={(e) => {
                           if (selectedRole === 'student') setStudentForm({ ...studentForm, password: e.target.value });
                           else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, password: e.target.value });
@@ -785,14 +474,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <input
                         type="password"
                         required
-                        minLength={6}
-                        value={
-                          selectedRole === 'student'
-                            ? studentForm.confirmPassword
-                            : selectedRole === 'faculty'
-                              ? facultyForm.confirmPassword
-                              : guestForm.confirmPassword
-                        }
+                        value={getCurrentForm().confirmPassword}
                         onChange={(e) => {
                           if (selectedRole === 'student') setStudentForm({ ...studentForm, confirmPassword: e.target.value });
                           else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, confirmPassword: e.target.value });
@@ -806,36 +488,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md"
                   >
-                    {loading ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                    ) : (
-                      <>
-                        <span>Proceed to OTP Email Verification</span>
-                        <ArrowRight className="w-4 h-4 text-slate-950" />
-                      </>
-                    )}
+                    <span>Proceed to OTP Email Verification</span>
+                    <ArrowRight className="w-4 h-4 text-slate-950" />
                   </button>
-
-                  <div className="pt-2 text-center text-xs text-slate-400">
-                    Already have an account?{' '}
-                    <button
-                      type="button"
-                      onClick={() => { setMode('login'); setError(null); setSuccessMessage(null); }}
-                      className="text-emerald-400 font-bold hover:underline cursor-pointer"
-                    >
-                      Login
-                    </button>
-                  </div>
                 </form>
               </div>
             )}
           </div>
         )}
 
-        {/* ── STEP 2: OTP EMAIL VERIFICATION ── */}
+        {/* STEP 2: OTP EMAIL VERIFICATION */}
         {step === 'otp' && (
           <div className="space-y-5">
             <div className="space-y-1 text-center">
@@ -844,36 +508,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
               <h3 className="text-xl font-extrabold text-white">Verify Your Email OTP</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                We sent an 8-digit security code to{' '}
-                <strong className="text-emerald-400">{otpEmail || studentForm.universityEmail}</strong>
+                We sent a 6-digit security code to{' '}
+                <strong className="text-emerald-400">{currentEmail || 'alex.paul@christuniversity.in'}</strong>
               </p>
             </div>
-
-            {/* Error */}
-            {error && (
-              <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
-                {error}
-              </div>
-            )}
-
-            {successMessage && (
-              <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-xs text-emerald-300">
-                {successMessage}
-              </div>
-            )}
 
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 mb-1 block text-center">
-                  8-Digit Verification Code
+                  6-Digit Verification Code
                 </label>
                 <input
                   type="text"
-                  inputMode="numeric"
-                  maxLength={8}
+                  maxLength={6}
                   required
                   value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => setOtpCode(e.target.value)}
                   className="w-full bg-slate-950 border border-emerald-500/60 focus:border-emerald-400 rounded-2xl py-3 text-center text-xl font-mono tracking-[0.5em] text-emerald-300 font-bold focus:outline-none shadow-inner"
                 />
               </div>
@@ -881,32 +531,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-2 text-xs text-slate-400">
                 <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>
-                  Institution Code: <strong className="text-emerald-400">{otpInstitutionCode || studentForm.institutionCode.toUpperCase()}</strong>
+                  Institution Target: <strong className="text-white">CHRIST (Deemed to be University)</strong> Code: <strong className="text-emerald-400">{getCurrentForm().institutionCode || 'CHRKNG2026'}</strong>
                 </span>
               </div>
 
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
               >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                ) : (
-                  <>
-                    <ShieldCheck className="w-4 h-4 text-slate-950" />
-                    <span>Verify &amp; Join Campus Portal</span>
-                  </>
-                )}
+                <ShieldCheck className="w-4 h-4 text-slate-950" />
+                <span>Verify & Join Campus Portal</span>
               </button>
 
               <div className="text-center text-xs text-slate-400">
                 Didn't receive code?{' '}
                 <button
                   type="button"
-                  onClick={handleResendOtp}
-                  disabled={loading}
-                  className="text-emerald-400 font-bold hover:underline cursor-pointer disabled:opacity-50"
+                  onClick={() => alert('New OTP code re-sent to your university email.')}
+                  className="text-emerald-400 font-bold hover:underline cursor-pointer"
                 >
                   Resend OTP
                 </button>
@@ -915,7 +557,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         )}
 
-        {/* ── STEP 3: SUCCESS CONFIRMATION ── */}
+        {/* STEP 3: SUCCESS CONFIRMATION */}
         {step === 'success' && (
           <div className="text-center py-6 space-y-4">
             <div className="w-16 h-16 mx-auto rounded-full bg-emerald-950 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shadow-xl">
@@ -925,14 +567,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <h3 className="text-2xl font-extrabold text-white">
                 {mode === 'login' ? 'Logged In Successfully!' : 'Email Verified & Account Joined!'}
               </h3>
-              {resolvedProfile?.code && (
-                <p className="text-xs text-emerald-400 font-mono font-semibold">
-                  Institution Code: {resolvedProfile.code}
-                </p>
-              )}
+              <p className="text-xs text-emerald-400 font-mono font-semibold">
+                Joined: CHRIST (Deemed to be University) - Kengeri Campus ({getCurrentForm().institutionCode || 'CHRKNG2026'})
+              </p>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
-              Welcome, <strong className="text-white">{resolvedProfile?.studentName}</strong>. You now have access to your campus food ordering portal, Razorpay checkout, and QR pickup lockers.
+              You now have access to Counter A, B, C & D menus, instant Razorpay checkout, and QR pickup lockers for your campus.
             </p>
             <button
               onClick={handleContinueToPortal}

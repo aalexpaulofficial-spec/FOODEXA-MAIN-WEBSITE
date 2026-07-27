@@ -12,12 +12,12 @@ import { ImpactSustainability } from './components/ImpactSustainability';
 import { Pricing } from './components/Pricing';
 import { Faq } from './components/Faq';
 import { BookDemoModal } from './components/BookDemoModal';
+import { RoleSelectionModal } from './components/RoleSelectionModal';
 import { InstitutionRegistrationModal } from './components/InstitutionRegistrationModal';
 import { AuthModal } from './components/AuthModal';
 import { StudentPortalModal } from './components/StudentPortalModal';
 import { DownloadModal } from './components/DownloadModal';
 import { PortalAccessModal } from './components/PortalAccessModal';
-import { RoleSelectionModal } from './components/RoleSelectionModal';
 import { LxChatDrawer } from './components/LxChatDrawer';
 import { VoiceAssistantModal } from './components/VoiceAssistantModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
@@ -43,8 +43,6 @@ export default function App() {
   });
   const [selectedRole, setSelectedRole] = useState<'student' | 'faculty' | 'guest'>('student');
   const [activePrompt, setActivePrompt] = useState<string>('');
-
-  // Toast System State
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const addToast = (title: string, description: string, type: 'success' | 'warning' | 'info' | 'ai' = 'info') => {
@@ -66,6 +64,13 @@ export default function App() {
     setIsAuthOpen(true);
   };
 
+  const handleOpenCreateAccount = (role: 'student' | 'faculty' | 'guest') => {
+    setSelectedRole(role);
+    setAuthInitialMode('create');
+    setIsAuthOpen(true);
+    setIsPortalAccessOpen(false);
+  };
+
   const handleOpenStudentRegister = () => {
     setIsRoleSelectionOpen(true);
   };
@@ -73,8 +78,9 @@ export default function App() {
   const handleRoleSelected = (role: 'student' | 'faculty' | 'guest') => {
     setIsRoleSelectionOpen(false);
     setAuthInitialMode('create');
-    setSelectedRole(role);
     setIsAuthOpen(true);
+    // Store selected role for pass to AuthModal
+    setSelectedRole(role);
   };
 
   const handleSelectPrompt = (promptText: string) => {
@@ -242,10 +248,8 @@ export default function App() {
       <PortalAccessModal
         isOpen={isPortalAccessOpen}
         onClose={() => setIsPortalAccessOpen(false)}
-        onOpenStudentRegister={handleOpenStudentRegister}
-        onOpenInstitutionRegister={() => setIsInstitutionRegistrationOpen(true)}
         onOpenLogin={handleOpenLogin}
-        onOpenCreateAccount={handleOpenStudentRegister}
+        onOpenCreateAccount={handleOpenCreateAccount}
       />
 
       <LxChatDrawer

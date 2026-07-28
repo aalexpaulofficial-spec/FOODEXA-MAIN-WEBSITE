@@ -1,13 +1,24 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, User as UserIcon, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
+
+interface InstitutionData {
+  institution_id: string;
+  institution_name: string;
+  campus: string;
+  city: string;
+  state: string;
+  country: string;
+  institution_code: string;
+}
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: 'login' | 'create';
   selectedRole?: 'student' | 'faculty' | 'guest';
-  onLoginSuccess?: () => void;
+  onLoginSuccess?: (institutionData: InstitutionData | null, userId?: string) => void;
 }
 
 // ── Password strength helper ────────────────────────────────────────────────
@@ -31,7 +42,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   selectedRole = 'student',
   onLoginSuccess,
 }) => {
-  const { signInWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData } = useAuth();
+  const { signInWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData } = useAuth();
   const [mode, setMode] = useState<'login' | 'create'>(initialMode);
   const [step, setStep] = useState<'form' | 'otp' | 'success'>('form');
 
@@ -47,17 +58,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [otpCode, setOtpCode] = useState('');
 
   // Institution validation state
-  const [validatedInstitution, setValidatedInstitution] = useState<{
-    institution_id: string;
-    institution_name: string;
-    campus: string;
-    city: string;
-    state: string;
-    country: string;
-    institution_code: string;
-  } | null>(null);
+  const [validatedInstitution, setValidatedInstitution] = useState<InstitutionData | null>(null);
   const [validatingCode, setValidatingCode] = useState(false);
   const [institutionError, setInstitutionError] = useState<string | null>(null);
+  const [verifiedInstitution, setVerifiedInstitution] = useState<InstitutionData | null>(null);
   const institutionCodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Registration password visibility
@@ -169,6 +173,9 @@ useEffect(() => {
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentEmail(loginEmail);
+    if (institutionData?.institution_name) {
+      setVerifiedInstitution(institutionData);
+    }
     setStep('success');
   };
 
@@ -215,26 +222,85 @@ useEffect(() => {
       });
   };
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otpCode.length < 8) {
       alert('Please enter a valid 8-digit OTP code');
       return;
     }
     
-    // Use the AuthContext's verifyOtp function which will create the profile
     verifyOtp(currentEmail, otpCode)
-      .then(({ error }) => {
+      .then(async ({ error }) => {
         if (!error) {
-          setStep('success');
-          localStorage.removeItem('tempFormData');
+          const fetchedInst = institutionData || validatedInstitution;
+          
+          if (fetchedInst && fetchedInst.institution_name) {
+            setVerifiedInstitution(fetchedInst);
+            setStep('success');
+            localStorage.removeItem('tempFormData');
+          } else {
+            const instId = institutionData?.institution_id;
+            const instCode = institutionData?.institution_code || validatedInstitution?.institution_code;
+            
+            if (instId) {
+              const { data } = await supabase
+                .from('institutions')
+                .select('id, name, campus, institution_code')
+                .eq('id', instId)
+                .single();
+              
+              if (data && data.name) {
+                const inst = {
+                  institution_id: data.id,
+                  institution_name: data.name,
+                  campus: data.campus || '',
+                  city: data.campus || '',
+                  state: '',
+                  country: '',
+                  institution_code: data.institution_code,
+                };
+                setVerifiedInstitution(inst);
+                setInstitutionData(inst);
+                setStep('success');
+                localStorage.removeItem('tempFormData');
+              } else {
+                alert('Unable to verify institution details. Please try again.');
+              }
+            } else if (instCode) {
+              const { data } = await supabase
+                .from('institutions')
+                .select('id, name, campus, institution_code')
+                .ilike('institution_code', instCode)
+                .single();
+              
+              if (data && data.name) {
+                const inst = {
+                  institution_id: data.id,
+                  institution_name: data.name,
+                  campus: data.campus || '',
+                  city: data.campus || '',
+                  state: '',
+                  country: '',
+                  institution_code: data.institution_code,
+                };
+                setVerifiedInstitution(inst);
+                setInstitutionData(inst);
+                setStep('success');
+                localStorage.removeItem('tempFormData');
+              } else {
+                alert('Unable to verify institution details. Please try again.');
+              }
+            } else {
+              alert('Institution details not available. Please try again.');
+            }
+          }
         } else {
           alert(`OTP verification failed: ${error.message}`);
         }
       });
   };
 
-const handleDemoStudentLogin = () => {
+  const handleDemoStudentLogin = () => {
     onClose();
   };
 
@@ -242,12 +308,13 @@ const handleDemoStudentLogin = () => {
     setStep('form');
     setMode(initialMode);
     onClose();
+    setVerifiedInstitution(null);
   };
 
   const handleContinueToPortal = () => {
     onClose();
     if (onLoginSuccess) {
-      onLoginSuccess();
+      onLoginSuccess(verifiedInstitution, undefined);
     }
   };
 
@@ -765,22 +832,29 @@ const handleDemoStudentLogin = () => {
               <h3 className="text-2xl font-extrabold text-white">
                 {mode === 'login' ? 'Logged In Successfully!' : 'Email Verified & Account Joined!'}
               </h3>
-              <p className="text-xs text-emerald-400 font-mono font-semibold">
-                {validatedInstitution
-                  ? `${validatedInstitution.institution_name} - ${validatedInstitution.campus} (${validatedInstitution.institution_code})`
-                  : ''}
-              </p>
+              {mode === 'create' && !verifiedInstitution && (
+                <p className="text-xs text-red-400 font-mono font-semibold">
+                  Unable to verify institution details. Please try again.
+                </p>
+              )}
+              {verifiedInstitution && (
+                <p className="text-xs text-emerald-400 font-mono font-semibold">
+                  {verifiedInstitution.institution_name} - {verifiedInstitution.campus} ({verifiedInstitution.institution_code})
+                </p>
+              )}
             </div>
             <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
               You now have access to campus dining menus, instant Razorpay checkout, and QR pickup lockers.
             </p>
-            <button
-              onClick={handleContinueToPortal}
-              className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
-            >
-              <span>Launch Campus Portal</span>
-              <ArrowRight className="w-4 h-4 text-slate-950" />
-            </button>
+            {verifiedInstitution && (
+              <button
+                onClick={handleContinueToPortal}
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+              >
+                <span>Launch Campus Portal</span>
+                <ArrowRight className="w-4 h-4 text-slate-950" />
+              </button>
+            )}
           </div>
         )}
 

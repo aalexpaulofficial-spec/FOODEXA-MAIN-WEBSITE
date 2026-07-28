@@ -209,11 +209,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
       if (!profile?.institution_id) return;
       const { data, error } = await supabase
         .from('institutions')
-        .select('institution_name, institution_code, campus, city, state')
+        .select('name, institution_code, campus, city, state')
         .eq('id', profile.institution_id)
         .single();
       if (!error && data) {
-        setInstitutionName(data.institution_name || '');
+        setInstitutionName(data.name || '');
         setInstitutionCode(data.institution_code || '');
         setCampus(data.campus || '');
       }

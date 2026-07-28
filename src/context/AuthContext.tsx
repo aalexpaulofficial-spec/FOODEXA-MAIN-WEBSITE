@@ -57,7 +57,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .single();
 
       if (error && error.code !== 'PGRST116') {
-        console.error('[Auth] Profile fetch error:', error);
         return null;
       }
 
@@ -67,7 +66,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return fetchedProfile;
       }
     } catch (err) {
-      console.error('[Auth] Profile fetch exception:', err);
     }
 
     setProfile(null);
@@ -113,7 +111,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth] Auth state changed:', event, session?.user?.id);
       const remembered = localStorage.getItem('foodexa-remember-me') === 'true' || sessionStorage.getItem('foodexa-remember-me') === 'true';
       if (session && !remembered) {
         await supabase.auth.signOut();
@@ -281,7 +278,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
 
       if (upsertError) {
-        console.error('[Auth] Profile upsert error:', upsertError);
+        return { error: new Error(`Profile creation failed: ${upsertError.message}`), profile: null, institution: null };
       }
 
       fetchedProfile = await fetchProfile(userId);
@@ -360,6 +357,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .upsert({
         user_id: user.id,
         ...updates,
+        updated_at: new Date().toISOString(),
       })
       .select()
       .single();

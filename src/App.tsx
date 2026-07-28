@@ -236,6 +236,8 @@ export default function App() {
             setIsKitchenDashboardOpen(true);
           } else if (role === 'super_admin') {
             setIsSuperAdminDashboardOpen(true);
+          } else if (role === 'student' || role === 'faculty' || role === 'guest') {
+            setIsStudentPortalOpen(true);
           } else {
             setIsStudentPortalOpen(true);
           }

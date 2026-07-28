@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { X, Loader2, LogOut, Globe, Users, ClipboardList } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 
 interface SuperAdminDashboardModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface SuperAdminDashboardModalProps {
 }
 
 export const SuperAdminDashboardModal: React.FC<SuperAdminDashboardModalProps> = ({ isOpen, onClose }) => {
+  const { signOut } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ institutions: 0, orders: 0, profiles: 0 });
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
@@ -36,7 +38,7 @@ export const SuperAdminDashboardModal: React.FC<SuperAdminDashboardModalProps> =
   if (!isOpen) return null;
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOut();
     onClose();
   };
 

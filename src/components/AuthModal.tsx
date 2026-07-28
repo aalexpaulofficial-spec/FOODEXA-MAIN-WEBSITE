@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -40,7 +40,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [institutionLoading, setInstitutionLoading] = useState(false);
   const [institutionError, setInstitutionError] = useState<string | null>(null);
 
-  // Create Student Account state
+  // Create Student Account state (no password — OTP-based auth)
   const [studentForm, setStudentForm] = useState({
     fullName: '',
     universityEmail: '',
@@ -50,11 +50,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     semester: '',
     campusBlock: '',
     institutionCode: '',
-    password: '',
-    confirmPassword: '',
   });
 
-  // Create Faculty Account state
+  // Create Faculty Account state (no password — OTP-based auth)
   const [facultyForm, setFacultyForm] = useState({
     fullName: '',
     universityEmail: '',
@@ -62,30 +60,44 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     department: '',
     designation: '',
     institutionCode: '',
-    password: '',
-    confirmPassword: '',
   });
 
-  // Create Guest Account state
+  // Create Guest Account state (no password — OTP-based auth)
   const [guestForm, setGuestForm] = useState({
     fullName: '',
     universityEmail: '',
     phone: '',
     institutionCode: '',
-    password: '',
-    confirmPassword: '',
   });
+
+  // ── CRITICAL FIX ───────────────────────────────────────────────────────────
+  // Sync internal `mode` and reset ALL state whenever the modal opens or the
+  // intended mode changes. Without this, AuthModal (which stays mounted) keeps
+  // its stale `mode` state, causing "Create Account" to show the Login screen.
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode);
+      setStep('form');
+      setOtpCode('');
+      setInstitutionData(null);
+      setInstitutionError(null);
+      setPortalPayload(null);
+      setCurrentEmail('');
+      setLoginEmail('');
+      setLoginPassword('');
+      setStudentForm({ fullName: '', universityEmail: '', phone: '', programme: '', department: '', semester: '', campusBlock: '', institutionCode: '' });
+      setFacultyForm({ fullName: '', universityEmail: '', phone: '', department: '', designation: '', institutionCode: '' });
+      setGuestForm({ fullName: '', universityEmail: '', phone: '', institutionCode: '' });
+    }
+  }, [isOpen, initialMode]);
+  // ──────────────────────────────────────────────────────────────────────────
 
   const getCurrentForm = () => {
     switch (selectedRole) {
-      case 'student':
-        return studentForm;
-      case 'faculty':
-        return facultyForm;
-      case 'guest':
-        return guestForm;
-      default:
-        return studentForm;
+      case 'student': return studentForm;
+      case 'faculty': return facultyForm;
+      case 'guest':   return guestForm;
+      default:        return studentForm;
     }
   };
 
@@ -165,31 +177,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const currentForm = selectedRole === 'student' ? studentForm : selectedRole === 'faculty' ? facultyForm : guestForm;
-
-    if (currentForm.password !== currentForm.confirmPassword) {
-      alert('Passwords do not match');
-      return;
-    }
+    const currentForm = getCurrentForm();
 
     const institution = await validateInstitutionCode(currentForm.institutionCode);
-    if (!institution) {
-      return;
-    }
+    if (!institution) return;
 
+    // Store verified code back into form
     if (selectedRole === 'student') {
-      setStudentForm({ ...studentForm, institutionCode: institution.code });
+      setStudentForm((f) => ({ ...f, institutionCode: institution.code }));
     } else if (selectedRole === 'faculty') {
-      setFacultyForm({ ...facultyForm, institutionCode: institution.code });
+      setFacultyForm((f) => ({ ...f, institutionCode: institution.code }));
     } else {
-      setGuestForm({ ...guestForm, institutionCode: institution.code });
+      setGuestForm((f) => ({ ...f, institutionCode: institution.code }));
     }
 
     setAuthLoading(true);
-    setCurrentEmail(currentForm.universityEmail.trim());
+    const email = currentForm.universityEmail.trim();
+    setCurrentEmail(email);
 
     const { error } = await signInWithOtp(
-      currentForm.universityEmail.trim(),
+      email,
       currentForm.fullName.trim(),
       selectedRole,
       institution.code,
@@ -417,9 +424,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, fullName: e.target.value });
                         else setGuestForm({ ...guestForm, fullName: e.target.value });
                       }}
-placeholder="Enter your full name"
-                       className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                     />
+                      placeholder="Enter your full name"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                    />
                    </div>
 
                    <div className="grid grid-cols-2 gap-2">
@@ -576,37 +583,10 @@ placeholder="Enter your full name"
                      </div>
                    )}
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Password</label>
-                      <input
-                        type="password"
-                        required
-                        value={getCurrentForm().password}
-                        onChange={(e) => {
-                          if (selectedRole === 'student') setStudentForm({ ...studentForm, password: e.target.value });
-                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, password: e.target.value });
-                          else setGuestForm({ ...guestForm, password: e.target.value });
-                        }}
-                        placeholder="••••••••"
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Confirm Password</label>
-                      <input
-                        type="password"
-                        required
-                        value={getCurrentForm().confirmPassword}
-                        onChange={(e) => {
-                          if (selectedRole === 'student') setStudentForm({ ...studentForm, confirmPassword: e.target.value });
-                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, confirmPassword: e.target.value });
-                          else setGuestForm({ ...guestForm, confirmPassword: e.target.value });
-                        }}
-                        placeholder="••••••••"
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                      />
-                    </div>
+
+                  {/* No password needed - authentication uses email OTP */}
+                  <div className="p-3 bg-slate-950/60 border border-emerald-500/20 rounded-xl text-[11px] text-slate-400 leading-relaxed">
+                    We will send an 8-digit OTP to your university email. No password needed - just verify and you are in.
                   </div>
 
                   <button
@@ -614,7 +594,7 @@ placeholder="Enter your full name"
                     disabled={authLoading || institutionLoading}
                     className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md"
                   >
-                    <span>{authLoading || institutionLoading ? 'Validating Institution Code...' : 'Proceed to OTP Email Verification'}</span>
+                    <span>{authLoading || institutionLoading ? 'Validating Institution...' : 'Send OTP & Verify Email'}</span>
                     <ArrowRight className="w-4 h-4 text-slate-950" />
                   </button>
                 </form>

@@ -39,9 +39,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, []);
 
   const displayName = profile?.full_name || user?.email || 'Guest';
-  const displayRole = profile?.role || 'guest';
-  const roleLabel = displayRole === 'student' ? 'Student' : displayRole === 'faculty' ? 'Faculty' : 'Guest';
-  const roleColor = displayRole === 'student' ? 'text-emerald-400' : displayRole === 'faculty' ? 'text-blue-400' : 'text-amber-400';
+  const displayRole = profile?.role || null;
+  const roleLabel = displayRole === 'student' ? 'Student' : displayRole === 'faculty' ? 'Faculty' : displayRole === 'guest' ? 'Guest' : 'Role pending';
+  const roleColor = displayRole === 'student' ? 'text-emerald-400' : displayRole === 'faculty' ? 'text-blue-400' : displayRole === 'guest' ? 'text-amber-400' : 'text-slate-400';
 
   const navLinks = [
     { label: 'Platform', href: '#platform' },

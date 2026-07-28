@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Sparkles, Send, Loader2, RefreshCw, Zap, ShieldCheck } from 'lucide-react';
 import { LXChatMessage } from '../types';
-import { SAMPLE_LX_PROMPTS } from '../data/foodexaData';
+
 
 interface LxChatDrawerProps {
   isOpen: boolean;
@@ -103,7 +103,7 @@ export const LxChatDrawer: React.FC<LxChatDrawerProps> = ({ isOpen, onClose, onO
 
         {/* Quick Prompts */}
         <div className="p-3 bg-slate-950/60 border-b border-slate-800 flex items-center gap-2 overflow-x-auto no-scrollbar">
-          {SAMPLE_LX_PROMPTS.map((promptText, idx) => (
+          {[ 'Find me high protein meals under ₹300', 'What is the shortest line right now?', 'Start a group cart for my dorm', 'Show me vegan options near Library' ].map((promptText, idx) => (
             <button
               key={idx}
               onClick={() => handleSend(promptText)}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Send, Loader2, RefreshCw, Check, Clock, DollarSign, MapPin, Zap, Flame, ShieldAlert } from 'lucide-react';
 import { LXChatMessage } from '../types';
-import { SAMPLE_LX_PROMPTS } from '../data/foodexaData';
+
 
 interface LxPlaygroundProps {
   initialPrompt?: string;
@@ -143,7 +143,7 @@ export const LxPlayground: React.FC<LxPlaygroundProps> = ({ initialPrompt, onOpe
           {/* Quick Prompt Chips */}
           <div className="py-3 flex items-center gap-2 overflow-x-auto no-scrollbar border-b border-slate-800/60">
             <span className="text-[11px] text-slate-400 font-mono shrink-0">Try asking LX:</span>
-            {SAMPLE_LX_PROMPTS.map((promptText, i) => (
+            {[ 'What can I eat under ₹500 near Science Bldg with 30g+ protein?', 'I need a vegan iced oat matcha + bagel without nuts', 'Which campus canteen has the shortest line right now?', 'Start a group cart for dorm order with 4-way bill split' ].map((promptText, i) => (
               <button
                 key={i}
                 onClick={() => handleSendPrompt(promptText)}

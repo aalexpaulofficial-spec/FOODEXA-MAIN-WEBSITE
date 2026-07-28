@@ -1,1180 +1,480 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
-  X,
-  Search,
-  ShoppingBag,
-  Mic,
-  QrCode,
-  Clock,
-  Sparkles,
-  CheckCircle2,
-  Building2,
-  Tag,
-  ChevronRight,
-  ShieldCheck,
-  CreditCard,
-  Smartphone,
-  ArrowRight,
-  RotateCcw,
-  Home,
-  Utensils,
-  Receipt,
-  User,
-  Bell,
-  AlertCircle,
-  Ban,
-  LogOut,
-  SlidersHorizontal,
-  Check,
-  Volume2,
-  Loader2
+  AlertCircle, ArrowRight, Bell, Building2, CheckCircle2, ChefHat, Clock, CreditCard, Heart, Home, Loader2, LogOut,
+  QrCode, Receipt, Search, ShoppingBag, Sparkles, Star, Tag, TrendingUp, User, Utensils, X, Zap,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { formatINR, formatDateTime, subscribeOrders, subscribeMenuItems, subscribeAnnouncements, placeOrder } from '../lib/supabase-service';
+import type { MenuItem, Order, OrderStatus, NotificationItem, UserRole } from '../types';
 
-interface StudentPortalModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
+interface StudentPortalModalProps { isOpen: boolean; onClose: () => void; }
+type PortalTab = 'home' | 'menu' | 'orders' | 'announcements' | 'profile';
 
-interface FoodItem {
-  id: string;
-  name: string;
-  counter: 'Counter A' | 'Counter B' | 'Counter C' | 'Counter D';
-  counterName: string;
-  price: number;
-  prepTime: string;
-  rating: number;
-  category: string;
-  image: string;
-  description: string;
-  popular?: boolean;
-}
+const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready'];
 
-type OrderStatus = 'Order Received' | 'Preparing' | 'Ready' | 'Collected' | 'Cancelled';
+const statusLabel = (s: OrderStatus) => {
+  const map: Record<OrderStatus, string> = { pending: 'Pending', accepted: 'Accepted', preparing: 'Preparing', ready: 'Ready for Pickup', completed: 'Completed', cancelled: 'Cancelled' };
+  return map[s] || s;
+};
 
-interface ActiveOrder {
-  orderId: string;
-  counter: string;
-  lockerNumber: string;
-  items: { name: string; quantity: number; price: number }[];
-  total: number;
-  qrCode: string;
-  status: OrderStatus;
-  createdAt: number;
-  timeRemaining: string;
-  queuePosition: number;
-  role: 'student' | 'faculty' | 'guest';
-}
+const statusColor = (s: OrderStatus) => {
+  const map: Record<OrderStatus, string> = { pending: 'text-yellow-300 border-yellow-500/40 bg-yellow-950/40', accepted: 'text-blue-300 border-blue-500/40 bg-blue-950/40', preparing: 'text-indigo-300 border-indigo-500/40 bg-indigo-950/40', ready: 'text-emerald-300 border-emerald-500/40 bg-emerald-950/50', completed: 'text-slate-400 border-slate-700 bg-slate-900', cancelled: 'text-red-300 border-red-500/40 bg-red-950/40' };
+  return map[s] || 'text-slate-300 border-slate-700 bg-slate-900';
+};
 
-interface NotificationItem {
-  id: string;
-  title: string;
-  message: string;
-  time: string;
-  type: 'announcement' | 'order' | 'offer';
-  read: boolean;
-}
+const roleLabel = (role: UserRole | null | undefined) => {
+  if (role === 'student') return 'Student'; if (role === 'faculty') return 'Faculty'; if (role === 'guest') return 'Guest'; return 'Role pending';
+};
 
+const roleColor = (role: UserRole | null | undefined) => {
+  if (role === 'student') return 'text-emerald-300 border-emerald-500/40 bg-emerald-950/50';
+  if (role === 'faculty') return 'text-cyan-300 border-cyan-500/40 bg-cyan-950/40';
+  if (role === 'guest') return 'text-amber-300 border-amber-500/40 bg-amber-950/40';
+  return 'text-slate-300 border-slate-700 bg-slate-900';
+};
 
-export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
-  isOpen,
-  onClose,
-}) => {
-  const { profile, refreshProfile, signOut } = useAuth();
-  const [institutionName, setInstitutionName] = useState<string>('');
-  const [institutionCode, setInstitutionCode] = useState<string>('');
-  const [campus, setCampus] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'home' | 'menu' | 'orders' | 'profile' | 'notifications'>('home');
-  
-  // Menu Filters
-  const [selectedCounter, setSelectedCounter] = useState<string>('ALL');
-  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  
-  const [menuItems, setMenuItems] = useState<FoodItem[]>([]);
-  const [cart, setCart] = useState<{ item: FoodItem; quantity: number }[]>([]);
-  const [isRazorpayModalOpen, setIsRazorpayModalOpen] = useState<boolean>(false);
-  const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'wallet' | 'netbanking'>('upi');
-  const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
+const SectionHeader = ({ icon: Icon, title, subtitle }: { icon: React.ElementType; title: string; subtitle?: string }) => (
+  <div className="flex items-end justify-between gap-4">
+    <div className="space-y-1">
+      <div className="flex items-center gap-2"><Icon className="w-4 h-4 text-emerald-400" /><h3 className="text-sm sm:text-base font-extrabold text-white tracking-tight">{title}</h3></div>
+      {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
+    </div>
+  </div>
+);
 
-  // Active Order State
-  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
+const EmptyState = ({ icon: Icon, title, message }: { icon: React.ElementType; title: string; message: string }) => (
+  <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-6 text-center">
+    <Icon className="w-7 h-7 mx-auto text-slate-600" />
+    <h4 className="mt-3 text-sm font-bold text-slate-200">{title}</h4>
+    <p className="mt-1 text-xs text-slate-500">{message}</p>
+  </div>
+);
 
-  // Past Orders History
-  const [orderHistory, setOrderHistory] = useState<ActiveOrder[]>([]);
+const FoodCard = ({ item, onAdd }: { key?: React.Key; item: MenuItem; onAdd: (item: MenuItem) => void }) => (
+  <article className="group overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/90 transition-all duration-300 hover:-translate-y-1 hover:border-emerald-500/50 hover:shadow-xl hover:shadow-emerald-950/30">
+    <div className="relative h-36 bg-slate-900">
+      {item.image_url ? <img src={item.image_url} alt={item.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /> : (
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/50"><Utensils className="w-9 h-9 text-emerald-500/70" /></div>
+      )}
+      <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+        {item.popular && <span className="rounded-full border border-emerald-500/40 bg-emerald-950/80 px-2 py-0.5 text-[10px] font-bold text-emerald-300">Trending</span>}
+        {item.offer_label && <span className="rounded-full border border-amber-500/40 bg-amber-950/80 px-2 py-0.5 text-[10px] font-bold text-amber-300">{item.offer_label}</span>}
+      </div>
+    </div>
+    <div className="space-y-3 p-4">
+      <div>
+        <div className="flex items-start justify-between gap-3"><h4 className="text-sm font-extrabold text-white">{item.name}</h4><span className="shrink-0 text-xs font-black text-emerald-300">{formatINR(item.price)}</span></div>
+        <p className="mt-1 line-clamp-2 min-h-[2rem] text-xs leading-relaxed text-slate-400">{item.description || item.category}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold text-slate-400">
+        <span className="rounded-full bg-slate-900 px-2 py-1">{item.counter_name}</span>
+        <span className="rounded-full bg-slate-900 px-2 py-1">{item.category}</span>
+        {item.prep_time && <span className="rounded-full bg-slate-900 px-2 py-1">{item.prep_time}</span>}
+        {item.rating > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2 py-1 text-amber-300"><Star className="w-3 h-3 fill-amber-300" /> {item.rating.toFixed(1)}</span>}
+      </div>
+      <button onClick={() => onAdd(item)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 px-4 py-2.5 text-xs font-extrabold text-slate-950 shadow-md transition-all hover:from-emerald-300">
+        <ShoppingBag className="w-4 h-4 text-slate-950" /> Add to order
+      </button>
+    </div>
+  </article>
+);
 
-  // Notifications
+const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => void; order: Order | null }) => {
+  if (!isOpen || !order) return null;
+  const qrValue = order.qr_code_data || order.qr_code || order.pickup_code || order.order_id;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4" onClick={onClose}>
+      <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl p-8 max-w-sm w-full text-center space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div className="w-20 h-20 mx-auto rounded-full bg-emerald-950 border-2 border-emerald-400 flex items-center justify-center"><QrCode className="w-10 h-10 text-emerald-400" /></div>
+        <h3 className="text-xl font-black text-white">Pickup Code Ready</h3>
+        <p className="text-xs text-slate-400">Show this code at the counter or scan at the locker hub</p>
+        <div className="bg-white rounded-2xl p-4 mx-auto max-w-[200px]">
+          <div className="font-mono text-2xl font-black text-slate-950 tracking-wider">{qrValue}</div>
+          <div className="mt-2 text-[10px] text-slate-500 font-mono">{order.order_id}</div>
+        </div>
+        <p className="text-xs text-emerald-400 font-mono">Counter: {order.counter}</p>
+        <button onClick={onClose} className="w-full py-3 rounded-xl bg-slate-950 border border-slate-700 text-xs font-bold text-white">Close</button>
+      </div>
+    </div>
+  );
+};
+
+export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, onClose }) => {
+  const { user, profile, refreshProfile, signOut } = useAuth();
+  const [activeTab, setActiveTab] = useState<PortalTab>('home');
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [institutionName, setInstitutionName] = useState('');
+  const [cart, setCart] = useState<{ item: MenuItem; quantity: number }[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCounter, setSelectedCounter] = useState('ALL');
+  const [loading, setLoading] = useState(true);
+  const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [qrOrder, setQrOrder] = useState<Order | null>(null);
 
-  // Data Fetching
-  const [loadingData, setLoadingData] = useState(true);
+  const liveRole = profile?.role || null;
+  const displayName = profile?.full_name || profile?.email || user?.email || 'Signed-in user';
+  const firstItemCounter = cart.length > 0 ? cart[0].item.counter_name : '';
+
+  const handleOrderUpdate = useCallback((payload: any) => {
+    const newStatus = payload.new?.status;
+    if (newStatus && payload.new?.user_id === user?.id) {
+      setOrders((prev) => {
+        const exists = prev.find((o) => o.id === String(payload.new.id));
+        if (exists) {
+          return prev.map((o) => o.id === String(payload.new.id) ? {
+            ...o, status: newStatus.toLowerCase() as OrderStatus,
+            ready_at: payload.new.ready_at || o.ready_at,
+            completed_at: payload.new.completed_at || o.completed_at,
+            qr_code: payload.new.qr_code || payload.new.qr_code_data || o.qr_code,
+            qr_code_data: payload.new.qr_code_data || o.qr_code_data,
+            pickup_code: payload.new.pickup_code || o.pickup_code,
+          } : o);
+        }
+        return prev;
+      });
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (!isOpen) return;
-    
-    const fetchData = async () => {
-      setLoadingData(true);
+    const load = async () => {
+      setLoading(true); setError(null);
       try {
-        const [{ data: menu }, { data: orders }, { data: notifs }] = await Promise.all([
-          supabase.from('menu_items').select('*'),
-          supabase.from('orders').select('*').order('created_at', { ascending: false }),
-          supabase.from('notifications').select('*').order('created_at', { ascending: false })
+        await refreshProfile();
+        const [menuResult, orderResult, notifResult] = await Promise.all([
+          supabase.from('menu_items').select('*').order('name'),
+          user?.id ? supabase.from('orders').select('*').eq('user_id', user.id).order('created_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
+          supabase.from('notifications').select('*').order('created_at', { ascending: false }),
         ]);
-        
-        if (menu) {
-          setMenuItems(menu.map((m: any) => ({
-            id: m.id,
-            name: m.name,
-            counter: m.counter,
-            counterName: m.counter_name || m.counter,
-            price: m.price,
-            prepTime: m.prep_time || '5 mins',
-            rating: m.rating || 4.5,
-            category: m.category,
-            description: m.description,
-            image: m.image_url,
-            popular: m.popular || false
-          })));
+        if (menuResult.error) throw menuResult.error;
+        if (orderResult.error) throw orderResult.error;
+        if (notifResult.error) throw notifResult.error;
+
+        setMenuItems((menuResult.data || []).map((r: any) => ({
+          id: String(r.id), name: String(r.name || 'Item'), counter: String(r.counter || r.counter_name || ''), counter_name: String(r.counter_name || r.counter || ''),
+          counter_id: null, price: Number(r.price || 0), offer_price: r.offer_price || null, offer_label: r.offer_label || null,
+          prep_time: r.prep_time || null, rating: Number(r.rating || 0), category: String(r.category || ''), category_id: null,
+          image_url: r.image_url || r.image || null, description: String(r.description || ''), is_available: true, is_published: true,
+          popular: Boolean(r.popular), nutrition: r.nutrition || null, institution_id: null,
+        })));
+        setOrders((orderResult.data || []).map((r: any) => ({
+          id: String(r.id), user_id: String(r.user_id || ''), email: String(r.email || ''), role: r.role || null,
+          institution_id: r.institution_id || null, institution_code: r.institution_code || null, counter_id: null, category_id: null,
+          order_id: String(r.order_id || r.id), counter: String(r.counter || ''), items: Array.isArray(r.items) ? r.items.map((i: any) => ({ name: String(i.name || ''), quantity: Number(i.quantity || 1), price: Number(i.price || 0) })) : [],
+          total_amount: Number(r.total_amount || r.total || 0), status: (r.status || 'pending').toLowerCase() as OrderStatus,
+          payment_status: r.payment_status || 'pending', pickup_code: r.pickup_code || r.qr_code || null, qr_code: r.qr_code || null,
+          qr_code_data: r.qr_code_data || null, locker_number: r.locker_number || null, created_at: r.created_at || '',
+          accepted_at: r.accepted_at || null, preparing_at: r.preparing_at || null, ready_at: r.ready_at || null, completed_at: r.completed_at || null, updated_at: r.updated_at || '',
+        })));
+        setNotifications((notifResult.data || []).map((r: any) => ({ id: String(r.id), title: String(r.title || 'Update'), message: String(r.message || ''), created_at: r.created_at || '', type: String(r.type || 'announcement'), read: Boolean(r.read) })));
+
+        if (profile?.institution_id) {
+          const { data: inst } = await supabase.from('institutions').select('name, campus').eq('id', profile.institution_id).maybeSingle();
+          if (inst) setInstitutionName(`${inst.name}${inst.campus ? ` - ${inst.campus}` : ''}`);
         }
-        
-        if (orders) {
-          const parsedOrders = orders.map((o: any) => ({
-            orderId: o.order_id || o.id,
-            counter: o.counter,
-            lockerNumber: o.locker_number,
-            items: o.items || [],
-            total: o.total_amount,
-            qrCode: o.qr_code,
-            status: o.status,
-            createdAt: new Date(o.created_at).getTime(),
-            timeRemaining: '5 mins',
-            queuePosition: 2
-          }));
-          
-          const active = parsedOrders.filter((o: any) => o.status !== 'Collected' && o.status !== 'Cancelled');
-          const past = parsedOrders.filter((o: any) => o.status === 'Collected' || o.status === 'Cancelled');
-          
-          setActiveOrder(active.length > 0 ? active[0] : null);
-          setOrderHistory(past);
-        }
-        
-        if (notifs) {
-          setNotifications(notifs.map((n: any) => ({
-            id: n.id,
-            title: n.title,
-            message: n.message,
-            time: new Date(n.created_at).toLocaleTimeString(),
-            type: n.type || 'announcement',
-            read: n.read || false
-          })));
-        }
-      } catch (err) {
-        console.error('Error fetching portal data:', err);
-      } finally {
-        setLoadingData(false);
-      }
+      } catch (err: any) { setError(err?.message || 'Failed to load portal data.'); } finally { setLoading(false); }
     };
-    
-    fetchData();
-  }, [isOpen]);
+    load();
 
-  // Cancellation Timer calculation
-  const [secondsSinceOrder, setSecondsSinceOrder] = useState<number>(30);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (activeOrder && activeOrder.status === 'Order Received') {
-      interval = setInterval(() => {
-        const diff = Math.floor((Date.now() - activeOrder.createdAt) / 1000);
-        setSecondsSinceOrder(diff);
-      }, 500);
-    }
-    return () => clearInterval(interval);
-  }, [activeOrder]);
-
-  // LX AI Voice Command state
-  const [lxMessage, setLxMessage] = useState<string>('');
-  const [isLxVoiceActive, setIsLxVoiceActive] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      refreshProfile();
-    }
-  }, [isOpen, refreshProfile]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const fetchInstitution = async () => {
-      if (!profile?.institution_id) return;
-      const { data, error } = await supabase
-        .from('institutions')
-        .select('name, institution_code, campus, city, state')
-        .eq('id', profile.institution_id)
-        .single();
-      if (!error && data) {
-        setInstitutionName(data.name || '');
-        setInstitutionCode(data.institution_code || '');
-        setCampus(data.campus || '');
+    const unsubOrders = user?.id ? subscribeOrders(handleOrderUpdate, { user_id: user.id }) : () => {};
+    const unsubMenu = subscribeMenuItems((payload) => {
+      if (payload.eventType === 'INSERT' && payload.new?.is_published !== false) {
+        setMenuItems((prev) => { const exists = prev.find((i) => i.id === String(payload.new.id)); return exists ? prev : [...prev, { id: String(payload.new.id), name: String(payload.new.name || ''), counter: String(payload.new.counter || ''), counter_name: String(payload.new.counter_name || ''), counter_id: null, price: Number(payload.new.price || 0), offer_price: null, offer_label: null, prep_time: null, rating: 0, category: String(payload.new.category || ''), category_id: null, image_url: null, description: '', is_available: true, is_published: true, popular: false, nutrition: null, institution_id: null }]; });
+        } else if (payload.eventType === 'UPDATE') {
+          setMenuItems((prev) => prev.map((i) => i.id === String(payload.new.id) ? { ...i, name: String(payload.new.name || i.name), price: Number(payload.new.price || i.price), is_published: payload.new.is_published !== false } : i));
+        } else if (payload.eventType === 'DELETE') {
+          setMenuItems((prev) => prev.filter((i) => i.id !== String(payload.old.id)));
+        }
+      });
+    const unsubNotif = subscribeAnnouncements((payload) => {
+      if (payload.eventType === 'INSERT') {
+        setNotifications((prev) => [{ id: String(payload.new.id), title: String(payload.new.title || 'Update'), message: String(payload.new.message || ''), created_at: payload.new.created_at || '', type: String(payload.new.type || 'announcement'), read: false }, ...prev]);
       }
-    };
-    fetchInstitution();
-  }, [isOpen, profile?.institution_id]);
+    });
+
+    return () => { unsubOrders(); unsubMenu(); unsubNotif(); };
+  }, [isOpen, profile?.institution_id, refreshProfile, user?.id, handleOrderUpdate]);
+
+  const counters = useMemo(() => {
+    const grouped = new Map<string, MenuItem[]>();
+    menuItems.forEach((item) => grouped.set(item.counter_name, [...(grouped.get(item.counter_name) || []), item]));
+    return Array.from(grouped.entries()).map(([name, items]) => ({ name, items, avgRating: items.reduce((s, i) => s + i.rating, 0) / Math.max(items.filter((i) => i.rating > 0).length, 1), categories: Array.from(new Set(items.map((i) => i.category))).slice(0, 3) }));
+  }, [menuItems]);
+
+  const orderItemNames = useMemo(() => new Set(orders.flatMap((o) => o.items.map((i) => i.name))), [orders]);
+  const orderedCategories = useMemo(() => { const names = orderItemNames; return new Set(menuItems.filter((i) => names.has(i.name)).map((i) => i.category)); }, [menuItems, orderItemNames]);
+
+  const activeOrders = orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
+  const pastOrders = orders.filter((o) => !ACTIVE_STATUSES.includes(o.status));
+  const offerItems = menuItems.filter((i) => i.offer_label).slice(0, 6);
+  const trendingItems = [...menuItems].sort((a, b) => Number(b.popular) - Number(a.popular) || b.rating - a.rating).slice(0, 8);
+  const quickReorderItems = menuItems.filter((i) => orderItemNames.has(i.name)).slice(0, 6);
+  const personalizedItems = menuItems.filter((i) => orderedCategories.has(i.category) && !orderItemNames.has(i.name)).slice(0, 6);
+  const nutritionItems = menuItems.filter((i) => i.nutrition).slice(0, 4);
+  const filteredItems = menuItems.filter((i) => {
+    const q = searchQuery.trim().toLowerCase();
+    const cm = selectedCounter === 'ALL' || i.counter_name === selectedCounter;
+    const qm = !q || i.name.toLowerCase().includes(q) || i.category.toLowerCase().includes(q) || i.counter_name.toLowerCase().includes(q);
+    return cm && qm;
+  });
+  const cartTotal = cart.reduce((s, e) => s + e.item.price * e.quantity, 0);
+
+  const addToCart = (item: MenuItem) => setCart((prev) => { const ex = prev.find((e) => e.item.id === item.id); return ex ? prev.map((e) => e.item.id === item.id ? { ...e, quantity: e.quantity + 1 } : e) : [...prev, { item, quantity: 1 }]; });
+  const updateQuantity = (id: string, delta: number) => setCart((prev) => prev.map((e) => e.item.id === id ? { ...e, quantity: e.quantity + delta } : e).filter((e) => e.quantity > 0));
+
+  const handlePlaceOrder = async () => {
+    if (!user?.id || !profile?.email) { setError('Sign in required.'); return; }
+    if (!liveRole) { setError('Profile role missing.'); return; }
+    if (!cart.length) return;
+    setSubmittingOrder(true); setError(null);
+    const result = await placeOrder({
+      user_id: user.id, email: profile.email, role: liveRole,
+      institution_id: profile.institution_id, institution_code: profile.institution_code,
+      counter: firstItemCounter,
+      items: cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.price })),
+      total_amount: cartTotal,
+    });
+    setSubmittingOrder(false);
+    if (result.error) { setError(result.error); return; }
+    if (result.data) setOrders((prev) => [result.data!, ...prev]);
+    setCart([]);
+    setActiveTab('orders');
+  };
+
+  const tabs: { id: PortalTab; label: string; icon: React.ElementType; badge?: string }[] = [
+    { id: 'home', label: 'Home', icon: Home },
+    { id: 'menu', label: 'Menu', icon: Utensils },
+    { id: 'orders', label: 'Orders', icon: Receipt, badge: activeOrders.length ? String(activeOrders.length) : undefined },
+    { id: 'announcements', label: 'Updates', icon: Bell, badge: notifications.filter((n) => !n.read).length ? String(notifications.filter((n) => !n.read).length) : undefined },
+    { id: 'profile', label: roleLabel(liveRole), icon: User },
+  ];
 
   if (!isOpen) return null;
 
-  // Filtered Food items
-  const filteredItems = menuItems.filter((item) => {
-    const matchesCounter = selectedCounter === 'ALL' || item.counter === selectedCounter;
-    const matchesCategory = selectedCategory === 'ALL' || item.category === selectedCategory;
-    const matchesSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.counter.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCounter && matchesCategory && matchesSearch;
-  });
-
-  const addToCart = (food: FoodItem) => {
-    setCart((prev) => {
-      const existing = prev.find((c) => c.item.id === food.id);
-      if (existing) {
-        return prev.map((c) => (c.item.id === food.id ? { ...c, quantity: c.quantity + 1 } : c));
-      }
-      return [...prev, { item: food, quantity: 1 }];
-    });
-  };
-
-  const removeFromCart = (foodId: string) => {
-    setCart((prev) => prev.filter((c) => c.item.id !== foodId));
-  };
-
-  const updateQuantity = (foodId: string, delta: number) => {
-    setCart((prev) =>
-      prev
-        .map((c) => {
-          if (c.item.id === foodId) {
-            const newQty = c.quantity + delta;
-            return newQty > 0 ? { ...c, quantity: newQty } : null;
-          }
-          return c;
-        })
-        .filter(Boolean) as { item: FoodItem; quantity: number }[]
-    );
-  };
-
-  const cartTotal = cart.reduce((acc, curr) => acc + curr.item.price * curr.quantity, 0);
-
-  const handleRazorpayPayment = () => {
-    setIsProcessingPayment(true);
-    setTimeout(async () => {
-      const randomOrderId = 'FDX-' + Math.floor(100000 + Math.random() * 900000);
-      const firstCounter = cart[0]?.item.counter || 'Counter B';
-      const lockerNum = Math.floor(1 + Math.random() * 12);
-      const orderRole = profile?.role || 'student';
-
-      const newOrderData = {
-        order_id: randomOrderId,
-        counter: firstCounter,
-        locker_number: `Locker #${lockerNum < 10 ? '0' + lockerNum : lockerNum}`,
-        items: cart.map((c) => ({ name: c.item.name, quantity: c.quantity, price: c.item.price })),
-        total_amount: cartTotal,
-        qr_code: `FOODEXA-${randomOrderId}-${institutionCode}`,
-        status: 'Order Received',
-        role: orderRole,
-      };
-
-      try {
-        await supabase.from('orders').insert([newOrderData]);
-        
-        const newOrder: ActiveOrder = {
-          orderId: newOrderData.order_id,
-          counter: newOrderData.counter,
-          lockerNumber: newOrderData.locker_number,
-          items: newOrderData.items,
-          total: newOrderData.total_amount,
-          qrCode: newOrderData.qr_code,
-          status: newOrderData.status as OrderStatus,
-          createdAt: Date.now(),
-          timeRemaining: '7 mins',
-          queuePosition: 3,
-          role: orderRole,
-        };
-
-        setActiveOrder(newOrder);
-        setSecondsSinceOrder(0);
-        setCart([]);
-        setActiveTab('orders');
-
-        // Add Notification locally (could also insert to DB)
-        setNotifications((prev) => [
-          {
-            id: 'n-' + Date.now(),
-            title: `Order #${randomOrderId} Placed`,
-            message: `Your payment of ₹${cartTotal} was verified by Razorpay. Sent to ${firstCounter}.`,
-            time: 'Just now',
-            type: 'order',
-            read: false,
-          },
-          ...prev,
-        ]);
-      } catch (err) {
-        console.error("Payment sync to DB failed", err);
-        alert('Failed to process order. Please try again.');
-      } finally {
-        setIsProcessingPayment(false);
-        setIsRazorpayModalOpen(false);
-      }
-    }, 1600);
-  };
-
-  const handleCancelOrder = async () => {
-    if (!activeOrder) return;
-
-    const secondsPassed = (Date.now() - activeOrder.createdAt) / 1000;
-    if (secondsPassed > 10) {
-      alert('Your order is now being prepared and can no longer be cancelled.');
-      return;
-    }
-
-    try {
-      await supabase
-        .from('orders')
-        .update({ status: 'Cancelled' })
-        .eq('order_id', activeOrder.orderId);
-
-      const cancelledOrder = { ...activeOrder, status: 'Cancelled' as OrderStatus };
-      setOrderHistory((prev) => [cancelledOrder, ...prev]);
-      setActiveOrder(null);
-
-      setNotifications((prev) => [
-        {
-          id: 'n-' + Date.now(),
-          title: `Order #${cancelledOrder.orderId} Cancelled`,
-          message: `Refund of ₹${cancelledOrder.total} initiated back to your original payment method.`,
-          time: 'Just now',
-          type: 'order',
-          read: false,
-        },
-        ...prev,
-      ]);
-    } catch (err) {
-      console.error("Cancellation failed", err);
-      alert("Failed to cancel order.");
-    }
-  };
-
-  const handleLxVoiceCommand = (cmd: string) => {
-    setIsLxVoiceActive(true);
-    setLxMessage(`Student: "${cmd}"`);
-
-    setTimeout(() => {
-      if (cmd.toLowerCase().includes('biryani') && menuItems.length > 0) {
-        addToCart(menuItems[0]);
-        setLxMessage(`LX AI: "Added ${menuItems[0].name} to your cart."`);
-      } else if (cmd.toLowerCase().includes('burger') && menuItems.length > 3) {
-        addToCart(menuItems[3]);
-        setLxMessage(`LX AI: "Added ${menuItems[3].name} to your cart."`);
-      } else if (menuItems.length > 0) {
-        addToCart(menuItems[0]);
-        setLxMessage(`LX AI: "Found recommendation and added it to your order!"`);
-      }
-      setIsLxVoiceActive(false);
-    }, 1100);
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/90 backdrop-blur-xl overflow-y-auto">
-      <div className="relative w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-4 flex flex-col max-h-[94vh]">
-        
-        {/* TOP BAR: Institution Identity */}
-        <div className="bg-slate-950 px-4 sm:px-6 py-3.5 border-b border-slate-800 flex items-center justify-between shrink-0">
-<div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-slate-950 font-extrabold text-lg shadow-lg">
-                  FX
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-extrabold text-white tracking-tight">
-                      {institutionName || 'Institution'}
-                    </h3>
-                    {institutionCode && (
-                      <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-800 font-mono font-bold">
-                        Code: {institutionCode}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-slate-400">
-                    Logged in as <span className="text-slate-200 font-semibold">{profile?.full_name || 'User'}</span> ({profile?.email || ''})
-                    <span className={`ml-1 font-bold ${profile?.role === 'student' ? 'text-emerald-400' : profile?.role === 'faculty' ? 'text-blue-400' : 'text-amber-400'}`}>
-                      {profile?.role ? ` • ${profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}` : ''}
-                    </span>
-                  </p>
-                </div>
+    <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100">
+      <QRModal isOpen={!!qrOrder} onClose={() => setQrOrder(null)} order={qrOrder} />
+      <div className="flex h-full min-h-0 flex-col">
+        <header className="shrink-0 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur-xl sm:px-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-500 text-sm font-black text-slate-950 shadow-lg shadow-emerald-950">FX</div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-base font-black tracking-tight text-white sm:text-lg">FOODEXA Campus Portal</h2><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${roleColor(liveRole)}`}>{roleLabel(liveRole)}</span></div>
+                <p className="truncate text-[11px] text-slate-400">{institutionName || 'Institution sync pending'}</p>
               </div>
-
-          <div className="flex items-center gap-2">
-            <span className="hidden md:inline-flex items-center gap-1.5 text-xs text-emerald-400 bg-slate-900 border border-slate-800 px-3 py-1 rounded-full font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Campus Live</span>
-            </span>
-
-            <button
-              onClick={onClose}
-              className="p-2 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setActiveTab('menu')} className="hidden items-center gap-2 rounded-full border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200 transition hover:border-emerald-500/50 sm:flex">
+                <ShoppingBag className="w-4 h-4 text-emerald-400" />{cart.reduce((s, e) => s + e.quantity, 0)} items
+              </button>
+              <button onClick={onClose} className="rounded-full border border-slate-800 bg-slate-900 p-2 text-slate-400 transition hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
           </div>
-        </div>
-
-        {/* NAVIGATION TABS BAR */}
-        <div className="bg-slate-950/90 border-b border-slate-800 px-4 sm:px-6 flex items-center justify-between overflow-x-auto no-scrollbar shrink-0">
-          <div className="flex items-center space-x-1 sm:space-x-2 py-2">
-            {[
-              { id: 'home', label: 'Home', icon: Home },
-              { id: 'menu', label: 'Menu & Counters', icon: Utensils },
-              { id: 'orders', label: 'Orders & Tracking', icon: Receipt, badge: activeOrder ? '1 Active' : undefined },
-              { id: 'notifications', label: 'Announcements', icon: Bell, badge: notifications.filter((n) => !n.read).length ? `${notifications.filter((n) => !n.read).length}` : undefined },
-              { id: 'profile', label: 'Student Profile', icon: User },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-                    isActive
-                      ? 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-bold shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900/60'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
-                  <span>{tab.label}</span>
-                  {tab.badge && (
-                    <span className="ml-0.5 text-[9px] bg-emerald-500 text-slate-950 font-mono font-extrabold px-1.5 py-0.2 rounded-full">
-                      {tab.badge}
-                    </span>
-                  )}
+        </header>
+        <div className="flex min-h-0 flex-1">
+          <aside className="hidden w-64 shrink-0 border-r border-slate-800 bg-slate-950 p-4 lg:block">
+            <div className="space-y-2">
+              {tabs.map((tab) => { const Icon = tab.icon; const active = activeTab === tab.id; return (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-xs font-bold transition ${active ? 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'text-slate-400 hover:bg-slate-900 hover:text-white'}`}>
+                  <span className="flex items-center gap-2"><Icon className="w-4 h-4" />{tab.label}</span>
+                  {tab.badge && <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] text-slate-950">{tab.badge}</span>}
                 </button>
-              );
-            })}
-          </div>
-
-          {/* Quick Cart Pill */}
-          <button
-            onClick={() => setActiveTab('menu')}
-            className="hidden sm:flex items-center gap-2 bg-slate-900 border border-slate-800 hover:border-emerald-500/50 text-xs px-3 py-1.5 rounded-xl text-slate-200 cursor-pointer transition-all"
-          >
-            <ShoppingBag className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Cart ({cart.reduce((a, b) => a + b.quantity, 0)})</span>
-            <span className="font-mono text-emerald-400 font-bold">₹{cartTotal}</span>
-          </button>
-        </div>
-
-        {/* TAB BODY CONTENT */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-          
-          {/* TAB 1: HOME */}
-          {activeTab === 'home' && (
-            <div className="space-y-6">
-              
-              {/* Campus Offer Hero Banner */}
-              <div className="relative rounded-3xl bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 border border-emerald-500/30 p-6 overflow-hidden shadow-xl">
-                <div className="relative z-10 max-w-xl space-y-3">
-                  <span className="inline-flex items-center gap-1.5 text-[10px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-800 px-2.5 py-0.5 rounded-full font-bold">
-                    <Tag className="w-3 h-3 text-emerald-400" />
-                    EXCLUSIVE CAMPUS ANNOUNCEMENT
-                  </span>
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
-                    Exam Special: 20% OFF at Counter B Fast Food
-                  </h2>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    Order loaded fries, artisan pizza slices, and burgers with express 5-minute QR locker pickup. Use code <strong className="text-white font-mono bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">EXAM20</strong>
-                  </p>
-                  <div className="pt-2 flex items-center gap-3">
-                    <button
-                      onClick={() => {
-                        setSelectedCounter('Counter B');
-                        setActiveTab('menu');
-                      }}
-                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-300 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all shadow-md cursor-pointer flex items-center gap-1.5"
-                    >
-                      <span>Explore Counter B</span>
-                      <ArrowRight className="w-3.5 h-3.5 text-slate-950" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* LX AI Voice Command Banner */}
-              <div className="bg-slate-950 border border-emerald-500/40 rounded-2xl p-4 space-y-3 shadow-lg">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-300 shrink-0">
-                      <Mic className={`w-5 h-5 ${isLxVoiceActive ? 'animate-pulse text-emerald-400' : ''}`} />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>LX Voice Assistant (Powered by Gemini)</span>
-                      </h4>
-                      <p className="text-[11px] text-slate-400">Order by voice directly for Counter A, B, C or D</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleLxVoiceCommand('Order one Special Chicken Biryani from Counter A')}
-                      className="text-[10px] bg-slate-900 border border-slate-800 hover:border-emerald-500/60 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
-                    >
-                      "Order Chicken Biryani"
-                    </button>
-                    <button
-                      onClick={() => handleLxVoiceCommand('Order Veg Burger from Counter B')}
-                      className="text-[10px] bg-slate-900 border border-slate-800 hover:border-emerald-500/60 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
-                    >
-                      "Order Veg Burger"
-                    </button>
-                  </div>
-                </div>
-
-                {lxMessage && (
-                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono text-emerald-300">
-                    {lxMessage}
-                  </div>
-                )}
-              </div>
-
-              {/* CAMPUS COUNTERS OVERVIEW */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-emerald-400" />
-                    <span>Campus Dining Counters</span>
-                  </h3>
-                  <button
-                    onClick={() => setActiveTab('menu')}
-                    className="text-xs text-emerald-400 hover:underline cursor-pointer"
-                  >
-                    View All Items →
-                  </button>
-                </div>
-
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {[...new Set(menuItems.map((m) => m.counter))].map((counter) => (
-                    <div
-                      key={counter}
-                      onClick={() => {
-                        setSelectedCounter(counter);
-                        setActiveTab('menu');
-                      }}
-                      className="bg-slate-950 border border-slate-800 hover:border-emerald-500/40 p-4 rounded-2xl hover:bg-slate-900/80 transition-all cursor-pointer space-y-2 group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white group-hover:text-emerald-400">{counter}</span>
-                      </div>
-                      <p className="text-xs font-semibold text-slate-300">{menuItems.filter((m) => m.counter === counter).length} items available</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* RECOMMENDED MEALS GRID */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-bold text-white">Recommended for Your Campus Break</h3>
-                <div className="grid sm:grid-cols-3 gap-4">
-                  {menuItems.slice(0, 3).map((food) => (
-                    <div
-                      key={food.id}
-                      className="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 space-y-3 hover:border-emerald-500/40 transition-all flex flex-col justify-between"
-                    >
-                      <div className="space-y-2">
-                        <div className="relative h-32 rounded-xl overflow-hidden bg-slate-900">
-                          <img
-                            src={food.image}
-                            alt={food.name}
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover"
-                          />
-                          <span className="absolute top-2 left-2 bg-slate-950/85 backdrop-blur-md text-emerald-400 text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-800 font-bold">
-                            {food.counter}
-                          </span>
-                        </div>
-                        <h4 className="text-xs font-bold text-white">{food.name}</h4>
-                        <p className="text-[11px] text-slate-400 line-clamp-2">{food.description}</p>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-900">
-                        <span className="text-xs font-bold text-emerald-400 font-mono">₹{food.price}</span>
-                        <button
-                          onClick={() => addToCart(food)}
-                          className="px-3 py-1 rounded-xl bg-emerald-400 text-slate-950 text-xs font-bold hover:bg-emerald-300 transition-colors cursor-pointer"
-                        >
-                          + Add
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
+              );})}
             </div>
-          )}
-
-          {/* TAB 2: MENU & COUNTERS */}
-          {activeTab === 'menu' && (
-            <div className="grid lg:grid-cols-12 gap-6">
-              
-              {/* LEFT 8 COLS: Food Filter, Search & Grid */}
-              <div className="lg:col-span-8 space-y-4">
-                
-                {/* Search & Counter Tabs */}
-                <div className="space-y-3">
-                  <div className="relative">
-                    <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search Biryani, Burger, Chai, Dosa..."
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
-                    />
-                  </div>
-
-                  {/* Counter Filter Tabs */}
-                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-                    {[{ id: 'ALL', label: 'All Campus Items' }, ...Array.from(new Set(menuItems.map(m => m.counter))).map(c => ({ id: c, label: c }))].map((tab) => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setSelectedCounter(tab.id)}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                          selectedCounter === tab.id
-                            ? 'bg-gradient-to-r from-emerald-400 to-teal-300 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
-                            : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* FOOD ITEMS GRID */}
-                <div className="grid sm:grid-cols-2 gap-4">
-                  {filteredItems.map((food) => (
-                    <div
-                      key={food.id}
-                      className="bg-slate-950 border border-slate-800/90 rounded-2xl p-3.5 space-y-3 hover:border-emerald-500/40 transition-all flex flex-col justify-between group"
-                    >
-                      <div className="space-y-2">
-                        <div className="relative h-32 rounded-xl overflow-hidden bg-slate-900">
-                          <img
-                            src={food.image}
-                            alt={food.name}
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          <span className="absolute top-2 left-2 bg-slate-950/85 backdrop-blur-md text-emerald-400 text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-800 font-bold">
-                            {food.counter}
-                          </span>
-                          <span className="absolute top-2 right-2 bg-slate-950/85 backdrop-blur-md text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                            ★ {food.rating}
-                          </span>
-                        </div>
-
-                        <div>
-                          <h4 className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
-                            {food.name}
-                          </h4>
-                          <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">{food.description}</p>
-                          <p className="text-[10px] text-emerald-400 font-mono mt-1">Ready in ~{food.prepTime}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-900">
-                        <span className="text-sm font-bold text-emerald-400 font-mono">₹{food.price}</span>
-                        <button
-                          onClick={() => addToCart(food)}
-                          className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-emerald-400 hover:text-slate-950 border border-slate-800 hover:border-emerald-400 text-xs font-bold text-white transition-all cursor-pointer"
-                        >
-                          + Add to Cart
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-              </div>
-
-              {/* RIGHT 4 COLS: Order Cart Sidebar */}
-              <div className="lg:col-span-4 bg-slate-950/60 p-4 rounded-3xl border border-slate-800/80 space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                  <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                    <ShoppingBag className="w-4 h-4 text-emerald-400" />
-                    <span>Your Order Cart</span>
-                  </h4>
-                  <span className="text-xs text-slate-400 font-mono">
-                    {cart.reduce((a, b) => a + b.quantity, 0)} Items
-                  </span>
-                </div>
-
-                {cart.length === 0 ? (
-                  <div className="text-center py-10 space-y-2">
-                    <p className="text-xs text-slate-400">Cart is empty.</p>
-                    <p className="text-[11px] text-slate-400">Select items from any counter above.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                      {cart.map(({ item, quantity }) => (
-                        <div
-                          key={item.id}
-                          className="bg-slate-900 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between text-xs"
-                        >
-                          <div>
-                            <h5 className="font-bold text-white text-[11px]">{item.name}</h5>
-                            <p className="text-[10px] text-slate-400 font-mono">{item.counter} • ₹{item.price}</p>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg">
-                              <button
-                                onClick={() => updateQuantity(item.id, -1)}
-                                className="px-2 py-0.5 text-slate-400 hover:text-white cursor-pointer"
-                              >
-                                -
-                              </button>
-                              <span className="px-2 text-[11px] font-bold text-emerald-400 font-mono">{quantity}</span>
-                              <button
-                                onClick={() => updateQuantity(item.id, 1)}
-                                className="px-2 py-0.5 text-slate-400 hover:text-white cursor-pointer"
-                              >
-                                +
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-1.5 text-xs">
-                      <div className="flex justify-between text-slate-400">
-                        <span>Items Subtotal</span>
-                        <span>₹{cartTotal}</span>
-                      </div>
-                      <div className="flex justify-between text-slate-400">
-                        <span>Campus Locker & Tech Fee</span>
-                        <span className="text-emerald-400 font-mono">₹0 (Free)</span>
-                      </div>
-                      <div className="pt-2 border-t border-slate-800 flex justify-between font-bold text-sm text-white">
-                        <span>Total Amount</span>
-                        <span className="text-emerald-400 font-mono">₹{cartTotal}</span>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => setIsRazorpayModalOpen(true)}
-                      className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer"
-                    >
-                      <ShieldCheck className="w-4 h-4 text-slate-950" />
-                      <span>Pay ₹{cartTotal} via Razorpay</span>
-                      <ArrowRight className="w-4 h-4 text-slate-950" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
+            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Signed in as</p>
+              <p className="mt-1 truncate text-sm font-extrabold text-white">{displayName}</p>
+              <p className="truncate text-[11px] text-slate-400">{profile?.email || user?.email}</p>
             </div>
-          )}
-
-          {/* TAB 3: ORDERS & LIVE TRACKING */}
-          {activeTab === 'orders' && (
-            <div className="space-y-6">
-              
-              {/* ACTIVE ORDER LIVE TRACKING CARD */}
-              {activeOrder ? (
-                <div className="bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border border-emerald-500/50 rounded-3xl p-6 shadow-2xl space-y-6">
-                  
-                  {/* Top Bar Status */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
-                      <h3 className="text-sm font-extrabold text-white">Live Campus Order Tracking</h3>
-                      <span className="text-xs bg-slate-900 text-emerald-400 font-mono px-2.5 py-0.5 rounded-full border border-slate-800 font-bold">
-                        ID: {activeOrder.orderId}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400 font-mono">
-                        Pickup: <strong className="text-white">{activeOrder.counter}</strong> ({activeOrder.lockerNumber})
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* PROGRESS TIMELINE (Received -> Preparing -> Ready -> Collected) */}
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                      {[
-                        { label: 'Order Received', step: 'Order Received' },
-                        { label: 'Preparing', step: 'Preparing' },
-                        { label: 'Ready at Locker', step: 'Ready' },
-                        { label: 'Collected', step: 'Collected' },
-                      ].map((st, idx) => {
-                        const statuses = ['Order Received', 'Preparing', 'Ready', 'Collected'];
-                        const currentIdx = statuses.indexOf(activeOrder.status);
-                        const isDone = currentIdx >= idx;
-                        const isCurrent = currentIdx === idx;
-
-                        return (
-                          <div key={st.step} className="space-y-2">
-                            <div
-                              className={`h-2 rounded-full transition-all ${
-                                isDone
-                                  ? 'bg-gradient-to-r from-emerald-400 to-teal-300'
-                                  : 'bg-slate-800'
-                              }`}
-                            />
-                            <span
-                              className={`text-[11px] font-bold block ${
-                                isCurrent
-                                  ? 'text-emerald-400 font-mono'
-                                  : isDone
-                                  ? 'text-slate-200'
-                                  : 'text-slate-500'
-                              }`}
-                            >
-                              {st.label}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* QR PICKUP LOCKER DISPLAY & TIMINGS */}
-                  <div className="grid sm:grid-cols-12 gap-6 bg-slate-950 p-5 rounded-2xl border border-slate-800 items-center">
-                    
-                    {/* QR Code Graphic */}
-                    <div className="sm:col-span-4 text-center space-y-2">
-                      <div className="w-32 h-32 mx-auto bg-white p-2 rounded-2xl shadow-xl flex items-center justify-center">
-                        <div className="w-full h-full border-2 border-slate-900 p-1 bg-slate-900 rounded-xl flex flex-col items-center justify-center text-white">
-                          <QrCode className="w-20 h-20 text-emerald-400" />
-                          <span className="text-[9px] font-mono text-slate-300 mt-1">SCAN AT LOCKER</span>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-slate-400 font-mono">Present this QR Code at Locker Pod</p>
-                    </div>
-
-                    {/* Order Info & Cancellation Notice */}
-                    <div className="sm:col-span-8 space-y-3">
-                      <div className="space-y-1">
-                        <span className="text-xs text-slate-400 block">Assigned Pickup Point:</span>
-                        <h4 className="text-lg font-extrabold text-white flex items-center gap-2">
-                          <span>{activeOrder.counter}</span>
-                          <span className="text-emerald-400 font-mono">{activeOrder.lockerNumber}</span>
-                        </h4>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800 text-xs font-mono">
-                        <div>
-                          <span className="text-slate-400 block">Est. Time Remaining:</span>
-                          <span className="text-amber-400 font-bold text-sm flex items-center gap-1 mt-0.5">
-                            <Clock className="w-3.5 h-3.5" /> {activeOrder.timeRemaining}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">Queue Ahead:</span>
-                          <span className="text-white font-bold text-sm mt-0.5 block">
-                            {activeOrder.queuePosition} Student Orders
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* 10-SECOND CANCELLATION LOGIC DISPLAY */}
-                      {activeOrder.status === 'Order Received' ? (
-                        <div className="pt-2">
-                          {secondsSinceOrder <= 10 ? (
-                            <div className="p-3 rounded-xl bg-amber-950/60 border border-amber-500/40 space-y-2">
-                              <div className="flex items-center justify-between text-xs text-amber-300">
-                                <span>You can cancel this order within 10 seconds of placing it:</span>
-                                <span className="font-mono font-bold text-amber-400">{10 - secondsSinceOrder}s remaining</span>
-                              </div>
-                              <button
-                                onClick={handleCancelOrder}
-                                className="px-4 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5"
-                              >
-                                <Ban className="w-3.5 h-3.5" />
-                                <span>Cancel Order & Refund</span>
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 flex items-center gap-2">
-                              <AlertCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                              <span>Your order is now being prepared in the kitchen and can no longer be cancelled.</span>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span>Order in progress ({activeOrder.status}). Kitchen is actively processing your meal.</span>
-                        </div>
-                      )}
-
-
-
-                    </div>
-
-                  </div>
-
-                </div>
-              ) : (
-                <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 text-center space-y-2">
-                  <Receipt className="w-8 h-8 text-slate-600 mx-auto" />
-                  <h4 className="text-xs font-bold text-slate-300">No Active Live Orders</h4>
-                  <p className="text-[11px] text-slate-500">Select food from Menu and complete payment to place a new order.</p>
+          </aside>
+          <main className="min-w-0 flex-1 overflow-y-auto">
+            <nav className="sticky top-0 z-20 flex gap-2 overflow-x-auto border-b border-slate-800 bg-slate-950/95 px-4 py-2 backdrop-blur-xl lg:hidden">
+              {tabs.map((tab) => { const Icon = tab.icon; const active = activeTab === tab.id; return (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold ${active ? 'bg-emerald-500/15 text-emerald-300' : 'text-slate-400'}`}>
+                  <Icon className="w-4 h-4" />{tab.label}
+                </button>
+              );})}
+            </nav>
+            <div className="mx-auto w-full max-w-[1800px] space-y-6 p-4 sm:p-6 xl:p-8">
+              {error && (
+                <div className="flex items-start gap-3 rounded-2xl border border-red-500/40 bg-red-950/40 p-4 text-sm text-red-200">
+                  <AlertCircle className="mt-0.5 w-5 h-5 shrink-0 text-red-300" />
+                  <div><p className="font-bold">Sync issue</p><p className="text-xs text-red-200/80">{error}</p></div>
                 </div>
               )}
-
-              {/* PAST ORDER HISTORY TABLE */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-bold text-white">Order History</h3>
-                <div className="space-y-2">
-                  {orderHistory.map((ord) => (
-                    <div
-                      key={ord.orderId}
-                      className="bg-slate-950 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between text-xs"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-white">{ord.orderId}</span>
-                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-                            ord.status === 'Collected'
-                              ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                              : 'bg-red-950 text-red-300 border border-red-800'
-                          }`}>
-                            {ord.status}
-                          </span>
+              {loading ? (
+                <div className="grid min-h-[55vh] place-items-center rounded-3xl border border-slate-800 bg-slate-900/40">
+                  <div className="flex items-center gap-3 text-sm font-bold text-slate-300"><Loader2 className="w-5 h-5 animate-spin text-emerald-400" />Loading live campus data</div>
+                </div>
+              ) : (
+                <>
+                  {activeTab === 'home' && (
+                    <div className="space-y-6">
+                      <section className="grid gap-4 xl:grid-cols-[1.5fr_0.8fr]">
+                        <div className="relative overflow-hidden rounded-3xl border border-emerald-500/30 bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/60 p-6 sm:p-8">
+                          <div className="relative z-10 max-w-3xl space-y-5">
+                            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-950/70 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-emerald-300"><Zap className="w-3.5 h-3.5" />Live campus ordering</span>
+                            <div className="space-y-2"><h1 className="text-3xl font-black tracking-tight text-white sm:text-5xl">{displayName.split(' ')[0] || 'Welcome'}, order from your campus counters faster.</h1><p className="max-w-2xl text-sm leading-relaxed text-slate-300">Your portal is synchronized with live menu items, active orders, announcements, and order history from Supabase.</p></div>
+                            <div className="flex flex-wrap gap-3">
+                              <button onClick={() => setActiveTab('menu')} className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 px-5 py-3 text-xs font-black text-slate-950 shadow-lg">Browse live menu<ArrowRight className="w-4 h-4 text-slate-950" /></button>
+                              <button onClick={() => setActiveTab('orders')} className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950 px-5 py-3 text-xs font-black text-slate-200">Track orders<Receipt className="w-4 h-4 text-emerald-400" /></button>
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-[11px] text-slate-400 mt-1">
-                          {ord.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')} • {ord.counter}
-                        </p>
-                      </div>
-
-                      <div className="text-right font-mono">
-                        <span className="text-emerald-400 font-bold block">₹{ord.total}</span>
-                        <span className="text-[10px] text-slate-500">Paid via Razorpay</span>
-                      </div>
+                        <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+                          {[
+                            { label: 'Live counters', value: counters.length, icon: Building2 },
+                            { label: 'Available dishes', value: menuItems.length, icon: ChefHat },
+                            { label: 'Active orders', value: activeOrders.length, icon: Clock },
+                          ].map((stat) => { const Icon = stat.icon; return (
+                            <div key={stat.label} className="rounded-3xl border border-slate-800 bg-slate-950 p-5"><Icon className="w-5 h-5 text-emerald-400" /><p className="mt-4 text-3xl font-black text-white">{stat.value}</p><p className="text-xs font-bold text-slate-500">{stat.label}</p></div>
+                          );})}
+                        </div>
+                      </section>
+                      <section className="grid gap-6 xl:grid-cols-3">
+                        <div className="space-y-4 xl:col-span-2">
+                          <SectionHeader icon={Tag} title="Featured Offers" subtitle="Live menu items with active discounts." />
+                          {offerItems.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{offerItems.map((item) => <FoodCard key={item.id} item={item} onAdd={addToCart} />)}</div> : <EmptyState icon={Tag} title="No live offers" message="Offer items appear when menu_items have offer_label or discount_label fields set." />}
+                        </div>
+                        <div className="space-y-4">
+                          <SectionHeader icon={Bell} title="Campus Announcements" />
+                          {notifications.length ? <div className="space-y-3">{notifications.slice(0, 5).map((n) => (
+                            <div key={n.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                              <div className="flex items-center justify-between gap-3"><h4 className="text-xs font-extrabold text-white">{n.title}</h4><span className="text-[10px] text-slate-500">{formatDateTime(n.created_at)}</span></div>
+                              <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-slate-400">{n.message}</p>
+                            </div>
+                          ))}</div> : <EmptyState icon={Bell} title="No announcements" message="Notifications from Supabase will appear here." />}
+                        </div>
+                      </section>
+                      <section className="space-y-4">
+                        <SectionHeader icon={TrendingUp} title="Trending Meals" subtitle="Ranked by popularity and rating from live menu rows." />
+                        {trendingItems.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{trendingItems.map((item) => <FoodCard key={item.id} item={item} onAdd={addToCart} />)}</div> : <EmptyState icon={Utensils} title="Menu is empty" message="Add menu_items rows in Supabase to populate the portal." />}
+                      </section>
+                      <section className="grid gap-6 xl:grid-cols-2">
+                        <div className="space-y-4"><SectionHeader icon={Receipt} title="Quick Reorder" subtitle="From your previous orders." />{quickReorderItems.length ? <div className="grid gap-3 sm:grid-cols-2">{quickReorderItems.map((item) => <FoodCard key={item.id} item={item} onAdd={addToCart} />)}</div> : <EmptyState icon={Receipt} title="No reorder history" message="Previously ordered items will appear here." />}</div>
+                        <div className="space-y-4"><SectionHeader icon={Sparkles} title="AI Recommendations" subtitle="Personalized from order history." />{personalizedItems.length ? <div className="grid gap-3 sm:grid-cols-2">{personalizedItems.map((item) => <FoodCard key={item.id} item={item} onAdd={addToCart} />)}</div> : <EmptyState icon={Sparkles} title="Recommendations warming up" message="More orders will unlock personalized recommendations." />}</div>
+                      </section>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-          )}
-
-          {/* TAB 4: ANNOUNCEMENTS & NOTIFICATIONS */}
-          {activeTab === 'notifications' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Bell className="w-4 h-4 text-emerald-400" />
-                  <span>Campus Announcements & Order Updates</span>
-                </h3>
-                <button
-                  onClick={() => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))}
-                  className="text-xs text-emerald-400 hover:underline cursor-pointer"
-                >
-                  Mark All Read
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {notifications.map((n) => (
-                  <div
-                    key={n.id}
-                    className={`p-4 rounded-2xl border transition-all flex items-start gap-3 ${
-                      n.read
-                        ? 'bg-slate-950 border-slate-800/80'
-                        : 'bg-slate-900 border-emerald-500/40 shadow-md'
-                    }`}
-                  >
-                    <div className="p-2 rounded-xl bg-slate-800 text-emerald-400 shrink-0">
-                      {n.type === 'order' ? <Receipt className="w-4 h-4" /> : <Tag className="w-4 h-4" />}
-                    </div>
-
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-bold text-white">{n.title}</h4>
-                        <span className="text-[10px] text-slate-500 font-mono">{n.time}</span>
-                      </div>
-                      <p className="text-xs text-slate-300 leading-relaxed">{n.message}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: STUDENT PROFILE */}
-          {activeTab === 'profile' && (
-            <div className="space-y-6 max-w-2xl mx-auto">
-              
-              {/* Profile Card Header */}
-              <div className="bg-slate-950 border border-slate-800 rounded-3xl p-6 flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg">
-                  {(profile?.full_name || 'U').charAt(0)}
-                </div>
-                <div>
-                  <h3 className="text-lg font-extrabold text-white">{profile?.full_name || 'User'}</h3>
-                  <p className="text-xs text-emerald-400 font-mono">{profile?.email || ''}</p>
-                  {profile?.role && (
-                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                      {profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}
-                    </p>
                   )}
-                </div>
-              </div>
-
-              {/* Institution Identity */}
-              <div className="bg-slate-950 border border-slate-800 rounded-3xl p-6 space-y-4">
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider text-slate-400">Institutional Identity</h4>
-                
-                <div className="grid sm:grid-cols-2 gap-4 text-xs font-mono">
-                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-                    <span className="text-slate-500 text-[10px] block">Registered Campus:</span>
-                    <span className="text-white font-bold">{institutionName || 'N/A'}</span>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-                    <span className="text-slate-500 text-[10px] block">Campus Access Code:</span>
-                    <span className="text-emerald-400 font-bold">{institutionCode || 'N/A'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Campus Preferences */}
-              <div className="bg-slate-950 border border-slate-800 rounded-3xl p-6 space-y-4">
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider text-slate-400">Dining Preferences</h4>
-                
-                <div className="space-y-3 text-xs">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="text-slate-300">Dietary Filter</span>
-                    <span className="text-emerald-400 font-semibold">Veg & Non-Veg Allowed</span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="text-slate-300">Preferred Payment Mode</span>
-                    <span className="text-emerald-400 font-semibold">Razorpay UPI Instant</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Logout Button */}
-              <button
-                onClick={async () => {
-                  await signOut();
-                  onClose();
-                }}
-                className="w-full py-3 rounded-2xl bg-slate-950 hover:bg-slate-900 border border-red-500/30 text-red-400 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Exit Campus Portal Session</span>
-              </button>
-
+                  {activeTab === 'menu' && (
+                    <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+                      <section className="space-y-5">
+                        <div className="flex flex-col gap-3 rounded-3xl border border-slate-800 bg-slate-950 p-4 lg:flex-row lg:items-center">
+                          <div className="relative flex-1"><Search className="absolute left-3 top-1/2 w-4 h-4 -translate-y-1/2 text-slate-500" /><input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search live meals, counters, or categories" className="w-full rounded-2xl border border-slate-800 bg-slate-900 py-3 pl-10 pr-4 text-sm text-white outline-none transition focus:border-emerald-500" /></div>
+                          <div className="flex gap-2 overflow-x-auto">{['ALL', ...counters.map((c) => c.name)].map((c) => (
+                            <button key={c} onClick={() => setSelectedCounter(c)} className={`shrink-0 rounded-2xl px-4 py-3 text-xs font-black transition ${selectedCounter === c ? 'bg-emerald-400 text-slate-950' : 'border border-slate-800 bg-slate-900 text-slate-300'}`}>{c === 'ALL' ? 'All counters' : c}</button>
+                          ))}</div>
+                        </div>
+                        {filteredItems.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{filteredItems.map((item) => <FoodCard key={item.id} item={item} onAdd={addToCart} />)}</div> : <EmptyState icon={Search} title="No matching items" message="Try a different search or counter filter." />}
+                      </section>
+                      <aside className="h-fit rounded-3xl border border-slate-800 bg-slate-950 p-5 xl:sticky xl:top-8">
+                        <SectionHeader icon={ShoppingBag} title="Order Cart" />
+                        <div className="mt-4 space-y-3">
+                          {cart.length ? cart.map((entry) => (
+                            <div key={entry.item.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+                              <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-extrabold text-white">{entry.item.name}</p><p className="text-[10px] text-slate-500">{entry.item.counter_name}</p></div><p className="text-xs font-black text-emerald-300">{formatINR(entry.item.price * entry.quantity)}</p></div>
+                              <div className="mt-3 flex items-center justify-between"><div className="flex items-center gap-2"><button onClick={() => updateQuantity(entry.item.id, -1)} className="h-7 w-7 rounded-lg bg-slate-950 text-slate-300">-</button><span className="text-xs font-bold text-white">{entry.quantity}</span><button onClick={() => updateQuantity(entry.item.id, 1)} className="h-7 w-7 rounded-lg bg-slate-950 text-slate-300">+</button></div></div>
+                            </div>
+                          )) : <EmptyState icon={ShoppingBag} title="Cart is empty" message="Add live menu items to begin checkout." />}
+                        </div>
+                        <div className="mt-5 border-t border-slate-800 pt-4">
+                          <div className="flex items-center justify-between text-sm"><span className="font-bold text-slate-300">Total</span><span className="font-black text-emerald-300">{formatINR(cartTotal)}</span></div>
+                          <button onClick={handlePlaceOrder} disabled={!cart.length || submittingOrder} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 py-3 text-xs font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-50">
+                            {submittingOrder ? <Loader2 className="w-4 h-4 animate-spin text-slate-950" /> : <CreditCard className="w-4 h-4 text-slate-950" />}Place order
+                          </button>
+                        </div>
+                      </aside>
+                    </div>
+                  )}
+                  {activeTab === 'orders' && (
+                    <div className="space-y-6">
+                      <SectionHeader icon={Receipt} title="Order Tracking" subtitle="Live order status via Supabase Realtime." />
+                      {activeOrders.length ? <div className="grid gap-4 xl:grid-cols-2">{activeOrders.map((order) => (
+                        <div key={order.id} className="rounded-3xl border border-emerald-500/30 bg-slate-950 p-5">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div><p className="text-xs font-black text-emerald-300">{order.order_id}</p><h4 className="mt-1 text-lg font-black text-white">{order.counter}</h4></div>
+                            <span className={`rounded-full border px-3 py-1 text-xs font-black ${statusColor(order.status)}`}>{statusLabel(order.status)}</span>
+                          </div>
+                          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                            <div className="rounded-2xl bg-slate-900 p-3"><Clock className="w-4 h-4 text-emerald-400" /><p className="mt-2 text-[10px] text-slate-500">Placed</p><p className="text-xs font-bold text-white">{formatDateTime(order.created_at) || 'Now'}</p></div>
+                            <div className="rounded-2xl bg-slate-900 p-3"><ShoppingBag className="w-4 h-4 text-emerald-400" /><p className="mt-2 text-[10px] text-slate-500">Items</p><p className="text-xs font-bold text-white">{order.items.length}</p></div>
+                            <div className="rounded-2xl bg-slate-900 p-3">
+                              <QrCode className="w-4 h-4 text-emerald-400" /><p className="mt-2 text-[10px] text-slate-500">Pickup</p>
+                              {order.status === 'ready' ? (
+                                <button onClick={() => setQrOrder(order)} className="text-xs font-bold text-emerald-400 underline">View QR Code</button>
+                              ) : (
+                                <p className="text-xs font-bold text-white">{order.locker_number || 'Counter pickup'}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="mt-4 space-y-2">{order.items.map((item, i) => (
+                            <div key={`${order.id}-${i}`} className="flex justify-between text-xs text-slate-300"><span>{item.quantity} x {item.name}</span><span>{formatINR(item.price * item.quantity)}</span></div>
+                          ))}</div>
+                          <div className="mt-4 flex justify-between border-t border-slate-800 pt-3 text-sm font-black"><span>Total</span><span className="text-emerald-300">{formatINR(order.total_amount)}</span></div>
+                          <div className="mt-3 flex gap-1.5 text-[10px] font-mono">
+                            {['pending', 'accepted', 'preparing', 'ready', 'completed'].map((step) => {
+                              const orderIdx = ['pending', 'accepted', 'preparing', 'ready', 'completed'].indexOf(order.status);
+                              const stepIdx = ['pending', 'accepted', 'preparing', 'ready', 'completed'].indexOf(step);
+                              return <div key={step} className={`flex-1 h-1.5 rounded-full ${stepIdx <= orderIdx ? 'bg-emerald-400' : order.status === 'cancelled' ? 'bg-red-500/30' : 'bg-slate-700'}`} />;
+                            })}
+                          </div>
+                          <div className="flex justify-between text-[9px] text-slate-500 mt-1">
+                            <span>Pending</span><span>Accepted</span><span>Preparing</span><span>Ready</span><span>Done</span>
+                          </div>
+                        </div>
+                      ))}</div> : <EmptyState icon={Receipt} title="No active orders" message="Orders placed from this portal will appear here immediately via Realtime." />}
+                      <SectionHeader icon={CheckCircle2} title="Recently Ordered" />
+                      {pastOrders.length ? <div className="grid gap-3">{pastOrders.slice(0, 10).map((order) => (
+                        <div key={order.id} className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-950 p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div><p className="text-xs font-black text-white">{order.order_id}</p><p className="mt-1 text-xs text-slate-400">{order.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}</p></div>
+                          <div className="text-left sm:text-right"><p className="text-xs font-black text-emerald-300">{formatINR(order.total_amount)}</p><p className="text-[10px] text-slate-500">{statusLabel(order.status)}</p></div>
+                        </div>
+                      ))}</div> : <EmptyState icon={Clock} title="No completed orders" message="Completed orders will be listed here." />}
+                    </div>
+                  )}
+                  {activeTab === 'announcements' && (
+                    <div className="space-y-5">
+                      <SectionHeader icon={Bell} title="Campus Announcements" subtitle="Live records from Supabase." />
+                      {notifications.length ? <div className="grid gap-4 lg:grid-cols-2">{notifications.map((n) => (
+                        <div key={n.id} className="rounded-3xl border border-slate-800 bg-slate-950 p-5">
+                          <div className="flex items-start justify-between gap-3"><div><span className="rounded-full bg-slate-900 px-2 py-1 text-[10px] font-bold uppercase text-emerald-300">{n.type}</span><h4 className="mt-3 text-sm font-black text-white">{n.title}</h4></div><span className="text-[10px] text-slate-500">{formatDateTime(n.created_at)}</span></div>
+                          <p className="mt-3 text-sm leading-relaxed text-slate-400">{n.message}</p>
+                        </div>
+                      ))}</div> : <EmptyState icon={Bell} title="No live announcements" message="Add notification rows in Supabase to publish campus updates." />}
+                    </div>
+                  )}
+                  {activeTab === 'profile' && (
+                    <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+                      <section className="rounded-3xl border border-slate-800 bg-slate-950 p-6">
+                        <div className="flex items-center gap-4">
+                          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-cyan-400 text-2xl font-black text-slate-950">{displayName.charAt(0).toUpperCase()}</div>
+                          <div className="min-w-0"><h3 className="truncate text-xl font-black text-white">{displayName}</h3><p className="truncate text-xs font-semibold text-emerald-300">{profile?.email || user?.email}</p><span className={`mt-2 inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase ${roleColor(liveRole)}`}>{roleLabel(liveRole)}</span></div>
+                        </div>
+                        <button onClick={async () => { await signOut(); onClose(); }} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-950/20 py-3 text-xs font-black text-red-300 transition hover:bg-red-950/40"><LogOut className="w-4 h-4" />Sign out</button>
+                      </section>
+                      <section className="grid gap-4 sm:grid-cols-2">
+                        {[
+                          { label: 'Profile role', value: roleLabel(liveRole), icon: User },
+                          { label: 'Institution', value: institutionName || 'Not linked', icon: Building2 },
+                          { label: 'Institution code', value: profile?.institution_code || 'Not synced', icon: Tag },
+                          { label: 'Email', value: profile?.email || user?.email || 'Synced', icon: Home },
+                        ].map((item) => { const Icon = item.icon; return (
+                          <div key={item.label} className="rounded-3xl border border-slate-800 bg-slate-950 p-5"><Icon className="w-5 h-5 text-emerald-400" /><p className="mt-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.label}</p><p className="mt-1 text-sm font-black text-white">{item.value}</p></div>
+                        );})}
+                      </section>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-          )}
-
+          </main>
         </div>
-
       </div>
-
-      {/* RAZORPAY DEMO PAYMENT MODAL */}
-      {isRazorpayModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
-          <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5">
-            
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <div className="px-2.5 py-1 rounded-lg bg-blue-950 text-blue-400 border border-blue-800 font-bold text-xs font-mono">
-                  RAZORPAY
-                </div>
-                <span className="text-xs font-bold text-white">Campus Checkout</span>
-              </div>
-              <button
-                onClick={() => setIsRazorpayModalOpen(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-slate-400 block">Merchant</span>
-                  <span className="text-xs font-bold text-white">{institutionName}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs text-slate-400 block">Amount</span>
-                  <span className="text-sm font-extrabold text-emerald-400 font-mono">₹{cartTotal}</span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-300 block">Select Payment Mode</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setPaymentMethod('upi')}
-                    className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all ${
-                      paymentMethod === 'upi'
-                        ? 'bg-emerald-950 border-emerald-500 text-emerald-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    <Smartphone className="w-4 h-4" />
-                    <span>UPI / GPay / PhonePe</span>
-                  </button>
-
-                  <button
-                    onClick={() => setPaymentMethod('card')}
-                    className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all ${
-                      paymentMethod === 'card'
-                        ? 'bg-emerald-950 border-emerald-500 text-emerald-300'
-                        : 'bg-slate-950 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    <span>Credit / Debit Card</span>
-                  </button>
-                </div>
-              </div>
-
-              <button
-                onClick={handleRazorpayPayment}
-                disabled={isProcessingPayment}
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg"
-              >
-                {isProcessingPayment ? (
-                  <>
-                    <RotateCcw className="w-4 h-4 animate-spin text-slate-950" />
-                    <span>Verifying Razorpay Transaction...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Confirm & Pay ₹{cartTotal}</span>
-                    <ArrowRight className="w-4 h-4 text-slate-950" />
-                  </>
-                )}
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
     </div>
   );
 };

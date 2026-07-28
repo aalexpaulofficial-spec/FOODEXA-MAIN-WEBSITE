@@ -250,6 +250,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     const userId = loginUserId || user?.id;
 
+    let freshProfile: Profile | null = authProfile;
+
     if (validatedInstitution && userId) {
       const { error: upsertError } = await updateProfile({
         institution_id: validatedInstitution.institution_id,
@@ -264,13 +266,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       await refreshProfile();
       setVerifiedInstitution(validatedInstitution);
       setInstitutionData(validatedInstitution);
+
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+      if (profileData) freshProfile = profileData as Profile;
     }
 
     setStep('success');
 
-    const updatedProfile = authProfile;
-    if (onLoginSuccess && updatedProfile) {
-      onLoginSuccess({ profile: updatedProfile, institution: validatedInstitution });
+    if (onLoginSuccess && freshProfile) {
+      onLoginSuccess({ profile: freshProfile, institution: validatedInstitution });
     }
   };
 
@@ -385,6 +393,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
       setStep('counter_verify');
+      return;
+    } else if (!institution) {
+      setStep('institution_verify');
       return;
     }
 
@@ -943,7 +954,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
               <h3 className="text-xl font-extrabold text-white">Verify Institution Code</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Please enter your Institution Code to access the institution dashboard.
+                Enter your Institution Code to access the campus portal.
               </p>
             </div>
 
@@ -978,7 +989,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 disabled={!validatedInstitution}
                 className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <span>Open Institution Dashboard</span>
+                <span>Verify & Access Portal</span>
                 <ArrowRight className="w-4 h-4 text-slate-950" />
               </button>
             </div>

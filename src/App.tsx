@@ -43,6 +43,7 @@ export default function App() {
   const [isSuperAdminDashboardOpen, setIsSuperAdminDashboardOpen] = useState(false);
   const [isRoleSelectionOpen, setIsRoleSelectionOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<'student' | 'faculty' | 'guest'>('student');
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [activePrompt, setActivePrompt] = useState<string>('');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -230,6 +231,7 @@ export default function App() {
         onLoginSuccess={({ profile, institution }) => {
           setIsAuthOpen(false);
           const role = profile?.role;
+          setCurrentUserRole(role);
           if (role === 'institution_admin') {
             setIsInstitutionDashboardOpen(true);
           } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
@@ -247,6 +249,7 @@ export default function App() {
       <StudentPortalModal
         isOpen={isStudentPortalOpen}
         onClose={() => setIsStudentPortalOpen(false)}
+        role={currentUserRole as any}
       />
 
       <InstitutionDashboardModal

@@ -102,7 +102,7 @@ export async function fetchMenuItems(params?: {
   if (params?.counter) query = query.eq('counter', params.counter);
   if (params?.category) query = query.eq('category', params.category);
   if (params?.availableOnly !== false) query = query.eq('is_published', true);
-  query = query.order('name', { ascending: true });
+  query = query.order('item_name', { ascending: true });
   const { data } = await query;
   return (data || []).map(mapMenuItem);
 }
@@ -110,7 +110,7 @@ export async function fetchMenuItems(params?: {
 export function mapMenuItem(row: any): MenuItem {
   return {
     id: String(row.id),
-    name: String(row.name || row.item_name || 'Unnamed'),
+    name: String(row.item_name || row.name || 'Unnamed'),
     counter: String(row.counter || row.counter_name || 'Counter'),
     counter_name: String(row.counter_name || row.counter || 'Counter'),
     counter_id: row.counter_id || null,
@@ -193,7 +193,7 @@ function normalizeOrderStatus(status: any): OrderStatus {
 function normalizeOrderItems(items: any): OrderItem[] {
   if (!items) return [];
   if (Array.isArray(items)) return items.map((i: any) => ({
-    name: String(i.name || i.item_name || 'Item'),
+    name: String(i.item_name || i.name || 'Item'),
     quantity: Number(i.quantity || i.qty || 1),
     price: Number(i.price || i.amount || 0),
   }));
@@ -313,8 +313,8 @@ export async function fetchNotifications(): Promise<NotificationItem[]> {
   const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false });
   return (data || []).map((r: any) => ({
     id: String(r.id),
-    title: String(r.title || r.heading || 'Update'),
-    message: String(r.message || r.body || ''),
+    title: String(r.title || r.heading || r.subject || 'Update'),
+    message: String(r.message || r.body || r.content || ''),
     created_at: r.created_at || '',
     type: String(r.type || r.category || 'announcement'),
     read: Boolean(r.read || r.is_read),

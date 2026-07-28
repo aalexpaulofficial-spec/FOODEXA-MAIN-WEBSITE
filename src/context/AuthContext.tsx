@@ -398,6 +398,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const signOut = async () => {
+    if (user && profile?.institution_id) {
+      await supabase.from('profiles').update({
+        institution_id: null,
+        institution_code: null,
+        updated_at: new Date().toISOString(),
+      }).eq('user_id', user.id);
+    }
     clearAllSessionData();
     await supabase.auth.signOut();
     setUser(null);

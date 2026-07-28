@@ -29,7 +29,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   selectedRole = 'student',
   onLoginSuccess,
 }) => {
-  const { signInWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
+  const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
   const [mode, setMode] = useState<'login' | 'create'>(initialMode);
   const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success'>('form');
   const [loginUserId, setLoginUserId] = useState<string | null>(null);
@@ -50,6 +50,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // Institution validation state
   const [validatedInstitution, setValidatedInstitution] = useState<InstitutionData | null>(null);
+  const [institutionVerifyCode, setInstitutionVerifyCode] = useState('');
   const [validatingCode, setValidatingCode] = useState(false);
   const [institutionError, setInstitutionError] = useState<string | null>(null);
   const [verifiedInstitution, setVerifiedInstitution] = useState<InstitutionData | null>(null);
@@ -71,6 +72,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     semester: '',
     campusBlock: '',
     institutionCode: '',
+    password: '',
+    confirmPassword: '',
   });
 
   // Create Faculty Account state
@@ -81,6 +84,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     department: '',
     designation: '',
     institutionCode: '',
+    password: '',
+    confirmPassword: '',
   });
 
   // Create Guest Account state
@@ -89,6 +94,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     universityEmail: '',
     phone: '',
     institutionCode: '',
+    password: '',
+    confirmPassword: '',
   });
 
   const getCurrentForm = () => {
@@ -131,6 +138,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setCurrentEmail('');
     setOtpCode('');
     setValidatedInstitution(null);
+    setInstitutionVerifyCode('');
     setVerifiedInstitution(null);
     setInstitutionError(null);
     setLoginError(null);
@@ -206,6 +214,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleInstitutionCodeChange = (code: string) => {
     if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
+    setInstitutionVerifyCode(code);
     setValidatedInstitution(null);
     setInstitutionError(null);
     const trimmed = code.trim();
@@ -226,6 +235,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleInstitutionCodeBlur = (code: string) => {
     if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
+    setInstitutionVerifyCode(code);
     const trimmed = code.trim();
     if (!trimmed) return;
     setValidatingCode(true);
@@ -242,9 +252,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const handleLoginInstitutionVerify = async () => {
-    const code = validatedInstitution?.institution_code || institutionData?.institution_code || '';
+    const code = institutionVerifyCode.trim() || validatedInstitution?.institution_code || institutionData?.institution_code || '';
     if (!code) {
       setInstitutionError('Please enter a valid Institution Code.');
+      return;
+    }
+
+    const { error: validateError, data: liveInstitution } = await validateInstitutionCode(code);
+    if (validateError || !liveInstitution) {
+      setInstitutionError(validateError || 'Invalid Institution Code. Please check and try again.');
+      setValidatedInstitution(null);
       return;
     }
 
@@ -252,10 +269,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     let freshProfile: Profile | null = authProfile;
 
-    if (validatedInstitution && userId) {
+    if (userId) {
       const { error: upsertError } = await updateProfile({
-        institution_id: validatedInstitution.institution_id,
-        institution_code: validatedInstitution.institution_code,
+        institution_id: liveInstitution.institution_id,
+        institution_code: liveInstitution.institution_code,
       });
 
       if (upsertError) {
@@ -264,8 +281,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
 
       await refreshProfile();
-      setVerifiedInstitution(validatedInstitution);
-      setInstitutionData(validatedInstitution);
+      setValidatedInstitution(liveInstitution);
+      setVerifiedInstitution(liveInstitution);
+      setInstitutionData(liveInstitution);
 
       const { data: profileData } = await supabase
         .from('profiles')
@@ -278,7 +296,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setStep('success');
 
     if (onLoginSuccess && freshProfile) {
-      onLoginSuccess({ profile: freshProfile, institution: validatedInstitution });
+      onLoginSuccess({ profile: freshProfile, institution: liveInstitution });
     }
   };
 
@@ -381,6 +399,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         };
         setInstitutionData(institution);
         setVerifiedInstitution(institution);
+        setValidatedInstitution(institution);
+        setInstitutionVerifyCode(institution.institution_code);
       }
     }
 
@@ -391,10 +411,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setStep('institution_verify');
         return;
       }
+      setStep('institution_verify');
+      return;
     } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
       setStep('counter_verify');
       return;
-    } else if (!institution) {
+    } else if (role === 'student' || role === 'faculty' || role === 'guest') {
+      if (liveProfile.institution_code && !institutionVerifyCode) {
+        setInstitutionVerifyCode(liveProfile.institution_code);
+      }
       setStep('institution_verify');
       return;
     }
@@ -414,6 +439,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setCurrentEmail(currentForm.universityEmail);
     setInstitutionError(null);
     setOtpError(null);
+
+    if (currentForm.password.length < 8) {
+      setInstitutionError('Password must be at least 8 characters.');
+      return;
+    }
+
+    if (currentForm.password !== currentForm.confirmPassword) {
+      setInstitutionError('Passwords do not match.');
+      return;
+    }
+
     setRegistrationPhase('validating');
     setValidatingCode(true);
 
@@ -429,10 +465,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setRegistrationPhase('connecting');
     setValidatedInstitution(validatedInst);
     setInstitutionData(validatedInst);
+    setInstitutionVerifyCode(validatedInst.institution_code);
     setValidatingCode(false);
 
     setRegistrationPhase('sending');
-    const { error } = await signInWithOtp(currentForm.universityEmail, currentForm.fullName, selectedRole, {
+    const { error } = await signUpWithPassword(currentForm.universityEmail, currentForm.password, currentForm.fullName, selectedRole, {
       institutionCode: currentForm.institutionCode,
       phone: currentForm.phone,
       department: (currentForm as any).department,
@@ -472,6 +509,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     setVerifiedInstitution(institution);
+    if (institution?.institution_code) {
+      setInstitutionVerifyCode(institution.institution_code);
+    }
     setStep('success');
 
     if (onLoginSuccess) {
@@ -668,6 +708,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           else setGuestForm({ ...guestForm, phone: e.target.value });
                         }}
                         placeholder="+91 9876543210"
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Password</label>
+                      <input
+                        type="password"
+                        required
+                        minLength={8}
+                        value={getCurrentForm().password}
+                        onChange={(e) => {
+                          if (selectedRole === 'student') setStudentForm({ ...studentForm, password: e.target.value });
+                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, password: e.target.value });
+                          else setGuestForm({ ...guestForm, password: e.target.value });
+                        }}
+                        placeholder="Minimum 8 characters"
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Confirm Password</label>
+                      <input
+                        type="password"
+                        required
+                        minLength={8}
+                        value={getCurrentForm().confirmPassword}
+                        onChange={(e) => {
+                          if (selectedRole === 'student') setStudentForm({ ...studentForm, confirmPassword: e.target.value });
+                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, confirmPassword: e.target.value });
+                          else setGuestForm({ ...guestForm, confirmPassword: e.target.value });
+                        }}
+                        placeholder="Repeat password"
                         className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
                       />
                     </div>
@@ -965,7 +1040,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <input
                     type="text"
                     required
-                    value={validatedInstitution?.institution_code || institutionData?.institution_code || ''}
+                    value={institutionVerifyCode}
                     onChange={(e) => handleInstitutionCodeChange(e.target.value)}
                     onBlur={(e) => handleInstitutionCodeBlur(e.target.value)}
                     placeholder="e.g. YAWEHH264881"
@@ -986,7 +1061,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <button
                 type="button"
                 onClick={handleLoginInstitutionVerify}
-                disabled={!validatedInstitution}
+                disabled={!institutionVerifyCode.trim() || validatingCode}
                 className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span>Verify & Access Portal</span>

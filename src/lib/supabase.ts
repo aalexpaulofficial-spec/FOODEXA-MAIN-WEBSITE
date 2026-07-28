@@ -12,4 +12,11 @@ if (envMissing) {
   );
 }
 
-export const supabase = createClient(rawUrl, rawKey);
+export const supabase = createClient(rawUrl, rawKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storageKey: 'foodexa-main-auth',
+  },
+});

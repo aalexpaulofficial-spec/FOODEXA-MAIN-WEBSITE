@@ -12,7 +12,7 @@ interface AuthContextType {
   setInstitutionData: (data: InstitutionData | null) => void;
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
-  signInWithOtp: (email: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; }) => Promise<{ error: Error | null }>;
+  signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; }) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
   signOut: () => Promise<void>;
   clearAllSessionData: () => void;
@@ -54,21 +54,56 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   } | null>(null);
   const pendingOtpProfileRef = React.useRef<typeof pendingOtpProfile>(null);
 
+  const loadInstitutionForProfile = useCallback(async (profileData: Profile | null): Promise<InstitutionData | null> => {
+    if (!profileData?.institution_id && !profileData?.institution_code) {
+      setInstitutionData(null);
+      return null;
+    }
+
+    let query = supabase
+      .from('institutions')
+      .select('id, name, campus, city, state, country, institution_code, logo_url');
+
+    query = profileData.institution_id
+      ? query.eq('id', profileData.institution_id)
+      : query.ilike('institution_code', profileData.institution_code || '');
+
+    const { data } = await query.maybeSingle();
+    if (!data) {
+      setInstitutionData(null);
+      return null;
+    }
+
+    const institution = {
+      institution_id: data.id,
+      institution_name: data.name || '',
+      campus: data.campus || '',
+      city: data.city || '',
+      state: data.state || '',
+      country: data.country || '',
+      institution_code: data.institution_code || '',
+      logo_url: data.logo_url || null,
+    };
+    setInstitutionData(institution);
+    return institution;
+  }, []);
+
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         return null;
       }
 
       if (data) {
         const fetchedProfile = data as Profile;
         setProfile(fetchedProfile);
+        await loadInstitutionForProfile(fetchedProfile);
         return fetchedProfile;
       }
     } catch (err) {
@@ -76,8 +111,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     setProfile(null);
+    setInstitutionData(null);
     return null;
-  }, []);
+  }, [loadInstitutionForProfile]);
 
   const refreshProfile = useCallback(async () => {
     if (user) {
@@ -143,6 +179,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await fetchProfile(newSession.user.id);
       } else {
         setProfile(null);
+        setInstitutionData(null);
       }
       setLoading(false);
     });
@@ -170,9 +207,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   };
 
-  const signInWithOtp = async (email: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; }) => {
+  const signUpWithPassword = async (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; }) => {
+    const trimmedEmail = email.trim().toLowerCase();
     setPendingRegistrationProfile({
-      email: email.trim(),
+      email: trimmedEmail,
       fullName: fullName.trim(),
       role,
       institutionCode: metadata?.institutionCode?.trim() || institutionData?.institution_code || null,
@@ -185,10 +223,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       designation: metadata?.designation?.trim() || null,
     });
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
+    const { error } = await supabase.auth.signUp({
+      email: trimmedEmail,
+      password,
       options: {
-        shouldCreateUser: true,
         data: {
           full_name: fullName.trim(),
           role,
@@ -256,7 +294,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (error) {
       // If 'signup' fails, it may already be a returning user — try 'email' type
-      const { error: emailError, data: emailAuthData } = await supabase.auth.verifyOtp({
+      const { error: emailError } = await supabase.auth.verifyOtp({
         email,
         token,
         type: 'email',
@@ -384,8 +422,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signOut = async () => {
     // Do NOT modify profile institution data on sign out — preserve user data
-    clearAllSessionData();
     await supabase.auth.signOut();
+    clearAllSessionData();
     setUser(null);
     setSession(null);
     setProfile(null);
@@ -393,16 +431,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
-    if (!user) return { error: new Error('Not authenticated') };
+    const activeUser = user || (await supabase.auth.getUser()).data.user;
+    if (!activeUser) return { error: new Error('Not authenticated') };
 
     const { error } = await upsertProfileSafely({
-      user_id: user.id,
+      user_id: activeUser.id,
       ...updates,
       updated_at: new Date().toISOString(),
     });
 
     if (!error) {
-      await fetchProfile(user.id);
+      await fetchProfile(activeUser.id);
     }
 
     return { error: error ? new Error(error.message) : null };
@@ -418,7 +457,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setInstitutionData,
       validateInstitutionCode,
       signIn,
-      signInWithOtp,
+      signUpWithPassword,
       verifyOtp,
       signOut,
       clearAllSessionData,

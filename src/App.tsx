@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { LxPlayground } from './components/LxPlayground';
@@ -27,8 +27,12 @@ import { ToastContainer, ToastMessage } from './components/Toast';
 import { ScrollProgress } from './components/ScrollProgress';
 import { Footer } from './components/Footer';
 import { Sparkles, Mic } from 'lucide-react';
+import { useAuth } from './context/AuthContext';
+import type { Profile } from './types';
 
 export default function App() {
+  const { user, profile, loading: authLoading } = useAuth();
+  const restoredDashboardRef = useRef(false);
   const [isBookDemoOpen, setIsBookDemoOpen] = useState(false);
   const [isInstitutionRegistrationOpen, setIsInstitutionRegistrationOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -60,6 +64,45 @@ export default function App() {
   const handleDismissToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
+
+  const closeDashboards = () => {
+    setIsStudentPortalOpen(false);
+    setIsInstitutionDashboardOpen(false);
+    setIsKitchenDashboardOpen(false);
+    setIsSuperAdminDashboardOpen(false);
+  };
+
+  const openDashboardForProfile = (liveProfile: Profile) => {
+    closeDashboards();
+    const role = liveProfile.role;
+    setCurrentUserRole(role);
+    if (role === 'institution_admin') {
+      setIsInstitutionDashboardOpen(true);
+    } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
+      setIsKitchenDashboardOpen(true);
+    } else if (role === 'super_admin') {
+      setIsSuperAdminDashboardOpen(true);
+    } else {
+      setIsStudentPortalOpen(true);
+    }
+  };
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      restoredDashboardRef.current = false;
+      setCurrentUserRole(null);
+      setIsAuthOpen(false);
+      closeDashboards();
+      return;
+    }
+
+    if (profile && !restoredDashboardRef.current && !isAuthOpen) {
+      restoredDashboardRef.current = true;
+      openDashboardForProfile(profile);
+    }
+  }, [authLoading, user, profile, isAuthOpen]);
 
   const handleOpenLogin = () => {
     setIsRoleSelectionOpen(false);
@@ -230,19 +273,8 @@ export default function App() {
         selectedRole={selectedRole}
         onLoginSuccess={({ profile, institution }) => {
           setIsAuthOpen(false);
-          const role = profile?.role;
-          setCurrentUserRole(role);
-          if (role === 'institution_admin') {
-            setIsInstitutionDashboardOpen(true);
-          } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
-            setIsKitchenDashboardOpen(true);
-          } else if (role === 'super_admin') {
-            setIsSuperAdminDashboardOpen(true);
-          } else if (role === 'student' || role === 'faculty' || role === 'guest') {
-            setIsStudentPortalOpen(true);
-          } else {
-            setIsStudentPortalOpen(true);
-          }
+          restoredDashboardRef.current = true;
+          openDashboardForProfile(profile);
         }}
       />
 

@@ -127,7 +127,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   onClick={onOpenLogin}
                   className="px-4 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer"
                 >
-                  Login
+                  Student Login
                 </button>
                 <button
                   onClick={onOpenGetStarted}
@@ -198,7 +198,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }}
                   className="flex items-center justify-center gap-1.5 bg-slate-900 border border-slate-700 text-white py-2.5 rounded-xl text-xs font-medium cursor-pointer"
                 >
-                  Login
+                  Student Login
                 </button>
                 <button
                   onClick={() => {

@@ -160,7 +160,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         error: null,
         data: {
           institution_id: data.id,
-          institution_name: data.institution_name,
+          institution_name: data.name,
           campus: data.campus,
           city: data.city,
           state: data.state,
@@ -207,6 +207,44 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
       
       await fetchProfile(userId);
+      
+      if (institutionId) {
+        const { data: instData } = await supabase
+          .from('institutions')
+          .select('id, name, campus, city, state, country, institution_code')
+          .eq('id', institutionId)
+          .single();
+        
+        if (instData) {
+          setInstitutionData({
+            institution_id: instData.id,
+            institution_name: instData.name,
+            campus: instData.campus || '',
+            city: instData.city || '',
+            state: instData.state || '',
+            country: instData.country || '',
+            institution_code: instData.institution_code,
+          });
+        }
+      } else if (institutionCode) {
+        const { data: instData } = await supabase
+          .from('institutions')
+          .select('id, name, campus, city, state, country, institution_code')
+          .ilike('institution_code', institutionCode)
+          .single();
+        
+        if (instData) {
+          setInstitutionData({
+            institution_id: instData.id,
+            institution_name: instData.name,
+            campus: instData.campus || '',
+            city: instData.city || '',
+            state: instData.state || '',
+            country: instData.country || '',
+            institution_code: instData.institution_code,
+          });
+        }
+      }
     }
     
     return { error: error ? new Error(error.message) : null };

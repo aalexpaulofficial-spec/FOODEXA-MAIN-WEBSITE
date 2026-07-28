@@ -35,10 +35,6 @@ import { useAuth } from '../context/AuthContext';
 interface StudentPortalModalProps {
   isOpen: boolean;
   onClose: () => void;
-  studentName?: string;
-  universityEmail?: string;
-  institutionCode?: string;
-  institutionName?: string;
 }
 
 interface FoodItem {
@@ -84,12 +80,11 @@ interface NotificationItem {
 export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   isOpen,
   onClose,
-  studentName = 'Alex Paul',
-  universityEmail = 'alex.paul@christuniversity.in',
-  institutionCode = 'CHRKNG2026',
-  institutionName = 'CHRIST (Deemed to be University) - Kengeri Campus',
 }) => {
   const { profile, refreshProfile } = useAuth();
+  const [institutionName, setInstitutionName] = useState<string>('');
+  const [institutionCode, setInstitutionCode] = useState<string>('');
+  const [campus, setCampus] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'home' | 'menu' | 'orders' | 'profile' | 'notifications'>('home');
   
   // Menu Filters
@@ -207,6 +202,24 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
       refreshProfile();
     }
   }, [isOpen, refreshProfile]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const fetchInstitution = async () => {
+      if (!profile?.institution_id) return;
+      const { data, error } = await supabase
+        .from('institutions')
+        .select('institution_name, institution_code, campus, city, state')
+        .eq('id', profile.institution_id)
+        .single();
+      if (!error && data) {
+        setInstitutionName(data.institution_name || '');
+        setInstitutionCode(data.institution_code || '');
+        setCampus(data.campus || '');
+      }
+    };
+    fetchInstitution();
+  }, [isOpen, profile?.institution_id]);
 
   if (!isOpen) return null;
 
@@ -375,24 +388,29 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
         
         {/* TOP BAR: Institution Identity */}
         <div className="bg-slate-950 px-4 sm:px-6 py-3.5 border-b border-slate-800 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-slate-950 font-extrabold text-lg shadow-lg">
-              FX
-            </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-extrabold text-white tracking-tight">
-                    {institutionName}
-                  </h3>
-                  <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-800 font-mono font-bold">
-                    Code: {institutionCode}
-                  </span>
+<div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-slate-950 font-extrabold text-lg shadow-lg">
+                  FX
                 </div>
-                <p className="text-[11px] text-slate-400">
-                  Logged in as <span className="text-slate-200 font-semibold">{profile?.full_name || studentName}</span> ({profile?.email || universityEmail})
-                </p>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-extrabold text-white tracking-tight">
+                      {institutionName || 'Institution'}
+                    </h3>
+                    {institutionCode && (
+                      <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-800 font-mono font-bold">
+                        Code: {institutionCode}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Logged in as <span className="text-slate-200 font-semibold">{profile?.full_name || 'User'}</span> ({profile?.email || ''})
+                    <span className={`ml-1 font-bold ${profile?.role === 'student' ? 'text-emerald-400' : profile?.role === 'faculty' ? 'text-blue-400' : 'text-amber-400'}`}>
+                      {profile?.role ? ` • ${profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}` : ''}
+                    </span>
+                  </p>
+                </div>
               </div>
-          </div>
 
           <div className="flex items-center gap-2">
             <span className="hidden md:inline-flex items-center gap-1.5 text-xs text-emerald-400 bg-slate-900 border border-slate-800 px-3 py-1 rounded-full font-mono">
@@ -1007,11 +1025,16 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
               {/* Profile Card Header */}
               <div className="bg-slate-950 border border-slate-800 rounded-3xl p-6 flex items-center gap-4">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg">
-                  {studentName.charAt(0)}
+                  {(profile?.full_name || 'U').charAt(0)}
                 </div>
                 <div>
-                  <h3 className="text-lg font-extrabold text-white">{studentName}</h3>
-                  <p className="text-xs text-emerald-400 font-mono">{universityEmail}</p>
+                  <h3 className="text-lg font-extrabold text-white">{profile?.full_name || 'User'}</h3>
+                  <p className="text-xs text-emerald-400 font-mono">{profile?.email || ''}</p>
+                  {profile?.role && (
+                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                      {profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1022,12 +1045,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 <div className="grid sm:grid-cols-2 gap-4 text-xs font-mono">
                   <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
                     <span className="text-slate-500 text-[10px] block">Registered Campus:</span>
-                    <span className="text-white font-bold">{institutionName}</span>
+                    <span className="text-white font-bold">{institutionName || 'N/A'}</span>
                   </div>
 
                   <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
                     <span className="text-slate-500 text-[10px] block">Campus Access Code:</span>
-                    <span className="text-emerald-400 font-bold">{institutionCode}</span>
+                    <span className="text-emerald-400 font-bold">{institutionCode || 'N/A'}</span>
                   </div>
                 </div>
               </div>

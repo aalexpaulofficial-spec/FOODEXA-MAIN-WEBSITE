@@ -13,11 +13,24 @@ export interface Profile {
   institution_code: string | null;
 }
 
+interface InstitutionData {
+  institution_id: string;
+  institution_name: string;
+  campus: string;
+  city: string;
+  state: string;
+  country: string;
+  institution_code: string;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  institutionData: InstitutionData | null;
+  setInstitutionData: (data: InstitutionData | null) => void;
+  validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string, role: 'student' | 'faculty' | 'guest', institutionCode?: string) => Promise<{ error: Error | null }>;
   signInWithOtp: (email: string, fullName: string, role: 'student' | 'faculty' | 'guest', institutionCode?: string, phone?: string) => Promise<{ error: Error | null }>;
@@ -34,6 +47,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [institutionData, setInstitutionData] = useState<InstitutionData | null>(null);
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -126,6 +140,39 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { error: error ? new Error(error.message) : null };
   };
 
+  const validateInstitutionCode = async (code: string) => {
+    const trimmed = code?.trim() || '';
+    if (!trimmed) {
+      return { error: 'Institution Code is required.', data: null };
+    }
+    try {
+      const { data, error } = await supabase
+        .from('institutions')
+        .select('*')
+        .ilike('institution_code', trimmed)
+        .maybeSingle();
+
+      if (error || !data) {
+        return { error: 'Invalid Institution Code', data: null };
+      }
+
+      return {
+        error: null,
+        data: {
+          institution_id: data.id,
+          institution_name: data.institution_name,
+          campus: data.campus,
+          city: data.city,
+          state: data.state,
+          country: data.country,
+          institution_code: data.institution_code,
+        } as InstitutionData,
+      };
+    } catch (err) {
+      return { error: 'Invalid Institution Code', data: null };
+    }
+  };
+
   const verifyOtp = async (email: string, token: string) => {
     const { error, data: authData } = await supabase.auth.verifyOtp({
       email,
@@ -141,6 +188,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const role = userData.role as 'student' | 'faculty' | 'guest' || 'guest';
       const institutionCode = userData.institution_code || null;
       const phone = userData.phone || null;
+      const institutionId = institutionData?.institution_id || null;
       
       await supabase
         .from('profiles')
@@ -150,7 +198,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           full_name: fullName,
           phone,
           role,
-          institution_id: null,
+          institution_id: institutionId,
           institution_code: institutionCode,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -196,6 +244,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       session,
       profile,
       loading,
+      institutionData,
+      setInstitutionData,
+      validateInstitutionCode,
       signIn,
       signUp,
       signInWithOtp,

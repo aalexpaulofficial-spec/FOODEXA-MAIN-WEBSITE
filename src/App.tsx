@@ -36,11 +36,6 @@ export default function App() {
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isStudentPortalOpen, setIsStudentPortalOpen] = useState(false);
   const [isRoleSelectionOpen, setIsRoleSelectionOpen] = useState(false);
-  const [portalData, setPortalData] = useState({
-    studentName: 'Alex Paul',
-    email: 'alex.paul@christuniversity.in',
-    code: 'CHRKNG2026',
-  });
   const [selectedRole, setSelectedRole] = useState<'student' | 'faculty' | 'guest'>('student');
   const [activePrompt, setActivePrompt] = useState<string>('');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -226,19 +221,14 @@ export default function App() {
         onClose={() => setIsAuthOpen(false)}
         initialMode={authInitialMode}
         selectedRole={selectedRole}
-        onLoginSuccess={(data) => {
-          setPortalData(data);
+        onLoginSuccess={() => {
           setIsStudentPortalOpen(true);
-          addToast('Logged in to Campus Portal', `Welcome to CHRIST University (${data.code})`, 'success');
         }}
       />
 
       <StudentPortalModal
         isOpen={isStudentPortalOpen}
         onClose={() => setIsStudentPortalOpen(false)}
-        studentName={portalData.studentName}
-        universityEmail={portalData.email}
-        institutionCode={portalData.code}
       />
 
       <DownloadModal

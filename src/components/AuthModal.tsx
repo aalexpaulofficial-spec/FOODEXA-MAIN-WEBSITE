@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, User as UserIcon } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, User as UserIcon, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface AuthModalProps {
@@ -7,7 +7,7 @@ interface AuthModalProps {
   onClose: () => void;
   initialMode?: 'login' | 'create';
   selectedRole?: 'student' | 'faculty' | 'guest';
-  onLoginSuccess?: (data: { studentName: string; email: string; code: string }) => void;
+  onLoginSuccess?: () => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -17,7 +17,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   selectedRole = 'student',
   onLoginSuccess,
 }) => {
-  const { signInWithOtp, verifyOtp } = useAuth();
+  const { signInWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData } = useAuth();
   const [mode, setMode] = useState<'login' | 'create'>(initialMode);
   const [step, setStep] = useState<'form' | 'otp' | 'success'>('form');
 
@@ -30,7 +30,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [currentEmail, setCurrentEmail] = useState('');
 
   // OTP state
-  const [otpCode, setOtpCode] = useState('849201');
+  const [otpCode, setOtpCode] = useState('');
+
+  // Institution validation state
+  const [validatedInstitution, setValidatedInstitution] = useState<{
+    institution_id: string;
+    institution_name: string;
+    campus: string;
+    city: string;
+    state: string;
+    country: string;
+    institution_code: string;
+  } | null>(null);
+  const [validatingCode, setValidatingCode] = useState(false);
+  const [institutionError, setInstitutionError] = useState<string | null>(null);
+  const institutionCodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Create Student Account state
   const [studentForm, setStudentForm] = useState({
@@ -41,7 +55,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     department: '',
     semester: '',
     campusBlock: '',
-    institutionCode: 'CHRKNG2026',
+    institutionCode: '',
     password: '',
     confirmPassword: '',
   });
@@ -53,7 +67,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     phone: '',
     department: '',
     designation: '',
-    institutionCode: 'CHRKNG2026',
+    institutionCode: '',
     password: '',
     confirmPassword: '',
   });
@@ -63,7 +77,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     fullName: '',
     universityEmail: '',
     phone: '',
-    institutionCode: 'CHRKNG2026',
+    institutionCode: '',
     password: '',
     confirmPassword: '',
   });
@@ -81,13 +95,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  useEffect(() => {
+useEffect(() => {
     if (!isOpen) return;
     setMode(initialMode);
     setStep('form');
     setCurrentEmail('');
-    setOtpCode('849201');
+    setOtpCode('');
+    setValidatedInstitution(null);
+    setInstitutionError(null);
   }, [initialMode, isOpen]);
+
+  useEffect(() => () => {
+    if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
+  }, []);
+
+  const handleInstitutionCodeChange = (code: string) => {
+    if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
+    setValidatedInstitution(null);
+    setInstitutionError(null);
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    setValidatingCode(true);
+    institutionCodeTimerRef.current = setTimeout(async () => {
+      const { error, data } = await validateInstitutionCode(trimmed);
+      if (error || !data) {
+        setInstitutionError('Invalid Institution Code. Please check and try again.');
+        setValidatedInstitution(null);
+      } else {
+        setValidatedInstitution(data);
+        setInstitutionData(data);
+      }
+      setValidatingCode(false);
+    }, 500);
+  };
+
+  const handleInstitutionCodeBlur = (code: string) => {
+    if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    setValidatingCode(true);
+    validateInstitutionCode(trimmed).then(({ error, data }) => {
+      if (error || !data) {
+        setInstitutionError('Invalid Institution Code. Please check and try again.');
+        setValidatedInstitution(null);
+      } else {
+        setValidatedInstitution(data);
+        setInstitutionData(data);
+      }
+      setValidatingCode(false);
+    });
+  };
 
   if (!isOpen) return null;
 
@@ -97,7 +154,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setStep('success');
   };
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const currentForm = selectedRole === 'student' ? studentForm : selectedRole === 'faculty' ? facultyForm : guestForm;
     
@@ -107,7 +164,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
     
     setCurrentEmail(currentForm.universityEmail);
+    setInstitutionError(null);
+    setValidatingCode(true);
+
+    const { error: validateError, data: validatedInst } = await validateInstitutionCode(currentForm.institutionCode);
     
+    if (validateError || !validatedInst) {
+      setInstitutionError('Invalid Institution Code');
+      setValidatingCode(false);
+      return;
+    }
+
+    setValidatedInstitution(validatedInst);
+    setInstitutionData(validatedInst);
+    setValidatingCode(false);
+
     // Store form data in user metadata for OTP verification
     // This will be used in the verifyOtp call from AuthContext
     localStorage.setItem('tempFormData', JSON.stringify({
@@ -128,8 +199,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleVerifyOtp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (otpCode.length < 6) {
-      alert('Please enter a valid 6-digit OTP code');
+    if (otpCode.length < 8) {
+      alert('Please enter a valid 8-digit OTP code');
       return;
     }
     
@@ -145,16 +216,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       });
   };
 
-  const handleDemoStudentLogin = () => {
-    const demoData = {
-      studentName: 'Alex Paul',
-      email: 'alex.paul@christuniversity.in',
-      code: 'CHRKNG2026',
-    };
+const handleDemoStudentLogin = () => {
     onClose();
-    if (onLoginSuccess) {
-      onLoginSuccess(demoData);
-    }
   };
 
   const handleReset = () => {
@@ -166,12 +229,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleContinueToPortal = () => {
     onClose();
     if (onLoginSuccess) {
-      const currentForm = getCurrentForm();
-      onLoginSuccess({
-        studentName: currentForm.fullName || 'Alex Paul',
-        email: mode === 'login' ? (loginEmail || 'alex.paul@christuniversity.in') : (currentForm.universityEmail || 'alex.paul@christuniversity.in'),
-        code: currentForm.institutionCode || 'CHRKNG2026',
-      });
+      onLoginSuccess();
     }
   };
 
@@ -248,6 +306,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       Forgot Password?
                     </button>
                   </div>
+
+                  {institutionError && (
+                    <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
+                      {institutionError}
+                    </div>
+                  )}
 
                   <button
                     type="submit"
@@ -357,14 +421,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         </div>
                         <div>
                           <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
-                          <input
-                            type="text"
-                            required
-                            value={studentForm.institutionCode}
-                            onChange={(e) => setStudentForm({ ...studentForm, institutionCode: e.target.value })}
-                            placeholder="CHRKNG2026"
-                            className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
-                          />
+                          <div className="relative">
+                            <input
+                              type="text"
+                              required
+                              value={studentForm.institutionCode}
+                              onChange={(e) => {
+                                setStudentForm({ ...studentForm, institutionCode: e.target.value });
+                                handleInstitutionCodeChange(e.target.value);
+                              }}
+                              onBlur={() => handleInstitutionCodeBlur(studentForm.institutionCode)}
+                              placeholder="e.g. YAWEHH264881"
+                              className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+                            />
+                            {validatingCode && (
+                              <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            )}
+                          </div>
+                          {institutionError && !validatingCode && (
+                            <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code. Please check and try again.</p>
+                          )}
+                          {validatedInstitution && !institutionError && !validatingCode && (
+                            <p className="text-[10px] text-emerald-400 mt-1">✓ Institution Code Verified</p>
+                          )}
                         </div>
                       </div>
 
@@ -436,14 +515,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                       <div>
                         <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
-                        <input
-                          type="text"
-                          required
-                          value={facultyForm.institutionCode}
-                          onChange={(e) => setFacultyForm({ ...facultyForm, institutionCode: e.target.value })}
-                          placeholder="CHRKNG2026"
-                          className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
-                        />
+                        <div className="relative">
+                          <input
+                            type="text"
+                            required
+                            value={facultyForm.institutionCode}
+                            onChange={(e) => {
+                              setFacultyForm({ ...facultyForm, institutionCode: e.target.value });
+                              handleInstitutionCodeChange(e.target.value);
+                            }}
+                            onBlur={() => handleInstitutionCodeBlur(facultyForm.institutionCode)}
+                            placeholder="e.g. YAWEHH264881"
+                            className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+                          />
+                          {validatingCode && (
+                            <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          )}
+                        </div>
+                        {institutionError && !validatingCode && (
+                          <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code. Please check and try again.</p>
+                        )}
+                        {validatedInstitution && !institutionError && !validatingCode && (
+                          <p className="text-[10px] text-emerald-400 mt-1">✓ Institution Code Verified</p>
+                        )}
                       </div>
                     </>
                   )}
@@ -451,14 +545,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   {selectedRole === 'guest' && (
                     <div>
                       <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
-                      <input
-                        type="text"
-                        required
-                        value={guestForm.institutionCode}
-                        onChange={(e) => setGuestForm({ ...guestForm, institutionCode: e.target.value })}
-                        placeholder="CHRKNG2026"
-                        className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          required
+                          value={guestForm.institutionCode}
+                          onChange={(e) => {
+                            setGuestForm({ ...guestForm, institutionCode: e.target.value });
+                            handleInstitutionCodeChange(e.target.value);
+                          }}
+                          onBlur={() => handleInstitutionCodeBlur(guestForm.institutionCode)}
+                          placeholder="e.g. YAWEHH264881"
+                          className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+                        />
+                        {validatingCode && (
+                          <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        )}
+                      </div>
+                      {institutionError && !validatingCode && (
+                        <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code. Please check and try again.</p>
+                      )}
+                      {validatedInstitution && !institutionError && !validatingCode && (
+                        <p className="text-[10px] text-emerald-400 mt-1">✓ Institution Code Verified</p>
+                      )}
                     </div>
                   )}
 
@@ -495,13 +604,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </div>
                   </div>
 
-                  <button
-                    type="submit"
-                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md"
-                  >
-                    <span>Proceed to OTP Email Verification</span>
-                    <ArrowRight className="w-4 h-4 text-slate-950" />
-                  </button>
+<button
+                     type="submit"
+                     disabled={validatingCode || !validatedInstitution}
+                     className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+                   >
+                     {validatingCode ? (
+                       <>
+                         <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                         <span>Validating Institution Code…</span>
+                       </>
+                     ) : (
+                       <>
+                         <span>Proceed to OTP Email Verification</span>
+                         <ArrowRight className="w-4 h-4 text-slate-950" />
+                       </>
+                     )}
+                   </button>
                 </form>
               </div>
             )}
@@ -517,31 +636,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
               <h3 className="text-xl font-extrabold text-white">Verify Your Email OTP</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                We sent a 6-digit security code to{' '}
-                <strong className="text-emerald-400">{currentEmail || 'alex.paul@christuniversity.in'}</strong>
+                We sent an 8-digit security code to{' '}
+                <strong className="text-emerald-400">{currentEmail || ''}</strong>
               </p>
             </div>
+
+            {validatedInstitution && (
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-2 text-xs text-slate-400">
+                <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>
+                  Institution: <strong className="text-white">{validatedInstitution.institution_name}</strong> • Code: <strong className="text-emerald-400">{validatedInstitution.institution_code}</strong>
+                </span>
+              </div>
+            )}
+
+            {institutionError && (
+              <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
+                {institutionError}
+              </div>
+            )}
 
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 mb-1 block text-center">
-                  6-Digit Verification Code
+                  8-Digit Verification Code
                 </label>
                 <input
                   type="text"
-                  maxLength={6}
+                  maxLength={8}
                   required
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value)}
                   className="w-full bg-slate-950 border border-emerald-500/60 focus:border-emerald-400 rounded-2xl py-3 text-center text-xl font-mono tracking-[0.5em] text-emerald-300 font-bold focus:outline-none shadow-inner"
                 />
-              </div>
-
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-2 text-xs text-slate-400">
-                <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>
-                  Institution Target: <strong className="text-white">CHRIST (Deemed to be University)</strong> Code: <strong className="text-emerald-400">{getCurrentForm().institutionCode || 'CHRKNG2026'}</strong>
-                </span>
               </div>
 
               <button
@@ -577,17 +704,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {mode === 'login' ? 'Logged In Successfully!' : 'Email Verified & Account Joined!'}
               </h3>
               <p className="text-xs text-emerald-400 font-mono font-semibold">
-                Joined: CHRIST (Deemed to be University) - Kengeri Campus ({getCurrentForm().institutionCode || 'CHRKNG2026'})
+                {validatedInstitution
+                  ? `${validatedInstitution.institution_name} - ${validatedInstitution.campus} (${validatedInstitution.institution_code})`
+                  : ''}
               </p>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
-              You now have access to Counter A, B, C & D menus, instant Razorpay checkout, and QR pickup lockers for your campus.
+              You now have access to campus dining menus, instant Razorpay checkout, and QR pickup lockers.
             </p>
             <button
               onClick={handleContinueToPortal}
               className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
             >
-              <span>Launch Campus Student Portal</span>
+              <span>Launch Campus Portal</span>
               <ArrowRight className="w-4 h-4 text-slate-950" />
             </button>
           </div>

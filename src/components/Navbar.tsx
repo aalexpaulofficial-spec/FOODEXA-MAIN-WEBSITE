@@ -40,8 +40,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const displayName = profile?.full_name || user?.email || 'Guest';
   const displayRole = profile?.role || null;
-  const roleLabel = displayRole === 'student' ? 'Student' : displayRole === 'faculty' ? 'Faculty' : displayRole === 'guest' ? 'Guest' : 'Role pending';
-  const roleColor = displayRole === 'student' ? 'text-emerald-400' : displayRole === 'faculty' ? 'text-blue-400' : displayRole === 'guest' ? 'text-amber-400' : 'text-slate-400';
+  const roleLabel = displayRole === 'student' ? 'Student' : displayRole === 'faculty' ? 'Faculty' : displayRole === 'guest' ? 'Guest' : displayRole === 'institution_admin' ? 'Institution Admin' : displayRole === 'kitchen_staff' ? 'Kitchen Staff' : displayRole === 'canteen_manager' ? 'Canteen Manager' : displayRole === 'super_admin' ? 'Super Admin' : 'Role pending';
+  const roleColor = displayRole === 'student' ? 'text-emerald-400' : displayRole === 'faculty' ? 'text-blue-400' : displayRole === 'guest' ? 'text-amber-400' : displayRole === 'institution_admin' ? 'text-purple-400' : displayRole === 'kitchen_staff' ? 'text-orange-400' : displayRole === 'canteen_manager' ? 'text-pink-400' : displayRole === 'super_admin' ? 'text-red-400' : 'text-slate-400';
 
   const navLinks = [
     { label: 'Platform', href: '#platform' },

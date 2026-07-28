@@ -26,8 +26,7 @@ export async function getHeroStats(): Promise<HeroStat[]> {
 export async function getPartnerUniversities(): Promise<PartnerUniversity[]> {
   try {
     const unis = await fetchPartnerUniversities();
-    if (unis.length > 0) return unis;
-    return [{ id: 'fallback', name: 'CHRIST (Deemed to be University)', campus: 'Kengeri Campus', location: 'Bengaluru', short_name: 'CHRIST', logo_url: null, is_active: true, order: 0 }];
+    return unis;
   } catch { return []; }
 }
 

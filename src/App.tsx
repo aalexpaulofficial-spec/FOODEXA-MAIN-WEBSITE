@@ -16,6 +16,9 @@ import { RoleSelectionModal } from './components/RoleSelectionModal';
 import { InstitutionRegistrationModal } from './components/InstitutionRegistrationModal';
 import { AuthModal } from './components/AuthModal';
 import { StudentPortalModal } from './components/StudentPortalModal';
+import { InstitutionDashboardModal } from './components/InstitutionDashboardModal';
+import { KitchenDashboardModal } from './components/KitchenDashboardModal';
+import { SuperAdminDashboardModal } from './components/SuperAdminDashboardModal';
 import { DownloadModal } from './components/DownloadModal';
 import { PortalAccessModal } from './components/PortalAccessModal';
 import { LxChatDrawer } from './components/LxChatDrawer';
@@ -35,6 +38,9 @@ export default function App() {
   const [isLxDrawerOpen, setIsLxDrawerOpen] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isStudentPortalOpen, setIsStudentPortalOpen] = useState(false);
+  const [isInstitutionDashboardOpen, setIsInstitutionDashboardOpen] = useState(false);
+  const [isKitchenDashboardOpen, setIsKitchenDashboardOpen] = useState(false);
+  const [isSuperAdminDashboardOpen, setIsSuperAdminDashboardOpen] = useState(false);
   const [isRoleSelectionOpen, setIsRoleSelectionOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<'student' | 'faculty' | 'guest'>('student');
   const [activePrompt, setActivePrompt] = useState<string>('');
@@ -221,14 +227,39 @@ export default function App() {
         onClose={() => setIsAuthOpen(false)}
         initialMode={authInitialMode}
         selectedRole={selectedRole}
-        onLoginSuccess={() => {
-          setIsStudentPortalOpen(true);
+        onLoginSuccess={({ profile, institution }) => {
+          setIsAuthOpen(false);
+          const role = profile?.role;
+          if (role === 'institution_admin') {
+            setIsInstitutionDashboardOpen(true);
+          } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
+            setIsKitchenDashboardOpen(true);
+          } else if (role === 'super_admin') {
+            setIsSuperAdminDashboardOpen(true);
+          } else {
+            setIsStudentPortalOpen(true);
+          }
         }}
       />
 
       <StudentPortalModal
         isOpen={isStudentPortalOpen}
         onClose={() => setIsStudentPortalOpen(false)}
+      />
+
+      <InstitutionDashboardModal
+        isOpen={isInstitutionDashboardOpen}
+        onClose={() => setIsInstitutionDashboardOpen(false)}
+      />
+
+      <KitchenDashboardModal
+        isOpen={isKitchenDashboardOpen}
+        onClose={() => setIsKitchenDashboardOpen(false)}
+      />
+
+      <SuperAdminDashboardModal
+        isOpen={isSuperAdminDashboardOpen}
+        onClose={() => setIsSuperAdminDashboardOpen(false)}
       />
 
       <DownloadModal

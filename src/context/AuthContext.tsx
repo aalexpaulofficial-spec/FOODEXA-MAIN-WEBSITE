@@ -1,29 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
-
-type UserRole = 'student' | 'faculty' | 'guest';
-
-export interface Profile {
-  user_id: string;
-  email: string;
-  full_name: string | null;
-  phone: string | null;
-  institution_id: string | null;
-  role: UserRole | null;
-  created_at: string;
-  institution_code: string | null;
-}
-
-interface InstitutionData {
-  institution_id: string;
-  institution_name: string;
-  campus: string;
-  city: string;
-  state: string;
-  country: string;
-  institution_code: string;
-}
+import type { UserRole, Profile, InstitutionData } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -34,19 +12,20 @@ interface AuthContextType {
   setInstitutionData: (data: InstitutionData | null) => void;
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
-  signUp: (email: string, password: string, fullName: string, role: UserRole, institutionCode?: string, phone?: string) => Promise<{ error: Error | null }>;
-  signInWithOtp: (email: string, fullName: string, role: UserRole, institutionCode?: string, phone?: string) => Promise<{ error: Error | null }>;
-  verifyOtp: (email: string, token: string) => Promise<{ error: Error | null }>;
+  signInWithOtp: (email: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; }) => Promise<{ error: Error | null }>;
+  verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
   signOut: () => Promise<void>;
   clearAllSessionData: () => void;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
+  setRememberMeFlag: (remember: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const normalizeRole = (value: unknown): UserRole | null => {
-  return value === 'student' || value === 'faculty' || value === 'guest' ? value : null;
+  const allowed: UserRole[] = ['student', 'faculty', 'guest', 'institution_admin', 'kitchen_staff', 'canteen_manager', 'super_admin'];
+  return allowed.includes(value as UserRole) ? (value as UserRole) : null;
 };
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -62,6 +41,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     institutionCode: string | null;
     institutionId: string | null;
     phone: string | null;
+    department: string | null;
+    semester: string | null;
+    programme: string | null;
+    campusBlock: string | null;
+    designation: string | null;
   } | null>(null);
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
@@ -96,13 +80,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [fetchProfile, user]);
 
+  const setRememberMeFlag = useCallback((remember: boolean) => {
+    if (remember) {
+      localStorage.setItem('foodexa-remember-me', 'true');
+      sessionStorage.removeItem('foodexa-remember-me');
+    } else {
+      sessionStorage.setItem('foodexa-remember-me', 'true');
+      localStorage.removeItem('foodexa-remember-me');
+    }
+  }, []);
+
   useEffect(() => {
     const initAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await fetchProfile(session.user.id);
+      const remembered = localStorage.getItem('foodexa-remember-me') === 'true' || sessionStorage.getItem('foodexa-remember-me') === 'true';
+      if (session && !remembered) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setInstitutionData(null);
+      } else {
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        }
       }
       setLoading(false);
     };
@@ -111,18 +114,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[Auth] Auth state changed:', event, session?.user?.id);
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await fetchProfile(session.user.id);
-      } else {
+      const remembered = localStorage.getItem('foodexa-remember-me') === 'true' || sessionStorage.getItem('foodexa-remember-me') === 'true';
+      if (session && !remembered) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
         setProfile(null);
+        setInstitutionData(null);
+      } else {
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        } else {
+          setProfile(null);
+        }
       }
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchProfile]);
+  }, [fetchProfile, setRememberMeFlag]);
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -136,37 +148,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const liveProfile = data.user?.id ? await fetchProfile(data.user.id) : null;
-    return { 
+    return {
       error: null,
-      session: data.session, 
+      session: data.session,
       user: data.user,
       profile: liveProfile,
     };
   };
 
-  const signUp = async (email: string, password: string, fullName: string, role: UserRole, institutionCode?: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          role,
-          institution_code: institutionCode,
-        },
-      },
-    });
-    return { error: error ? new Error(error.message) : null };
-  };
-
-  const signInWithOtp = async (email: string, fullName: string, role: UserRole, institutionCode?: string, phone?: string) => {
+  const signInWithOtp = async (email: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; }) => {
     setPendingOtpProfile({
       email: email.trim(),
       fullName: fullName.trim(),
       role,
-      institutionCode: institutionCode?.trim() || institutionData?.institution_code || null,
+      institutionCode: metadata?.institutionCode?.trim() || institutionData?.institution_code || null,
       institutionId: institutionData?.institution_id || null,
-      phone: phone?.trim() || null,
+      phone: metadata?.phone?.trim() || null,
+      department: metadata?.department?.trim() || null,
+      semester: metadata?.semester?.trim() || null,
+      programme: metadata?.programme?.trim() || null,
+      campusBlock: metadata?.campusBlock?.trim() || null,
+      designation: metadata?.designation?.trim() || null,
     });
 
     const { error } = await supabase.auth.signInWithOtp({
@@ -176,9 +178,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         data: {
           full_name: fullName.trim(),
           role,
-          institution_code: institutionCode?.trim() || institutionData?.institution_code,
+          institution_code: metadata?.institutionCode?.trim() || institutionData?.institution_code,
           institution_id: institutionData?.institution_id,
-          phone: phone?.trim() || null,
+          phone: metadata?.phone?.trim() || null,
+          department: metadata?.department?.trim() || null,
+          semester: metadata?.semester?.trim() || null,
+          programme: metadata?.programme?.trim() || null,
+          campus_block: metadata?.campusBlock?.trim() || null,
+          designation: metadata?.designation?.trim() || null,
         },
       },
     });
@@ -228,23 +235,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       token,
       type: 'email',
     });
-    
+
+    let fetchedProfile: Profile | null = null;
+    let fetchedInstitution: InstitutionData | null = null;
+
     if (!error && authData?.user?.id) {
       const userId = authData.user.id;
-      
+
       const userData = authData.user.user_metadata || {};
       const role = normalizeRole(pendingOtpProfile?.role || userData.role);
 
       if (!role) {
-        return { error: new Error('Account role is missing. Please restart registration and choose Student, Faculty, or Guest.') };
+        return { error: new Error('Account role is missing. Please restart registration and choose a valid role.'), profile: null, institution: null };
       }
-      
+
       const fullName = pendingOtpProfile?.fullName || userData.full_name || null;
       const institutionCode = pendingOtpProfile?.institutionCode || userData.institution_code || null;
       const phone = pendingOtpProfile?.phone || userData.phone || null;
       const institutionId = pendingOtpProfile?.institutionId || userData.institution_id || institutionData?.institution_id || null;
-      
-      await supabase
+      const department = pendingOtpProfile?.department || userData.department || null;
+      const semester = pendingOtpProfile?.semester || userData.semester || null;
+      const programme = pendingOtpProfile?.programme || userData.programme || null;
+      const campusBlock = pendingOtpProfile?.campusBlock || userData.campus_block || null;
+      const designation = pendingOtpProfile?.designation || userData.designation || null;
+
+      const { error: upsertError } = await supabase
         .from('profiles')
         .upsert({
           user_id: userId,
@@ -254,24 +269,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           role,
           institution_id: institutionId,
           institution_code: institutionCode,
+          department,
+          semester,
+          programme,
+          campus_block: campusBlock,
+          designation,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'user_id',
         });
-      
-      await fetchProfile(userId);
+
+      if (upsertError) {
+        console.error('[Auth] Profile upsert error:', upsertError);
+      }
+
+      fetchedProfile = await fetchProfile(userId);
       setPendingOtpProfile(null);
-      
+
       if (institutionId) {
         const { data: instData } = await supabase
           .from('institutions')
           .select('id, name, campus, city, state, country, institution_code')
           .eq('id', institutionId)
           .single();
-        
+
         if (instData) {
-          setInstitutionData({
+          fetchedInstitution = {
             institution_id: instData.id,
             institution_name: instData.name,
             campus: instData.campus || '',
@@ -279,7 +303,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             state: instData.state || '',
             country: instData.country || '',
             institution_code: instData.institution_code,
-          });
+          };
+          setInstitutionData(fetchedInstitution);
         }
       } else if (institutionCode) {
         const { data: instData } = await supabase
@@ -287,9 +312,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           .select('id, name, campus, city, state, country, institution_code')
           .ilike('institution_code', institutionCode)
           .single();
-        
+
         if (instData) {
-          setInstitutionData({
+          fetchedInstitution = {
             institution_id: instData.id,
             institution_name: instData.name,
             campus: instData.campus || '',
@@ -297,24 +322,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             state: instData.state || '',
             country: instData.country || '',
             institution_code: instData.institution_code,
-          });
+          };
+          setInstitutionData(fetchedInstitution);
         }
       }
     }
-    
-    return { error: error ? new Error(error.message) : null };
+
+    return { error: error ? new Error(error.message) : null, profile: fetchedProfile, institution: fetchedInstitution };
   };
 
   const clearAllSessionData = () => {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key !== 'foodexa-theme-preference') {
+      if (key && key !== 'foodexa-theme-preference' && key !== 'foodexa-remember-me') {
         keysToRemove.push(key);
       }
     }
     keysToRemove.forEach((key) => localStorage.removeItem(key));
-    
     sessionStorage.clear();
   };
 
@@ -356,13 +381,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setInstitutionData,
       validateInstitutionCode,
       signIn,
-      signUp,
       signInWithOtp,
       verifyOtp,
       signOut,
       clearAllSessionData,
       updateProfile,
       refreshProfile,
+      setRememberMeFlag,
     }}>
       {children}
     </AuthContext.Provider>

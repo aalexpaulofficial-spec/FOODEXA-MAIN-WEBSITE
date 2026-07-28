@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, User as UserIcon, Loader2, Eye, EyeOff } from 'lucide-react';
+import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, User as UserIcon, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import type { UserRole, Profile } from '../types';
 
 interface InstitutionData {
   institution_id: string;
@@ -17,22 +18,8 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: 'login' | 'create';
-  selectedRole?: 'student' | 'faculty' | 'guest';
-  onLoginSuccess?: (institutionData: InstitutionData | null) => void;
-}
-
-// ── Password strength helper ────────────────────────────────────────────────
-function getPasswordStrength(pw: string): { score: number; label: string; color: string } {
-  let score = 0;
-  if (pw.length >= 8)  score++;
-  if (pw.length >= 12) score++;
-  if (/[A-Z]/.test(pw)) score++;
-  if (/[0-9]/.test(pw)) score++;
-  if (/[^A-Za-z0-9]/.test(pw)) score++;
-  if (score <= 1) return { score, label: 'Weak', color: 'bg-red-500' };
-  if (score <= 2) return { score, label: 'Medium', color: 'bg-yellow-400' };
-  if (score <= 3) return { score, label: 'Strong', color: 'bg-emerald-400' };
-  return { score, label: 'Very Strong', color: 'bg-emerald-500' };
+  selectedRole?: UserRole;
+  onLoginSuccess?: (data: { profile: Profile; institution: InstitutionData | null }) => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -42,21 +29,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   selectedRole = 'student',
   onLoginSuccess,
 }) => {
-  const { signInWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signOut, signIn, user } = useAuth();
+  const { signInWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signOut, signIn, user, setRememberMeFlag } = useAuth();
   const [mode, setMode] = useState<'login' | 'create'>(initialMode);
-  const [step, setStep] = useState<'form' | 'institution' | 'otp' | 'success'>('form');
+  const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success'>('form');
   const [loginUserId, setLoginUserId] = useState<string | null>(null);
 
   // Login state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   // Track the email used for the current OTP flow (login or create)
   const [currentEmail, setCurrentEmail] = useState('');
 
   // OTP state
   const [otpCode, setOtpCode] = useState('');
+  const [otpError, setOtpError] = useState<string | null>(null);
 
   // Institution validation state
   const [validatedInstitution, setValidatedInstitution] = useState<InstitutionData | null>(null);
@@ -65,9 +54,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [verifiedInstitution, setVerifiedInstitution] = useState<InstitutionData | null>(null);
   const institutionCodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Registration password visibility
-  const [showRegPw, setShowRegPw] = useState(false);
-  const [showRegConfirm, setShowRegConfirm] = useState(false);
+  // Counter/Canteen code validation state
+  const [counterCode, setCounterCode] = useState('');
+  const [validatingCounter, setValidatingCounter] = useState(false);
+  const [counterError, setCounterError] = useState<string | null>(null);
+  const counterCodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Create Student Account state
   const [studentForm, setStudentForm] = useState({
@@ -79,8 +70,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     semester: '',
     campusBlock: '',
     institutionCode: '',
-    password: '',
-    confirmPassword: '',
   });
 
   // Create Faculty Account state
@@ -91,8 +80,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     department: '',
     designation: '',
     institutionCode: '',
-    password: '',
-    confirmPassword: '',
   });
 
   // Create Guest Account state
@@ -101,8 +88,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     universityEmail: '',
     phone: '',
     institutionCode: '',
-    password: '',
-    confirmPassword: '',
   });
 
   const getCurrentForm = () => {
@@ -127,11 +112,75 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setValidatedInstitution(null);
     setVerifiedInstitution(null);
     setInstitutionError(null);
+    setLoginError(null);
+    setOtpError(null);
   }, [initialMode, isOpen]);
 
   useEffect(() => () => {
     if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
+    if (counterCodeTimerRef.current) clearTimeout(counterCodeTimerRef.current);
   }, []);
+
+  const handleCounterCodeChange = (code: string) => {
+    if (counterCodeTimerRef.current) clearTimeout(counterCodeTimerRef.current);
+    setCounterError(null);
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    setValidatingCounter(true);
+    counterCodeTimerRef.current = setTimeout(async () => {
+      const userId = loginUserId || user?.id;
+      if (!userId) {
+        setCounterError('Session expired. Please login again.');
+        setValidatingCounter(false);
+        return;
+      }
+      const { data: profile } = await supabase.from('profiles').select('institution_id').eq('user_id', userId).single();
+      if (!profile?.institution_id) {
+        setCounterError('Profile missing institution. Contact support.');
+        setValidatingCounter(false);
+        return;
+      }
+      const { data: counterRows, error: counterError } = await supabase
+        .from('menu_items')
+        .select('counter')
+        .eq('institution_id', profile.institution_id)
+        .ilike('counter', trimmed);
+      if (counterError || !counterRows || counterRows.length === 0) {
+        setCounterError('Invalid Counter Code');
+      } else {
+        setCounterError(null);
+      }
+      setValidatingCounter(false);
+    }, 500);
+  };
+
+  const handleCounterCodeBlur = (code: string) => {
+    if (counterCodeTimerRef.current) clearTimeout(counterCodeTimerRef.current);
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    setValidatingCounter(true);
+    const userId = loginUserId || user?.id;
+    if (!userId) {
+      setCounterError('Session expired. Please login again.');
+      setValidatingCounter(false);
+      return;
+    }
+    supabase.from('profiles').select('institution_id').eq('user_id', userId).single().then(({ data: profile }) => {
+      if (!profile?.institution_id) {
+        setCounterError('Profile missing institution. Contact support.');
+        setValidatingCounter(false);
+        return;
+      }
+      supabase.from('menu_items').select('counter').eq('institution_id', profile.institution_id).ilike('counter', trimmed).then(({ data: counterRows, error: counterError }) => {
+        if (counterError || !counterRows || counterRows.length === 0) {
+          setCounterError('Invalid Counter Code');
+        } else {
+          setCounterError(null);
+        }
+        setValidatingCounter(false);
+      });
+    });
+  };
 
   const handleInstitutionCodeChange = (code: string) => {
     if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
@@ -176,9 +225,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setInstitutionError('Please enter a valid Institution Code.');
       return;
     }
-    
+
     const userId = loginUserId || user?.id;
-    
+
     if (validatedInstitution && userId) {
       await supabase
         .from('profiles')
@@ -187,10 +236,53 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           institution_id: validatedInstitution.institution_id,
           institution_code: validatedInstitution.institution_code,
         }, { onConflict: 'user_id' });
-      
+
       setVerifiedInstitution(validatedInstitution);
     }
-    
+
+    setStep('success');
+  };
+
+  const handleCounterVerify = async () => {
+    const code = counterCode.trim();
+    if (!code) {
+      setCounterError('Please enter a valid Counter Code.');
+      return;
+    }
+
+    const userId = loginUserId || user?.id;
+    if (!userId) {
+      setCounterError('Session expired. Please login again.');
+      return;
+    }
+
+    const { data: profile } = await supabase.from('profiles').select('institution_id').eq('user_id', userId).single();
+    if (!profile?.institution_id) {
+      setCounterError('Profile missing institution. Contact support.');
+      return;
+    }
+
+    const { data: counterRows, error: counterError } = await supabase
+      .from('menu_items')
+      .select('counter')
+      .eq('institution_id', profile.institution_id)
+      .ilike('counter', code);
+
+    if (counterError || !counterRows || counterRows.length === 0) {
+      setCounterError('Invalid Counter Code');
+      return;
+    }
+
+    const verified: InstitutionData = validatedInstitution || institutionData || {
+      institution_id: profile.institution_id,
+      institution_name: '',
+      campus: '',
+      city: '',
+      state: '',
+      country: '',
+      institution_code: code,
+    };
+    setVerifiedInstitution(verified);
     setStep('success');
   };
 
@@ -199,41 +291,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentEmail(loginEmail);
+    setLoginError(null);
     setInstitutionError(null);
-    
-    const { error, session: authSession, user: authUser } = await signIn(loginEmail, loginPassword);
-    
+    setStep('form');
+
+    const { error, session: authSession, user: authUser, profile: liveProfile } = await signIn(loginEmail, loginPassword);
+    setRememberMeFlag(rememberMe);
+
     if (error) {
-      alert(`Login failed: ${error.message}`);
+      setLoginError('Invalid email or password');
       return;
     }
-    
-    if (!authUser) {
-      alert('Login failed: No user returned from authentication.');
+
+    if (!authUser || !liveProfile) {
+      setLoginError('Profile not found. Please contact support.');
       return;
     }
-    
+
     setLoginUserId(authUser.id);
-    
-    const { data: profileData, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', authUser.id)
-      .single();
-    
-    if (profileError && profileError.code !== 'PGRST116') {
-      console.error('[Auth] Profile fetch after login error:', profileError);
-    }
-    
-    if (profileData?.institution_id) {
+
+    let institution: InstitutionData | null = null;
+    if (liveProfile.institution_id) {
       const { data: instData } = await supabase
         .from('institutions')
         .select('id, name, campus, city, state, country, institution_code')
-        .eq('id', profileData.institution_id)
+        .eq('id', liveProfile.institution_id)
         .single();
-      
+
       if (instData) {
-        const verified: InstitutionData = {
+        institution = {
           institution_id: instData.id,
           institution_name: instData.name,
           campus: instData.campus || '',
@@ -242,30 +328,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           country: instData.country || '',
           institution_code: instData.institution_code,
         };
-        setVerifiedInstitution(verified);
-        setInstitutionData(verified);
+        setInstitutionData(institution);
+        setVerifiedInstitution(institution);
       }
-      setStep('success');
-    } else {
-      setStep('institution');
+    }
+
+    const role = liveProfile.role;
+
+    if (role === 'institution_admin') {
+      if (!institution) {
+        setStep('institution_verify');
+        return;
+      }
+    } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
+      setStep('counter_verify');
+      return;
+    }
+
+    setStep('success');
+    if (onLoginSuccess) {
+      onLoginSuccess({ profile: liveProfile, institution });
     }
   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const currentForm = selectedRole === 'student' ? studentForm : selectedRole === 'faculty' ? facultyForm : guestForm;
-    
-    if (currentForm.password !== currentForm.confirmPassword) {
-      alert('Passwords do not match');
-      return;
-    }
-    
+    const currentForm = getCurrentForm();
+
     setCurrentEmail(currentForm.universityEmail);
     setInstitutionError(null);
     setValidatingCode(true);
 
     const { error: validateError, data: validatedInst } = await validateInstitutionCode(currentForm.institutionCode);
-    
+
     if (validateError || !validatedInst) {
       setInstitutionError('Invalid Institution Code');
       setValidatingCode(false);
@@ -276,92 +371,48 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setInstitutionData(validatedInst);
     setValidatingCode(false);
 
-    signInWithOtp(currentForm.universityEmail, currentForm.fullName, selectedRole, currentForm.institutionCode, currentForm.phone)
-      .then(({ error }) => {
-        if (!error) {
-          setStep('otp');
-        } else {
-          alert(`Registration failed: ${error.message}`);
-        }
-      });
+    signInWithOtp(currentForm.universityEmail, currentForm.fullName, selectedRole, {
+      institutionCode: currentForm.institutionCode,
+      phone: currentForm.phone,
+      department: (currentForm as any).department,
+      semester: (currentForm as any).semester,
+      programme: (currentForm as any).programme,
+      campusBlock: (currentForm as any).campusBlock,
+      designation: (currentForm as any).designation,
+    }).then(({ error }) => {
+      if (!error) {
+        setOtpError(null);
+        setStep('otp');
+      } else {
+        setInstitutionError(error.message || 'Registration failed');
+      }
+    });
   };
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otpCode.length < 8) {
-      alert('Please enter a valid 8-digit OTP code');
+      setOtpError('Please enter a valid 8-digit OTP code');
       return;
     }
-    
-    verifyOtp(currentEmail, otpCode)
-      .then(async ({ error }) => {
-        if (!error) {
-          const fetchedInst = institutionData || validatedInstitution;
-          
-          if (fetchedInst && fetchedInst.institution_name) {
-            setVerifiedInstitution(fetchedInst);
-            setStep('success');
-          } else {
-            const instId = institutionData?.institution_id;
-            const instCode = institutionData?.institution_code || validatedInstitution?.institution_code;
-            
-            if (instId) {
-              const { data } = await supabase
-                .from('institutions')
-                .select('id, name, campus, institution_code')
-                .eq('id', instId)
-                .single();
-              
-              if (data && data.name) {
-                const inst = {
-                  institution_id: data.id,
-                  institution_name: data.name,
-                  campus: data.campus || '',
-                  city: data.campus || '',
-                  state: '',
-                  country: '',
-                  institution_code: data.institution_code,
-                };
-                setVerifiedInstitution(inst);
-                setInstitutionData(inst);
-                setStep('success');
-              } else {
-                alert('Unable to verify institution details. Please try again.');
-              }
-            } else if (instCode) {
-              const { data } = await supabase
-                .from('institutions')
-                .select('id, name, campus, institution_code')
-                .ilike('institution_code', instCode)
-                .single();
-              
-              if (data && data.name) {
-                const inst = {
-                  institution_id: data.id,
-                  institution_name: data.name,
-                  campus: data.campus || '',
-                  city: data.campus || '',
-                  state: '',
-                  country: '',
-                  institution_code: data.institution_code,
-                };
-                setVerifiedInstitution(inst);
-                setInstitutionData(inst);
-                setStep('success');
-              } else {
-                alert('Unable to verify institution details. Please try again.');
-              }
-            } else {
-              alert('Institution details not available. Please try again.');
-            }
-          }
-        } else {
-          alert(`OTP verification failed: ${error.message}`);
-        }
-      });
-  };
 
-  const handleDemoStudentLogin = () => {
-    onClose();
+    const { error, profile, institution } = await verifyOtp(currentEmail, otpCode);
+
+    if (error) {
+      setOtpError(error.message || 'OTP verification failed');
+      return;
+    }
+
+    if (!profile) {
+      setOtpError('Profile creation failed. Please try again.');
+      return;
+    }
+
+    setVerifiedInstitution(institution);
+    setStep('success');
+
+    if (onLoginSuccess) {
+      onLoginSuccess({ profile, institution });
+    }
   };
 
   const handleReset = () => {
@@ -371,13 +422,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setVerifiedInstitution(null);
     setValidatedInstitution(null);
     setLoginUserId(null);
+    setLoginError(null);
+    setOtpError(null);
   };
 
   const handleContinueToPortal = () => {
     onClose();
-    if (onLoginSuccess) {
-      onLoginSuccess(verifiedInstitution);
-    }
   };
 
   return (
@@ -447,14 +497,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </label>
                     <button
                       type="button"
-                      onClick={() => alert('Password reset instructions sent to your university email.')}
+                      onClick={() => {}}
                       className="text-emerald-400 font-medium hover:underline cursor-pointer"
                     >
                       Forgot Password?
                     </button>
                   </div>
 
-                  {institutionError && (
+                  {loginError && (
+                    <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
+                      {loginError}
+                    </div>
+                  )}
+
+                  {institutionError && step === 'form' && (
                     <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
                       {institutionError}
                     </div>
@@ -718,86 +774,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Password</label>
-                      <div className="relative">
-                        <input
-                          type={showRegPw ? 'text' : 'password'}
-                          required
-                          value={getCurrentForm().password}
-                          onChange={(e) => {
-                            if (selectedRole === 'student') setStudentForm({ ...studentForm, password: e.target.value });
-                            else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, password: e.target.value });
-                            else setGuestForm({ ...guestForm, password: e.target.value });
-                          }}
-                          placeholder="Min. 8 characters"
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 pr-9 text-xs text-white placeholder-slate-500 focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowRegPw(!showRegPw)}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
-                        >
-                          {showRegPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                      {getCurrentForm().password && (() => {
-                        const pwStrength = getPasswordStrength(getCurrentForm().password);
-                        return (
-                          <div className="mt-1.5 space-y-1">
-                            <div className="flex gap-0.5">
-                              {[1, 2, 3, 4, 5].map((i) => (
-                                <div
-                                  key={i}
-                                  className={`h-1 flex-1 rounded-full transition-all ${i <= pwStrength.score ? pwStrength.color : 'bg-slate-800'}`}
-                                />
-                              ))}
-                            </div>
-                            <span className="text-[10px] text-slate-400">{pwStrength.label}</span>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Confirm Password</label>
-                      <div className="relative">
-                        <input
-                          type={showRegConfirm ? 'text' : 'password'}
-                          required
-                          value={getCurrentForm().confirmPassword}
-                          onChange={(e) => {
-                            if (selectedRole === 'student') setStudentForm({ ...studentForm, confirmPassword: e.target.value });
-                            else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, confirmPassword: e.target.value });
-                            else setGuestForm({ ...guestForm, confirmPassword: e.target.value });
-                          }}
-                          placeholder="Re-enter password"
-                          className={`w-full bg-slate-950 border focus:outline-none rounded-xl px-3 py-2 pr-9 text-xs text-white placeholder-slate-500 ${
-                            getCurrentForm().confirmPassword && getCurrentForm().password !== getCurrentForm().confirmPassword
-                              ? 'border-red-500/60 focus:border-red-500'
-                              : 'border-slate-800 focus:border-emerald-500'
-                          }`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowRegConfirm(!showRegConfirm)}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
-                        >
-                          {showRegConfirm ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                      {getCurrentForm().confirmPassword && getCurrentForm().password !== getCurrentForm().confirmPassword && (
-                        <p className="text-[10px] text-red-400 mt-1">✗ Passwords Do Not Match</p>
-                      )}
-                      {getCurrentForm().confirmPassword && getCurrentForm().password === getCurrentForm().confirmPassword && (
-                        <p className="text-[10px] text-emerald-400 mt-1">✓ Passwords Match</p>
-                      )}
-                    </div>
-                  </div>
-
                   <button
                     type="submit"
-                    disabled={validatingCode || !validatedInstitution || (getCurrentForm().confirmPassword && getCurrentForm().password !== getCurrentForm().confirmPassword) || getPasswordStrength(getCurrentForm().password).score < 2}
+                    disabled={validatingCode || !validatedInstitution}
                     className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {validatingCode ? (
@@ -898,6 +877,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             )}
 
+            {otpError && (
+              <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-300">
+                {otpError}
+              </div>
+            )}
+
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 mb-1 block text-center">
@@ -925,13 +910,118 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 Didn't receive code?{' '}
                 <button
                   type="button"
-                  onClick={() => alert('New OTP code re-sent to your university email.')}
+                  onClick={() => {}}
                   className="text-emerald-400 font-bold hover:underline cursor-pointer"
                 >
                   Resend OTP
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* INSTITUTION CODE VERIFICATION STEP (for institution_admin login) */}
+        {step === 'institution_verify' && (
+          <div className="space-y-5">
+            <div className="space-y-1 text-center">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                <Building2 className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-extrabold text-white">Verify Institution Code</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Please enter your Institution Code to access the institution dashboard.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={validatedInstitution?.institution_code || institutionData?.institution_code || ''}
+                    onChange={(e) => handleInstitutionCodeChange(e.target.value)}
+                    onBlur={(e) => handleInstitutionCodeBlur(e.target.value)}
+                    placeholder="e.g. YAWEHH264881"
+                    className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+                  />
+                  {validatingCode && (
+                    <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  )}
+                </div>
+                {institutionError && !validatingCode && (
+                  <p className="text-[10px] text-red-400 mt-1">✗ {institutionError}</p>
+                )}
+                {validatedInstitution && !institutionError && !validatingCode && (
+                  <p className="text-[10px] text-emerald-400 mt-1">✓ Institution Code Verified: {validatedInstitution.institution_name}</p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleLoginInstitutionVerify}
+                disabled={!validatedInstitution}
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <span>Open Institution Dashboard</span>
+                <ArrowRight className="w-4 h-4 text-slate-950" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* COUNTER / CANTEEN CODE VERIFICATION STEP (for kitchen_staff / canteen_manager login) */}
+        {step === 'counter_verify' && (
+          <div className="space-y-5">
+            <div className="space-y-1 text-center">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                <Users className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-extrabold text-white">Verify Counter Code</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Enter your assigned Counter or Canteen Code to access the kitchen dashboard.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Counter / Canteen Code</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={counterCode}
+                    onChange={(e) => {
+                      setCounterCode(e.target.value);
+                      handleCounterCodeChange(e.target.value);
+                    }}
+                    onBlur={(e) => handleCounterCodeBlur(e.target.value)}
+                    placeholder="e.g. COUNTER-01"
+                    className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+                  />
+                  {validatingCounter && (
+                    <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  )}
+                </div>
+                {counterError && !validatingCounter && (
+                  <p className="text-[10px] text-red-400 mt-1">✗ {counterError}</p>
+                )}
+                {!counterError && validatedInstitution && !validatingCounter && (
+                  <p className="text-[10px] text-emerald-400 mt-1">✓ Counter Code Verified</p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCounterVerify}
+                disabled={!counterCode || validatingCounter || counterError}
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <span>Open Kitchen Dashboard</span>
+                <ArrowRight className="w-4 h-4 text-slate-950" />
+              </button>
+            </div>
           </div>
         )}
 

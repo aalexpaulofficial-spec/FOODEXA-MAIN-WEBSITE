@@ -45,7 +45,7 @@ export interface InstitutionRequestInsert {
   status: 'pending';
 }
 
-export type UserRole = 'student' | 'faculty' | 'guest';
+export type UserRole = 'student' | 'faculty' | 'guest' | 'institution_admin' | 'kitchen_staff' | 'canteen_manager' | 'super_admin';
 
 export interface Profile {
   user_id: string;
@@ -56,11 +56,16 @@ export interface Profile {
   role: UserRole | null;
   created_at: string;
   institution_code: string | null;
+  department: string | null;
+  semester: string | null;
+  programme: string | null;
+  campus_block: string | null;
+  designation: string | null;
 }
 
 export interface InstitutionData {
-  id: string;
-  name: string;
+  institution_id: string;
+  institution_name: string;
   campus: string;
   city: string;
   state: string;

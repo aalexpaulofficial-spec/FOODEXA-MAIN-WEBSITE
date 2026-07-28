@@ -14,7 +14,7 @@ declare global {
   }
 }
 
-interface StudentPortalModalProps { isOpen: boolean; onClose: () => void; }
+interface StudentPortalModalProps { isOpen: boolean; onClose: () => void; role?: UserRole; }
 type PortalTab = 'home' | 'menu' | 'orders' | 'announcements' | 'profile';
 
 const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready'];
@@ -106,7 +106,7 @@ const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => v
   );
 };
 
-export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, onClose }) => {
+export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, onClose, role }) => {
   const { user, profile, refreshProfile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<PortalTab>('home');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -383,10 +383,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-500 text-sm font-black text-slate-950 shadow-lg shadow-emerald-950">FX</div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-base font-black tracking-tight text-white sm:text-lg">FOODEXA Campus Portal</h2><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${roleColor(liveRole)}`}>{roleLabel(liveRole)}</span></div>
-                <p className="truncate text-[11px] text-slate-400">{institutionName || 'Institution sync pending'}</p>
-              </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-base font-black tracking-tight text-white sm:text-lg">{role === 'faculty' ? 'FOODEXA Faculty Portal' : role === 'guest' ? 'FOODEXA Guest Portal' : 'FOODEXA Campus Portal'}</h2><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${roleColor(liveRole)}`}>{roleLabel(liveRole)}</span></div>
+                  <p className="truncate text-[11px] text-slate-400">{institutionName || 'Institution sync pending'}</p>
+                </div>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => setActiveTab('menu')} className="hidden items-center gap-2 rounded-full border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200 transition hover:border-emerald-500/50 sm:flex">

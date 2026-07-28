@@ -155,7 +155,7 @@ export function mapOrder(row: any): Order {
     id: String(row.id),
     user_id: String(row.user_id || ''),
     email: String(row.email || ''),
-    role: row.role === 'student' || row.role === 'faculty' || row.role === 'guest' ? row.role : null,
+    role: ['student', 'faculty', 'guest', 'institution_admin', 'kitchen_staff', 'canteen_manager', 'super_admin'].includes(row.role) ? row.role : null,
     institution_id: row.institution_id || null,
     institution_code: row.institution_code || null,
     counter_id: row.counter_id || null,
@@ -344,8 +344,8 @@ export async function fetchInstitution(id: string): Promise<InstitutionData | nu
   const { data } = await supabase.from('institutions').select('*').eq('id', id).single();
   if (!data) return null;
   return {
-    id: data.id,
-    name: data.name || '',
+    institution_id: data.id,
+    institution_name: data.name || '',
     campus: data.campus || '',
     city: data.city || '',
     state: data.state || '',
@@ -365,8 +365,6 @@ export async function fetchLiveStats(): Promise<{ value: string; label: string }
     return [
       { value: `${(instCount || 0)}+`, label: 'Partner Campuses' },
       { value: `${(orderCount || 0)}+`, label: 'Orders Processed' },
-      { value: '4.2 Mins', label: 'Avg Express Pickup' },
-      { value: '99.98%', label: 'Uptime Reliability' },
     ];
   } catch {
     return [];

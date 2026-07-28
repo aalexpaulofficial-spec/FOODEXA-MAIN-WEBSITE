@@ -34,7 +34,7 @@ interface AuthContextType {
   setInstitutionData: (data: InstitutionData | null) => void;
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
-  signUp: (email: string, password: string, fullName: string, role: UserRole, institutionCode?: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName: string, role: UserRole, institutionCode?: string, phone?: string) => Promise<{ error: Error | null }>;
   signInWithOtp: (email: string, fullName: string, role: UserRole, institutionCode?: string, phone?: string) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;

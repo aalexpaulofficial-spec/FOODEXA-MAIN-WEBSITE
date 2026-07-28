@@ -37,9 +37,9 @@ export default function App() {
   const [isStudentPortalOpen, setIsStudentPortalOpen] = useState(false);
   const [isRoleSelectionOpen, setIsRoleSelectionOpen] = useState(false);
   const [portalData, setPortalData] = useState({
-    studentName: 'Alex Paul',
-    email: 'alex.paul@christuniversity.in',
-    code: 'CHRKNG2026',
+    studentName: '',
+    email: '',
+    code: '',
     institutionName: '',
   });
   const [selectedRole, setSelectedRole] = useState<'student' | 'faculty' | 'guest'>('student');

@@ -18,9 +18,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   selectedRole = 'student',
   onLoginSuccess,
 }) => {
-  const { signInWithOtp, verifyOtp } = useAuth();
+  const { signIn, signInWithOtp, verifyOtp } = useAuth();
   const [mode, setMode] = useState<'login' | 'create'>(initialMode);
   const [step, setStep] = useState<'form' | 'otp' | 'success'>('form');
+  const [authLoading, setAuthLoading] = useState(false);
 
   // Login state
   const [loginEmail, setLoginEmail] = useState('');
@@ -32,6 +33,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // OTP state
   const [otpCode, setOtpCode] = useState('');
+  const [portalPayload, setPortalPayload] = useState<{ studentName: string; email: string; code: string; institutionName?: string } | null>(null);
 
   // Institution validation state
   const [institutionData, setInstitutionData] = useState<{ id: string; name: string; campus: string; code: string } | null>(null);
@@ -101,7 +103,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         .from('institutions')
         .select('id, name, campus, code')
         .eq('code', code.trim().toUpperCase())
-        .single();
+        .maybeSingle();
 
       if (error || !data) {
         setInstitutionError('Invalid Institution Code. Please check and try again.');
@@ -109,8 +111,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         return null;
       }
 
-      setInstitutionData({ id: data.id, name: data.name, campus: data.campus, code: data.code });
-      return data;
+      const verifiedInstitution = { id: data.id, name: data.name, campus: data.campus, code: data.code };
+      setInstitutionData(verifiedInstitution);
+      return verifiedInstitution;
     } catch (err) {
       setInstitutionError('Failed to validate institution code. Please try again.');
       setInstitutionData(null);
@@ -120,10 +123,44 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCurrentEmail(loginEmail);
-    setStep('success');
+    setAuthLoading(true);
+    setInstitutionError(null);
+
+    try {
+      const { error, profile } = await signIn(loginEmail.trim(), loginPassword);
+      if (error) {
+        alert(`Login failed: ${error.message}`);
+        return;
+      }
+
+      let loginInstitution: { id: string; name: string; campus: string; code: string } | null = null;
+      if (profile?.institution_id || profile?.institution_code) {
+        let query = supabase.from('institutions').select('id, name, campus, code');
+        query = profile.institution_id
+          ? query.eq('id', profile.institution_id)
+          : query.eq('code', (profile.institution_code || '').trim().toUpperCase());
+
+        const { data } = await query.maybeSingle();
+        if (data) {
+          loginInstitution = { id: data.id, name: data.name, campus: data.campus, code: data.code };
+          setInstitutionData(loginInstitution);
+        }
+      }
+
+      const nextPayload = {
+        studentName: profile?.full_name || '',
+        email: profile?.email || loginEmail.trim(),
+        code: loginInstitution?.code || profile?.institution_code || '',
+        institutionName: loginInstitution?.name,
+      };
+      setPortalPayload(nextPayload);
+      setCurrentEmail(loginEmail.trim());
+      setStep('success');
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
@@ -140,62 +177,98 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    setCurrentEmail(currentForm.universityEmail);
+    if (selectedRole === 'student') {
+      setStudentForm({ ...studentForm, institutionCode: institution.code });
+    } else if (selectedRole === 'faculty') {
+      setFacultyForm({ ...facultyForm, institutionCode: institution.code });
+    } else {
+      setGuestForm({ ...guestForm, institutionCode: institution.code });
+    }
 
-    // Store form data in user metadata for OTP verification
-    // This will be used in the verifyOtp call from AuthContext
-    localStorage.setItem('tempFormData', JSON.stringify({
-      ...currentForm,
-      role: selectedRole,
-    }));
+    setAuthLoading(true);
+    setCurrentEmail(currentForm.universityEmail.trim());
 
-    // Call signInWithOtp with role and additional data
-    signInWithOtp(currentForm.universityEmail, currentForm.fullName, selectedRole, currentForm.institutionCode, currentForm.phone)
-      .then(({ error }) => {
-        if (!error) {
-          // Advance to OTP verification
-          setStep('otp');
-          localStorage.removeItem('tempFormData');
-        }
-      });
+    const { error } = await signInWithOtp(
+      currentForm.universityEmail.trim(),
+      currentForm.fullName.trim(),
+      selectedRole,
+      institution.code,
+      currentForm.phone.trim(),
+      institution.id,
+      institution.name,
+      institution.campus
+    );
+
+    setAuthLoading(false);
+
+    if (error) {
+      alert(`Failed to send OTP: ${error.message}`);
+      return;
+    }
+
+    setOtpCode('');
+    setStep('otp');
   };
 
   const getExpectedOtpLength = (): number => {
     return 8;
   };
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const expectedLength = getExpectedOtpLength();
+    const cleanOtp = otpCode.trim();
     
-    if (otpCode.length !== expectedLength) {
-      const digitsWord = expectedLength === 1 ? 'digit' : 'digits';
+    if (!new RegExp(`^\\d{${expectedLength}}$`).test(cleanOtp)) {
       alert(`Please enter a valid ${expectedLength}-digit OTP code`);
       return;
     }
 
-    // Use the AuthContext's verifyOtp function which will create the profile
-    verifyOtp(currentEmail, otpCode)
-      .then(({ error }) => {
-        if (!error) {
-          setStep('success');
-          localStorage.removeItem('tempFormData');
-        } else {
-          alert(`OTP verification failed: ${error.message}`);
-        }
-      });
+    setAuthLoading(true);
+    const { error } = await verifyOtp(currentEmail, cleanOtp);
+    setAuthLoading(false);
+
+    if (error) {
+      alert(`OTP verification failed: ${error.message}`);
+      return;
+    }
+
+    const currentForm = getCurrentForm();
+    setPortalPayload({
+      studentName: currentForm.fullName || '',
+      email: currentEmail,
+      code: institutionData?.code || '',
+      institutionName: institutionData?.name,
+    });
+    setStep('success');
   };
 
-  const handleDemoStudentLogin = () => {
-    const demoData = {
-      studentName: '',
-      email: '',
-      code: '',
-    };
-    onClose();
-    if (onLoginSuccess) {
-      onLoginSuccess(demoData);
+  const handleResendOtp = async () => {
+    const currentForm = getCurrentForm();
+    if (!institutionData) {
+      setInstitutionError('Please validate a valid Institution Code before requesting OTP.');
+      return;
     }
+
+    setAuthLoading(true);
+    const { error } = await signInWithOtp(
+      currentEmail,
+      currentForm.fullName.trim(),
+      selectedRole,
+      institutionData.code,
+      currentForm.phone.trim(),
+      institutionData.id,
+      institutionData.name,
+      institutionData.campus
+    );
+    setAuthLoading(false);
+
+    if (error) {
+      alert(`Failed to resend OTP: ${error.message}`);
+      return;
+    }
+
+    alert('New OTP code re-sent to your university email.');
   };
 
   const handleReset = () => {
@@ -203,14 +276,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     onClose();
   };
 
-  const handleContinueToPortal = () => {
+  const handleContinueToPortalLive = () => {
     onClose();
     if (onLoginSuccess) {
-      const currentForm = getCurrentForm();
-      onLoginSuccess({
-        studentName: currentForm.fullName || '',
-        email: mode === 'login' ? (loginEmail || '') : (currentForm.universityEmail || ''),
-        code: currentForm.institutionCode || '—',
+      onLoginSuccess(portalPayload || {
+        studentName: getCurrentForm().fullName || '',
+        email: mode === 'login' ? (loginEmail || '') : (currentEmail || ''),
+        code: institutionData?.code || '',
         institutionName: institutionData?.name || undefined,
       });
     }
@@ -292,9 +364,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <button
                     type="submit"
+                    disabled={authLoading}
                     className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
                   >
-                    <span>Login</span>
+                    <span>{authLoading ? 'Logging in...' : 'Login'}</span>
                     <ArrowRight className="w-4 h-4 text-slate-950" />
                   </button>
 
@@ -538,9 +611,10 @@ placeholder="Enter your full name"
 
                   <button
                     type="submit"
+                    disabled={authLoading || institutionLoading}
                     className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md"
                   >
-                    <span>Proceed to OTP Email Verification</span>
+                    <span>{authLoading || institutionLoading ? 'Validating Institution Code...' : 'Proceed to OTP Email Verification'}</span>
                     <ArrowRight className="w-4 h-4 text-slate-950" />
                   </button>
                 </form>
@@ -558,7 +632,7 @@ placeholder="Enter your full name"
               </div>
               <h3 className="text-xl font-extrabold text-white">Verify Your Email OTP</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                We sent a {otpCode.length || 8}-digit security code to{' '}
+                We sent an 8-digit security code to{' '}
                 <strong className="text-emerald-400">{currentEmail || 'your email'}</strong>
               </p>
             </div>
@@ -573,7 +647,7 @@ placeholder="Enter your full name"
                   maxLength={getExpectedOtpLength()}
                   required
                   value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value)}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, getExpectedOtpLength()))}
                   className="w-full bg-slate-950 border border-emerald-500/60 focus:border-emerald-400 rounded-2xl py-3 text-center text-xl font-mono tracking-[0.5em] text-emerald-300 font-bold focus:outline-none shadow-inner"
                 />
               </div>
@@ -609,17 +683,19 @@ placeholder="Enter your full name"
 
               <button
                 type="submit"
+                disabled={authLoading}
                 className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
               >
                 <ShieldCheck className="w-4 h-4 text-slate-950" />
-                <span>Verify & Join Campus Portal</span>
+                <span>{authLoading ? 'Verifying OTP...' : 'Verify & Join Campus Portal'}</span>
               </button>
 
               <div className="text-center text-xs text-slate-400">
                 Didn't receive code?{' '}
                 <button
                   type="button"
-                  onClick={() => alert('New OTP code re-sent to your university email.')}
+                  onClick={handleResendOtp}
+                  disabled={authLoading}
                   className="text-emerald-400 font-bold hover:underline cursor-pointer"
                 >
                   Resend OTP
@@ -640,16 +716,16 @@ placeholder="Enter your full name"
                 {mode === 'login' ? 'Logged In Successfully!' : 'Email Verified & Account Joined!'}
               </h3>
               <p className="text-xs text-emerald-400 font-mono font-semibold">
-                Joined: {institutionData ? institutionData.name : 'Institution'}
-                {institutionData?.campus ? ` — ${institutionData.campus}` : ''}
-                ({getCurrentForm().institutionCode || '—'})
+                Joined: {portalPayload?.institutionName || institutionData?.name || 'Institution'}
+                {institutionData?.campus ? ` - ${institutionData.campus}` : ''}
+                ({portalPayload?.code || institutionData?.code || getCurrentForm().institutionCode || '-'})
               </p>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
               You now have access to Counter A, B, C & D menus, instant Razorpay checkout, and QR pickup lockers for your campus.
             </p>
             <button
-              onClick={handleContinueToPortal}
+              onClick={handleContinueToPortalLive}
               className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
             >
               <span>Launch Campus Student Portal</span>

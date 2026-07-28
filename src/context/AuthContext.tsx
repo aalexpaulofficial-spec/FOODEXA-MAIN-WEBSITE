@@ -57,6 +57,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     campusBlock: string | null;
     designation: string | null;
   } | null>(null);
+  const pendingOtpProfileRef = React.useRef<typeof pendingOtpProfile>(null);
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
@@ -98,6 +99,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
+  const setPendingRegistrationProfile = useCallback((value: typeof pendingOtpProfile) => {
+    pendingOtpProfileRef.current = value;
+    setPendingOtpProfile(value);
+  }, []);
+
   const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
     const safePayload = { ...payload };
     const ignoredColumns = new Set<string>();
@@ -134,7 +140,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const initAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       const remembered = localStorage.getItem('foodexa-remember-me') === 'true' || sessionStorage.getItem('foodexa-remember-me') === 'true';
-      if (session && !remembered) {
+      if (session && !remembered && !pendingOtpProfileRef.current) {
         await supabase.auth.signOut();
         setSession(null);
         setUser(null);
@@ -154,7 +160,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const remembered = localStorage.getItem('foodexa-remember-me') === 'true' || sessionStorage.getItem('foodexa-remember-me') === 'true';
-      if (session && !remembered) {
+      if (session && !remembered && !pendingOtpProfileRef.current) {
         await supabase.auth.signOut();
         setSession(null);
         setUser(null);
@@ -196,7 +202,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const signInWithOtp = async (email: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; }) => {
-    setPendingOtpProfile({
+    setRememberMeFlag(true);
+    setPendingRegistrationProfile({
       email: email.trim(),
       fullName: fullName.trim(),
       role,
@@ -278,29 +285,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let fetchedProfile: Profile | null = null;
     let fetchedInstitution: InstitutionData | null = null;
 
-    if (!error && authData?.user?.id) {
-      const userId = authData.user.id;
+    if (error) {
+      return { error: new Error(error.message), profile: null, institution: null };
+    }
 
-      const userData = authData.user.user_metadata || {};
-      const role = normalizeRole(pendingOtpProfile?.role || userData.role);
+    const { data: currentUserData, error: userError } = await supabase.auth.getUser();
+    if (userError || !currentUserData.user?.id) {
+      return { error: new Error(userError?.message || 'OTP verified, but no authenticated Supabase user was found.'), profile: null, institution: null };
+    }
+
+    const authUser = currentUserData.user;
+
+    if (authUser.id) {
+      const userId = authUser.id;
+
+      const pendingProfile = pendingOtpProfileRef.current || pendingOtpProfile;
+      const userData = authUser.user_metadata || authData.user?.user_metadata || {};
+      const role = normalizeRole(pendingProfile?.role || userData.role);
 
       if (!role) {
         return { error: new Error('Account role is missing. Please restart registration and choose a valid role.'), profile: null, institution: null };
       }
 
-      const fullName = pendingOtpProfile?.fullName || userData.full_name || null;
-      const institutionCode = pendingOtpProfile?.institutionCode || userData.institution_code || null;
-      const phone = pendingOtpProfile?.phone || userData.phone || null;
-      const institutionId = pendingOtpProfile?.institutionId || userData.institution_id || institutionData?.institution_id || null;
-      const department = pendingOtpProfile?.department || userData.department || null;
-      const semester = pendingOtpProfile?.semester || userData.semester || null;
-      const programme = pendingOtpProfile?.programme || userData.programme || null;
-      const campusBlock = pendingOtpProfile?.campusBlock || userData.campus_block || null;
-      const designation = pendingOtpProfile?.designation || userData.designation || null;
+      const fullName = pendingProfile?.fullName || userData.full_name || null;
+      const institutionCode = pendingProfile?.institutionCode || userData.institution_code || null;
+      const phone = pendingProfile?.phone || userData.phone || null;
+      const institutionId = pendingProfile?.institutionId || userData.institution_id || institutionData?.institution_id || null;
+      const department = pendingProfile?.department || userData.department || null;
+      const semester = pendingProfile?.semester || userData.semester || null;
+      const programme = pendingProfile?.programme || userData.programme || null;
+      const campusBlock = pendingProfile?.campusBlock || userData.campus_block || null;
+      const designation = pendingProfile?.designation || userData.designation || null;
 
       const { error: upsertError } = await upsertProfileSafely({
         user_id: userId,
-        email: authData.user.email || email,
+        email: authUser.email || email,
         full_name: fullName,
         phone,
         role,
@@ -320,7 +339,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       fetchedProfile = await fetchProfile(userId);
-      setPendingOtpProfile(null);
+      setPendingRegistrationProfile(null);
 
       if (institutionId) {
         const { data: instData } = await supabase

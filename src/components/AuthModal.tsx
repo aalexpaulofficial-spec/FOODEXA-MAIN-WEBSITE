@@ -160,10 +160,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       });
   };
 
+  const getExpectedOtpLength = (): number => {
+    return 8;
+  };
+
   const handleVerifyOtp = (e: React.FormEvent) => {
     e.preventDefault();
-    if (otpCode.length !== 8) {
-      alert('Please enter a valid 8-digit OTP code');
+    const expectedLength = getExpectedOtpLength();
+    
+    if (otpCode.length !== expectedLength) {
+      const digitsWord = expectedLength === 1 ? 'digit' : 'digits';
+      alert(`Please enter a valid ${expectedLength}-digit OTP code`);
       return;
     }
 
@@ -181,9 +188,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleDemoStudentLogin = () => {
     const demoData = {
-      studentName: 'Alex Paul',
-      email: 'alex.paul@christuniversity.in',
-      code: 'CHRKNG2026',
+      studentName: '',
+      email: '',
+      code: '',
     };
     onClose();
     if (onLoginSuccess) {
@@ -201,8 +208,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (onLoginSuccess) {
       const currentForm = getCurrentForm();
       onLoginSuccess({
-        studentName: currentForm.fullName || 'Alex Paul',
-        email: mode === 'login' ? (loginEmail || 'alex.paul@christuniversity.in') : (currentForm.universityEmail || 'alex.paul@christuniversity.in'),
+        studentName: currentForm.fullName || '',
+        email: mode === 'login' ? (loginEmail || '') : (currentForm.universityEmail || ''),
         code: currentForm.institutionCode || '—',
         institutionName: institutionData?.name || undefined,
       });
@@ -247,7 +254,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       required
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="e.g. alex@christuniversity.in"
+                      placeholder="Enter your university email"
                       className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
                     />
                   </div>
@@ -337,164 +344,164 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, fullName: e.target.value });
                         else setGuestForm({ ...guestForm, fullName: e.target.value });
                       }}
-                      placeholder="e.g. Alex Paul"
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                    />
-                  </div>
+placeholder="Enter your full name"
+                       className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                     />
+                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">University Email</label>
-                      <input
-                        type="email"
-                        required
-                        value={getCurrentForm().universityEmail}
-                        onChange={(e) => {
-                          if (selectedRole === 'student') setStudentForm({ ...studentForm, universityEmail: e.target.value });
-                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, universityEmail: e.target.value });
-                          else setGuestForm({ ...guestForm, universityEmail: e.target.value });
-                        }}
-                        placeholder="e.g. alex@christuniversity.in"
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Phone Number</label>
-                      <input
-                        type="tel"
-                        required
-                        value={getCurrentForm().phone}
-                        onChange={(e) => {
-                          if (selectedRole === 'student') setStudentForm({ ...studentForm, phone: e.target.value });
-                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, phone: e.target.value });
-                          else setGuestForm({ ...guestForm, phone: e.target.value });
-                        }}
-                        placeholder="+91 9876543210"
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
+                   <div className="grid grid-cols-2 gap-2">
+                     <div>
+                       <label className="text-xs font-semibold text-slate-300 mb-1 block">University Email</label>
+                       <input
+                         type="email"
+                         required
+                         value={getCurrentForm().universityEmail}
+                         onChange={(e) => {
+                           if (selectedRole === 'student') setStudentForm({ ...studentForm, universityEmail: e.target.value });
+                           else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, universityEmail: e.target.value });
+                           else setGuestForm({ ...guestForm, universityEmail: e.target.value });
+                         }}
+                         placeholder="Enter your university email"
+                         className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                       />
+                     </div>
+                     <div>
+                       <label className="text-xs font-semibold text-slate-300 mb-1 block">Phone Number</label>
+                       <input
+                         type="tel"
+                         required
+                         value={getCurrentForm().phone}
+                         onChange={(e) => {
+                           if (selectedRole === 'student') setStudentForm({ ...studentForm, phone: e.target.value });
+                           else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, phone: e.target.value });
+                           else setGuestForm({ ...guestForm, phone: e.target.value });
+                         }}
+                         placeholder="Enter your phone number"
+                         className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                       />
+                     </div>
+                   </div>
 
-                  {selectedRole === 'student' && (
-                    <>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Programme</label>
-                          <input
-                            type="text"
-                            required
-                            value={studentForm.programme}
-                            onChange={(e) => setStudentForm({ ...studentForm, programme: e.target.value })}
-                            placeholder="e.g. B.Tech Computer Science"
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
-                          <input
-                            type="text"
-                            required
-                            value={studentForm.institutionCode}
-                            onChange={(e) => setStudentForm({ ...studentForm, institutionCode: e.target.value })}
-                            placeholder="e.g. YAWEHH264881"
-                            className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
-                          />
-                        </div>
-                      </div>
+{selectedRole === 'student' && (
+                     <>
+                       <div className="grid grid-cols-2 gap-2">
+                         <div>
+                           <label className="text-xs font-semibold text-slate-300 mb-1 block">Programme</label>
+                           <input
+                             type="text"
+                             required
+                             value={studentForm.programme}
+                             onChange={(e) => setStudentForm({ ...studentForm, programme: e.target.value })}
+                             placeholder="Enter your programme"
+                             className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                           />
+                         </div>
+                         <div>
+                           <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
+                           <input
+                             type="text"
+                             required
+                             value={studentForm.institutionCode}
+                             onChange={(e) => setStudentForm({ ...studentForm, institutionCode: e.target.value })}
+                             placeholder="Enter your institution code"
+                             className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
+                           />
+                         </div>
+                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Department</label>
-                          <input
-                            type="text"
-                            required
-                            value={studentForm.department}
-                            onChange={(e) => setStudentForm({ ...studentForm, department: e.target.value })}
-                            placeholder="e.g. Computer Science"
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Semester</label>
-                          <input
-                            type="text"
-                            required
-                            value={studentForm.semester}
-                            onChange={(e) => setStudentForm({ ...studentForm, semester: e.target.value })}
-                            placeholder="e.g. 3"
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                          />
-                        </div>
-                      </div>
+                       <div className="grid grid-cols-2 gap-2">
+                         <div>
+                           <label className="text-xs font-semibold text-slate-300 mb-1 block">Department</label>
+                           <input
+                             type="text"
+                             required
+                             value={studentForm.department}
+                             onChange={(e) => setStudentForm({ ...studentForm, department: e.target.value })}
+                             placeholder="Enter your department"
+                             className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                           />
+                         </div>
+                         <div>
+                           <label className="text-xs font-semibold text-slate-300 mb-1 block">Semester</label>
+                           <input
+                             type="text"
+                             required
+                             value={studentForm.semester}
+                             onChange={(e) => setStudentForm({ ...studentForm, semester: e.target.value })}
+                             placeholder="Enter your semester"
+                             className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                           />
+                         </div>
+                       </div>
 
-                      <div>
-                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Campus Block</label>
-                        <input
-                          type="text"
-                          required
-                          value={studentForm.campusBlock}
-                          onChange={(e) => setStudentForm({ ...studentForm, campusBlock: e.target.value })}
-                          placeholder="e.g. Block A"
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                        />
-                      </div>
-                    </>
-                  )}
+                       <div>
+                         <label className="text-xs font-semibold text-slate-300 mb-1 block">Campus Block</label>
+                         <input
+                           type="text"
+                           required
+                           value={studentForm.campusBlock}
+                           onChange={(e) => setStudentForm({ ...studentForm, campusBlock: e.target.value })}
+                           placeholder="Enter your campus block"
+                           className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                         />
+                       </div>
+                     </>
+                   )}
 
-                  {selectedRole === 'faculty' && (
-                    <>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Department</label>
-                          <input
-                            type="text"
-                            required
-                            value={facultyForm.department}
-                            onChange={(e) => setFacultyForm({ ...facultyForm, department: e.target.value })}
-                            placeholder="e.g. Computer Science"
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Designation</label>
-                          <input
-                            type="text"
-                            required
-                            value={facultyForm.designation}
-                            onChange={(e) => setFacultyForm({ ...facultyForm, designation: e.target.value })}
-                            placeholder="e.g. Assistant Professor"
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                          />
-                        </div>
-                      </div>
+                   {selectedRole === 'faculty' && (
+                     <>
+                       <div className="grid grid-cols-2 gap-2">
+                         <div>
+                           <label className="text-xs font-semibold text-slate-300 mb-1 block">Department</label>
+                           <input
+                             type="text"
+                             required
+                             value={facultyForm.department}
+                             onChange={(e) => setFacultyForm({ ...facultyForm, department: e.target.value })}
+                             placeholder="Enter your department"
+                             className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                           />
+                         </div>
+                         <div>
+                           <label className="text-xs font-semibold text-slate-300 mb-1 block">Designation</label>
+                           <input
+                             type="text"
+                             required
+                             value={facultyForm.designation}
+                             onChange={(e) => setFacultyForm({ ...facultyForm, designation: e.target.value })}
+                             placeholder="Enter your designation"
+                             className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                           />
+                         </div>
+                       </div>
 
-                      <div>
-                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
-                        <input
-                          type="text"
-                          required
-                          value={facultyForm.institutionCode}
-                          onChange={(e) => setFacultyForm({ ...facultyForm, institutionCode: e.target.value })}
-                          placeholder="e.g. YAWEHH264881"
-                          className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
-                        />
-                      </div>
-                    </>
-                  )}
+                       <div>
+                         <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
+                         <input
+                           type="text"
+                           required
+                           value={facultyForm.institutionCode}
+                           onChange={(e) => setFacultyForm({ ...facultyForm, institutionCode: e.target.value })}
+                           placeholder="Enter your institution code"
+                           className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
+                         />
+                       </div>
+                     </>
+                   )}
 
-                  {selectedRole === 'guest' && (
-                    <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
-                      <input
-                        type="text"
-                        required
-                        value={guestForm.institutionCode}
-                        onChange={(e) => setGuestForm({ ...guestForm, institutionCode: e.target.value })}
-                        placeholder="e.g. YAWEHH264881"
-                        className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
-                      />
-                    </div>
-                  )}
+                   {selectedRole === 'guest' && (
+                     <div>
+                       <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
+                       <input
+                         type="text"
+                         required
+                         value={guestForm.institutionCode}
+                         onChange={(e) => setGuestForm({ ...guestForm, institutionCode: e.target.value })}
+                         placeholder="Enter your institution code"
+                         className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
+                       />
+                     </div>
+                   )}
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -551,19 +558,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
               <h3 className="text-xl font-extrabold text-white">Verify Your Email OTP</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                We sent an 8-digit security code to{' '}
-                <strong className="text-emerald-400">{currentEmail || 'alex.paul@christuniversity.in'}</strong>
+                We sent a {otpCode.length || 8}-digit security code to{' '}
+                <strong className="text-emerald-400">{currentEmail || 'your email'}</strong>
               </p>
             </div>
 
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 mb-1 block text-center">
-                  8-Digit Verification Code
+                  Verification Code
                 </label>
                 <input
                   type="text"
-                  maxLength={8}
+                  maxLength={getExpectedOtpLength()}
                   required
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value)}

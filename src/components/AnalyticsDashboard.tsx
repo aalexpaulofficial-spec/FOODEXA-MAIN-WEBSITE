@@ -1,57 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Sparkles, Clock, Activity, Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import React, { useState } from 'react';
+import { BarChart3, TrendingUp, Sparkles, Clock, ShieldCheck, Flame, Users, ChevronRight, Activity } from 'lucide-react';
 
 export const AnalyticsDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'traffic' | 'forecast' | 'dishes'>('traffic');
-  const [dashboardData, setDashboardData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchAnalytics = async () => {
-      setLoading(true);
-      try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const [{ count: totalOrders }, { data: recentOrders }, { data: counters }] = await Promise.all([
-          supabase.from('orders').select('*', { count: 'exact', head: true }),
-          supabase.from('orders').select('*').gte('created_at', today.toISOString()).order('created_at', { ascending: false }),
-          supabase.from('menu_items').select('counter')
-        ]);
-
-        const uniqueCounters = [...new Set((counters || []).map((c: any) => c.counter))];
-        const counterOrderCounts = (recentOrders || []).reduce((acc: any, o: any) => {
-          acc[o.counter] = (acc[o.counter] || 0) + 1;
-          return acc;
-        }, {});
-
-        const itemCounts: Record<string, { name: string; count: number; price: number }> = {};
-        (recentOrders || []).forEach((o: any) => {
-          (o.items || []).forEach((item: any) => {
-            const key = item.name;
-            if (!itemCounts[key]) itemCounts[key] = { name: item.name, count: 0, price: item.price || 0 };
-            itemCounts[key].count += item.quantity || 1;
-          });
-        });
-        const topDishes = Object.values(itemCounts).sort((a: any, b: any) => b.count - a.count).slice(0, 3);
-
-        setDashboardData({
-          totalOrders: totalOrders || 0,
-          todayOrders: recentOrders?.length || 0,
-          recentOrders: recentOrders || [],
-          counters: uniqueCounters,
-          counterOrderCounts,
-          topDishes
-        });
-      } catch (err) {
-        console.error('Error fetching analytics:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAnalytics();
-  }, []);
 
   return (
     <section id="analytics" className="py-24 bg-slate-950 relative border-t border-slate-900">
@@ -64,10 +15,10 @@ export const AnalyticsDashboard: React.FC = () => {
             <span>Campus Dining Command Center</span>
           </div>
           <h2 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
-            Real-Time Intelligence & <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">Live Analytics</span>
+            Real-Time Intelligence & <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">LX Predictive Analytics</span>
           </h2>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-            Live order volume, counter activity, and campus dining metrics from the FOODEXA database.
+            Monitor real-time cafeteria order volume, prep throughput, peak lunch rushes, and student satisfaction metrics from one centralized dashboard.
           </p>
         </div>
 
@@ -80,12 +31,13 @@ export const AnalyticsDashboard: React.FC = () => {
               <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  FOODEXA Live Command Center
+                  Stanford Main Campus • Live Command Center
                 </h3>
-                <p className="text-[11px] text-slate-400 font-mono">{loading ? 'Loading...' : `${dashboardData?.counters?.length || 0} Counters Active`}</p>
+                <p className="text-[11px] text-slate-400 font-mono">Sync Interval: 1.0s • 4 Dining Halls Active</p>
               </div>
             </div>
 
+            {/* View Selector Tabs */}
             <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
               <button
                 onClick={() => setActiveTab('traffic')}
@@ -98,6 +50,17 @@ export const AnalyticsDashboard: React.FC = () => {
                 Live Traffic
               </button>
               <button
+                onClick={() => setActiveTab('forecast')}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1 ${
+                  activeTab === 'forecast'
+                    ? 'bg-emerald-500 text-slate-950 font-bold'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Sparkles className="w-3 h-3" />
+                LX Forecast
+              </button>
+              <button
                 onClick={() => setActiveTab('dishes')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                   activeTab === 'dishes'
@@ -105,105 +68,164 @@ export const AnalyticsDashboard: React.FC = () => {
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Top Items
+                Top Dishes
               </button>
             </div>
           </div>
 
-          {loading ? (
-            <div className="py-16 text-center text-slate-400">
-              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-emerald-400" />
-              <span className="text-xs font-mono">Loading live analytics...</span>
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 py-6 border-b border-slate-800">
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
+              <div className="text-[10px] text-slate-400 font-mono uppercase">Orders Today</div>
+              <div className="text-2xl font-black text-white font-mono mt-1">4,892</div>
+              <div className="text-[10px] text-emerald-400 font-mono mt-1 flex items-center gap-1">
+                <TrendingUp className="w-3 h-3" /> +18.4% vs last Tuesday
+              </div>
             </div>
-          ) : (
-            <>
-              {/* Quick Metrics Bar */}
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 py-6 border-b border-slate-800">
-                <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
-                  <div className="text-[10px] text-slate-400 font-mono uppercase">Orders Today</div>
-                  <div className="text-2xl font-black text-white font-mono mt-1">{dashboardData?.todayOrders || 0}</div>
-                  <div className="text-[10px] text-slate-400 font-mono mt-1">Total: {dashboardData?.totalOrders || 0}</div>
-                </div>
 
-                <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
-                  <div className="text-[10px] text-slate-400 font-mono uppercase">Active Counters</div>
-                  <div className="text-2xl font-black text-emerald-400 font-mono mt-1">{dashboardData?.counters?.length || 0}</div>
-                  <div className="text-[10px] text-slate-400 font-mono mt-1">Campus dining stations</div>
-                </div>
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
+              <div className="text-[10px] text-slate-400 font-mono uppercase">Avg Prep Wait Time</div>
+              <div className="text-2xl font-black text-emerald-400 font-mono mt-1">3.1 mins</div>
+              <div className="text-[10px] text-emerald-400 font-mono mt-1">⚡ Down from 22 mins</div>
+            </div>
 
-                <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
-                  <div className="text-[10px] text-slate-400 font-mono uppercase">Recent Orders</div>
-                  <div className="text-2xl font-black text-teal-300 font-mono mt-1">{dashboardData?.recentOrders?.length || 0}</div>
-                  <div className="text-[10px] text-slate-400 font-mono mt-1">Since midnight</div>
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
+              <div className="text-[10px] text-slate-400 font-mono uppercase">LX AI Auto Matches</div>
+              <div className="text-2xl font-black text-teal-300 font-mono mt-1">89.2%</div>
+              <div className="text-[10px] text-slate-400 font-mono mt-1">Dietary & Budget Filtered</div>
+            </div>
+
+            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
+              <div className="text-[10px] text-slate-400 font-mono uppercase">Student Satisfaction</div>
+              <div className="text-2xl font-black text-indigo-400 font-mono mt-1">4.92 / 5.0</div>
+              <div className="text-[10px] text-indigo-400 font-mono mt-1">★ Based on 1,420 ratings</div>
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          <div className="pt-6">
+            {activeTab === 'traffic' && (
+              <div className="space-y-4">
+                <h4 className="text-xs font-mono text-slate-400 uppercase tracking-wider">
+                  Live Campus Cafeteria Load Heatmap
+                </h4>
+
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-slate-950 p-4 rounded-2xl border border-emerald-500/40 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-white">Science Quad Bistro</span>
+                      <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded-full font-mono">
+                        Optimal
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400">Wait: <strong className="text-emerald-400 font-mono">2 mins</strong></div>
+                    <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
+                      <div className="bg-emerald-400 h-full w-[25%]" />
+                    </div>
+                    <p className="text-[10px] text-slate-500">Capacity: 25% • Locker Pod 2 Active</p>
+                  </div>
+
+                  <div className="bg-slate-950 p-4 rounded-2xl border border-yellow-500/40 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-white">Main Library Cafe</span>
+                      <span className="text-[10px] bg-yellow-950 text-yellow-300 px-2 py-0.5 rounded-full font-mono">
+                        Medium
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400">Wait: <strong className="text-yellow-400 font-mono">5 mins</strong></div>
+                    <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
+                      <div className="bg-yellow-400 h-full w-[55%]" />
+                    </div>
+                    <p className="text-[10px] text-slate-500">Capacity: 55% • Express Barista Active</p>
+                  </div>
+
+                  <div className="bg-slate-950 p-4 rounded-2xl border border-red-500/40 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-white">North Student Union</span>
+                      <span className="text-[10px] bg-red-950 text-red-300 px-2 py-0.5 rounded-full font-mono">
+                        Peak Rush
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400">Walk-in: <strong className="text-red-400 font-mono">22 mins</strong></div>
+                    <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
+                      <div className="bg-red-400 h-full w-[92%]" />
+                    </div>
+                    <p className="text-[10px] text-emerald-400 font-mono">💡 LX Express Pickup: 3 mins!</p>
+                  </div>
+
+                  <div className="bg-slate-950 p-4 rounded-2xl border border-emerald-500/40 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-white">West Dorm Grill</span>
+                      <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded-full font-mono">
+                        Optimal
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400">Wait: <strong className="text-emerald-400 font-mono">4 mins</strong></div>
+                    <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
+                      <div className="bg-emerald-400 h-full w-[35%]" />
+                    </div>
+                    <p className="text-[10px] text-slate-500">Capacity: 35% • Dorm Delivery Pool</p>
+                  </div>
                 </div>
               </div>
+            )}
 
-              {/* Tab Content */}
-              <div className="pt-6">
-                {activeTab === 'traffic' && (
-                  <div className="space-y-4">
-                    <h4 className="text-xs font-mono text-slate-400 uppercase tracking-wider">
-                      Counter Load Distribution
-                    </h4>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {(dashboardData?.counters || []).map((counter: string) => {
-                        const count = dashboardData?.counterOrderCounts?.[counter] || 0;
-                        const maxCount = Math.max(...Object.values(dashboardData?.counterOrderCounts || { count: 1 }) as number[], 1);
-                        const pct = Math.round((count / maxCount) * 100);
-                        const isBusy = pct > 70;
-                        const isMedium = pct > 40 && pct <= 70;
-                        return (
-                          <div key={counter} className={`bg-slate-950 p-4 rounded-2xl border ${isBusy ? 'border-red-500/40' : isMedium ? 'border-yellow-500/40' : 'border-emerald-500/40'} space-y-2`}>
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs font-bold text-white">{counter}</span>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${isBusy ? 'bg-red-950 text-red-300' : isMedium ? 'bg-yellow-950 text-yellow-300' : 'bg-emerald-950 text-emerald-300'}`}>
-                                {count === 0 ? 'Inactive' : isBusy ? 'Busy' : isMedium ? 'Moderate' : 'Quiet'}
-                              </span>
-                            </div>
-                            <div className="text-xs text-slate-400">Orders today: <strong className="text-white font-mono">{count}</strong></div>
-                            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden">
-                              <div className={`h-full ${isBusy ? 'bg-red-400' : isMedium ? 'bg-yellow-400' : 'bg-emerald-400'}`} style={{ width: `${Math.max(pct, 5)}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {(!dashboardData?.counters || dashboardData.counters.length === 0) && (
-                        <div className="col-span-full text-center py-8 text-xs text-slate-500">
-                          No counter data available yet.
-                        </div>
-                      )}
-                    </div>
+            {activeTab === 'forecast' && (
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 flex items-start gap-3">
+                  <Sparkles className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-bold text-emerald-300 font-mono">LX AI Demand Forecast Summary</h4>
+                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                      "Physics 101 midterm ends at 12:15 PM near Science Quad. LX predicts an influx of +220 students requesting quick high-protein meals. Kitchen staff instructed to pre-portion 120 Grilled Chicken Quinoa Bowls."
+                    </p>
                   </div>
-                )}
-
-                {activeTab === 'dishes' && (
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-mono text-slate-400 uppercase tracking-wider">
-                      Top Ordered Items Today
-                    </h4>
-                    <div className="space-y-2 text-xs">
-                      {(dashboardData?.topDishes || []).map((dish: any, idx: number) => (
-                        <div key={dish.name} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="font-mono text-emerald-400 font-bold">#{idx + 1}</span>
-                            <div>
-                              <div className="font-bold text-white">{dish.name}</div>
-                            </div>
-                          </div>
-                          <span className="font-mono text-xs text-slate-300">{dish.count} ordered</span>
-                        </div>
-                      ))}
-                      {(!dashboardData?.topDishes || dashboardData.topDishes.length === 0) && (
-                        <div className="text-center py-8 text-xs text-slate-500">
-                          No orders placed yet today.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
-            </>
-          )}
+            )}
+
+            {activeTab === 'dishes' && (
+              <div className="space-y-3">
+                <h4 className="text-xs font-mono text-slate-400 uppercase tracking-wider">
+                  Top 3 Student Favorite Campus Dishes
+                </h4>
+                <div className="space-y-2 text-xs">
+                  <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-emerald-400 font-bold">#1</span>
+                      <div>
+                        <div className="font-bold text-white">Grilled Chicken Quinoa Bowl</div>
+                        <div className="text-[10px] text-slate-400">Science Quad Bistro • $7.80</div>
+                      </div>
+                    </div>
+                    <span className="font-mono text-xs text-slate-300">1,240 orders / wk</span>
+                  </div>
+
+                  <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-emerald-400 font-bold">#2</span>
+                      <div>
+                        <div className="font-bold text-white">Iced Oat Vanilla Matcha</div>
+                        <div className="text-[10px] text-slate-400">Library Artisan Roast • $4.50</div>
+                      </div>
+                    </div>
+                    <span className="font-mono text-xs text-slate-300">980 orders / wk</span>
+                  </div>
+
+                  <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-emerald-400 font-bold">#3</span>
+                      <div>
+                        <div className="font-bold text-white">Spicy Sesame Tofu Tan Tan</div>
+                        <div className="text-[10px] text-slate-400">North Union Noodle House • $5.99</div>
+                      </div>
+                    </div>
+                    <span className="font-mono text-xs text-slate-300">850 orders / wk</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
         </div>
 

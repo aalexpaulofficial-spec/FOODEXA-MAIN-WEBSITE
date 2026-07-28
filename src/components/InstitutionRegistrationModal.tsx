@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, CheckCircle2, ArrowRight, Building2, Loader2 } from 'lucide-react';
+import { X, CheckCircle2, ArrowRight, Building2, Sparkles, ShieldCheck, Loader2 } from 'lucide-react';
 import type { InstitutionRequestInsert } from '../types';
 import { supabase } from '../lib/supabase';
 
@@ -31,15 +31,15 @@ const INITIAL_FORM: InstitutionFormData = {
   campus: '',
   city: '',
   state: '',
-  country: 'India',
+  country: '',
   institutionEmail: '',
   contactPerson: '',
   role: 'Institution Administrator',
   phoneNumber: '',
   institutionWebsite: '',
-  studentPopulation: '5,000–10,000',
-  foodCourtsCount: '2',
-  vendorsCount: '8',
+  studentPopulation: '',
+  foodCourtsCount: '',
+  vendorsCount: '',
   message: '',
   termsAgreed: false,
 };
@@ -109,7 +109,6 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
     }
   };
 
-
   const handleClose = () => {
     setSubmitted(false);
     setError(null);
@@ -141,7 +140,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                 Register Your Institution
               </h3>
               <p className="text-xs text-slate-300">
-                Digitize your entire campus food court ecosystem with Foodexa AI &amp; Smart Pickups.
+                Digitize your entire campus food court ecosystem with Foodexa AI & Smart Pickups.
               </p>
             </div>
 
@@ -153,20 +152,20 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
             )}
 
             <div className="grid sm:grid-cols-2 gap-4">
-              {/* Institution Name */}
-              <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                  Institution Name <span className="text-emerald-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.institutionName}
-                  onChange={(e) => setFormData({ ...formData, institutionName: e.target.value })}
-                  placeholder="e.g. Christ (Deemed to be University)"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
-                />
-              </div>
+               {/* Institution Name */}
+               <div>
+                 <label className="text-xs font-semibold text-slate-300 mb-1 block">
+                   Institution Name <span className="text-emerald-400">*</span>
+                 </label>
+                 <input
+                   type="text"
+                   required
+                   value={formData.institutionName}
+                   onChange={(e) => setFormData({ ...formData, institutionName: e.target.value })}
+                   placeholder="Enter your institution name"
+                   className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                 />
+               </div>
 
               {/* Campus */}
               <div>
@@ -178,7 +177,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   required
                   value={formData.campus}
                   onChange={(e) => setFormData({ ...formData, campus: e.target.value })}
-                  placeholder="e.g. Kengeri Campus"
+                  placeholder="Enter campus name"
                   className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
                 />
               </div>
@@ -193,7 +192,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   required
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  placeholder="e.g. Bengaluru"
+                  placeholder="Enter city name"
                   className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
                 />
               </div>
@@ -208,7 +207,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   required
                   value={formData.state}
                   onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                  placeholder="e.g. Karnataka"
+                  placeholder="Enter state name"
                   className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
                 />
               </div>
@@ -223,7 +222,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   required
                   value={formData.country}
                   onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                  placeholder="India"
+                  placeholder="Enter country name"
                   className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
                 />
               </div>
@@ -238,7 +237,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   required
                   value={formData.institutionEmail}
                   onChange={(e) => setFormData({ ...formData, institutionEmail: e.target.value })}
-                  placeholder="e.g. admin@christuniversity.in"
+                  placeholder="Enter institution email"
                   className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
                 />
               </div>
@@ -253,7 +252,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   required
                   value={formData.contactPerson}
                   onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
-                  placeholder="e.g. Alex Paul"
+                  placeholder="Enter contact person name"
                   className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
                 />
               </div>
@@ -287,7 +286,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   required
                   value={formData.phoneNumber}
                   onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                  placeholder="e.g. +91 98765 43210"
+                  placeholder="Enter phone number"
                   className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
                 />
               </div>
@@ -301,7 +300,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   type="url"
                   value={formData.institutionWebsite}
                   onChange={(e) => setFormData({ ...formData, institutionWebsite: e.target.value })}
-                  placeholder="e.g. https://christuniversity.in"
+                  placeholder="Enter institution website URL"
                   className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
                 />
               </div>
@@ -381,7 +380,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                 className="w-4 h-4 rounded bg-slate-950 border-slate-800 text-emerald-400 focus:ring-emerald-500"
               />
               <label htmlFor="agree-terms" className="text-xs text-slate-300 cursor-pointer">
-                I agree to Foodexa Terms &amp; Conditions and Privacy Policy.
+                I agree to Foodexa Terms & Conditions and Privacy Policy.
               </label>
             </div>
 
@@ -412,7 +411,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
             </div>
             <h3 className="text-2xl font-extrabold text-white">Registration Submitted Successfully.</h3>
             <p className="text-xs text-slate-300 leading-relaxed max-w-md mx-auto">
-              Our team will review your institution and contact you at <strong className="text-emerald-400">{formData.institutionEmail}</strong> to configure your customized campus portal.
+              Our team will review your institution and contact you shortly to configure your customized campus portal.
             </p>
             <button
               onClick={handleClose}

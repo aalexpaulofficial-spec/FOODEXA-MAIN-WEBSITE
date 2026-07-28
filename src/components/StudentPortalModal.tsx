@@ -240,8 +240,8 @@ const MENU_ITEMS: FoodItem[] = [
 export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   isOpen,
   onClose,
-  studentName = 'Alex Paul',
-  universityEmail = 'alex.paul@christuniversity.in',
+  studentName,
+  universityEmail,
   institutionCode,
   institutionName,
 }) => {
@@ -264,67 +264,38 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
 
   // Active Order State
-  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>({
-    orderId: 'FDX-849201',
-    counter: 'Counter B',
-    lockerNumber: 'Locker #04',
-    items: [
-      { name: 'Cheese Veg Burger', quantity: 1, price: 110 },
-      { name: 'Loaded Peri Peri Fries', quantity: 1, price: 90 },
-    ],
-    total: 200,
-    qrCode: `FOODEXA-FDX-849201-${institutionCode || ''}`,
-    status: 'Preparing',
-    createdAt: Date.now() - 25000, // 25s ago
-    timeRemaining: '5 mins',
-    queuePosition: 2,
-    role: 'student',
-  });
+  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
 
   // Past Orders History
-  const [orderHistory, setOrderHistory] = useState<ActiveOrder[]>([
-    {
-      orderId: 'FDX-710492',
-      counter: 'Counter A',
-      lockerNumber: 'Locker #09',
-      items: [{ name: 'Special Chicken Biryani', quantity: 1, price: 160 }],
-      total: 160,
-      qrCode: 'FOODEXA-FDX-710492-CHRKNG2026',
-      status: 'Collected',
-      createdAt: Date.now() - 86400000,
-      timeRemaining: '0 mins',
-      queuePosition: 0,
-      role: 'student',
-    }
-  ]);
+  const [orderHistory, setOrderHistory] = useState<ActiveOrder[]>([]);
 
-  // Notifications
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: 'n1',
-      title: 'Counter B Ready for Pickup',
-      message: 'Order #FDX-849201 is currently being prepared at Counter B (Locker #04).',
-      time: '10 mins ago',
-      type: 'order',
-      read: false,
-    },
-    {
-      id: 'n2',
-      title: 'Exam Special 20% OFF Offer',
-      message: 'Use coupon EXAM20 at Counter B Fast Food to get 20% flat discount!',
-      time: '1 hour ago',
-      type: 'offer',
-      read: true,
-    },
-    {
-      id: 'n3',
-      title: 'New QR Pod Lockers Installed',
-      message: '30 new contact-free QR pickup lockers are now active at Block 3 Dining Hall.',
-      time: '1 day ago',
-      type: 'announcement',
-      read: true,
-    }
-  ]);
+   // Notifications
+   const [notifications, setNotifications] = useState<NotificationItem[]>([
+     {
+       id: 'n1',
+       title: 'Counter B Ready for Pickup',
+       message: 'Your order is currently being prepared at Counter B (Locker #04).',
+       time: '10 mins ago',
+       type: 'order',
+       read: false,
+     },
+     {
+       id: 'n2',
+       title: 'Exam Special 20% OFF Offer',
+       message: 'Use coupon EXAM20 at Counter B Fast Food to get 20% flat discount!',
+       time: '1 hour ago',
+       type: 'offer',
+       read: true,
+     },
+     {
+       id: 'n3',
+       title: 'New QR Pod Lockers Installed',
+       message: '30 new contact-free QR pickup lockers are now active at Block 3 Dining Hall.',
+       time: '1 day ago',
+       type: 'announcement',
+       read: true,
+     }
+   ]);
 
   // Cancellation Timer calculation
   const [secondsSinceOrder, setSecondsSinceOrder] = useState<number>(30);

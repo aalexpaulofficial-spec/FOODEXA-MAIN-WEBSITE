@@ -61,13 +61,13 @@ export interface FaqItem {
 }
 
 export interface DemoFormData {
-  fullName: string;
-  email: string;
-  role: 'University Admin' | 'Dining Director' | 'Campus Vendor / Franchise' | 'Student Rep';
-  institutionName: string;
-  campusStudentCount: string;
-  preferredDate: string;
-  notes: string;
+  fullName?: string;
+  email?: string;
+  role?: 'Institution Administrator' | 'Campus Director' | 'Food Court Manager' | 'Student Government';
+  institutionName?: string;
+  campusStudentCount?: string;
+  preferredDate?: string;
+  notes?: string;
 }
 
 export interface InstitutionRequestInsert {

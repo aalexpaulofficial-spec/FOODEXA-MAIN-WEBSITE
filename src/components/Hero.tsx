@@ -66,7 +66,7 @@ export const Hero: React.FC<HeroProps> = ({
               Order food, skip long lines, and manage campus dining with AI voice ordering, instant QR pickup, and real-time kitchen tracking.
             </p>
 
-            {/* CTA Buttons Row - 1. Register Your Institution, 2. Student Login, 3. Institution Login, 4. Book Demo, 5. Talk to LX, 6. Download App */}
+            {/* CTA Buttons Row - 1. Register Your Institution, 2. Create Your Account, 3. Student Login, 4. Institution Login, 5. Book Demo, 6. Talk to LX, 7. Download App */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3">
               
               {/* 1. Primary CTA: Register Your Institution */}
@@ -92,13 +92,13 @@ export const Hero: React.FC<HeroProps> = ({
               {/* 3. Student Login */}
               <button
                 onClick={onOpenLogin}
-                className="px-5 py-3.5 rounded-2xl bg-slate-900 border border-slate-700 hover:border-emerald-500/80 text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-md hover:bg-slate-800/80 cursor-pointer"
+                className="px-5 py-3.5 rounded-2xl bg-slate-900 border border-emerald-500/40 hover:border-emerald-400 text-emerald-300 hover:text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
               >
                 <Lock className="w-4 h-4 text-emerald-400" />
                 <span>Student Login</span>
               </button>
 
-              {/* 3. Institution Login */}
+              {/* 4. Institution Login */}
               <a
                 href="https://portal.foodexa.com"
                 target="_blank"
@@ -110,7 +110,7 @@ export const Hero: React.FC<HeroProps> = ({
                 <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
               </a>
 
-              {/* 4. Book Demo */}
+              {/* 5. Book Demo */}
               <button
                 onClick={onOpenBookDemo}
                 className="px-5 py-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
@@ -118,7 +118,7 @@ export const Hero: React.FC<HeroProps> = ({
                 <span>Book Demo</span>
               </button>
 
-              {/* 5. Talk to LX */}
+              {/* 6. Talk to LX */}
               <button
                 onClick={onOpenVoiceModal || onOpenLxDrawer}
                 className="px-5 py-3.5 rounded-2xl bg-slate-950 border border-emerald-500/40 hover:border-emerald-400 text-emerald-300 hover:text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
@@ -127,7 +127,7 @@ export const Hero: React.FC<HeroProps> = ({
                 <span>Talk to LX</span>
               </button>
 
-              {/* 6. Download App */}
+              {/* 7. Download App */}
               <button
                 onClick={onOpenDownload}
                 className="px-5 py-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
@@ -364,21 +364,7 @@ export const Hero: React.FC<HeroProps> = ({
 
         </div>
 
-        {/* TRUSTED UNIVERSITIES SECTION */}
-        <div className="mt-16 pt-8 border-t border-slate-800/80 text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-400 uppercase tracking-widest">
-            <span>TRUSTED & DESIGNED FOR CAMPUS DINING</span>
-          </div>
 
-          <div className="max-w-xl mx-auto bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-2 shadow-lg">
-            <h3 className="text-base font-bold text-white tracking-tight">
-              CHRIST (Deemed to be University)
-            </h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Kengeri Campus, Bengaluru • Official campus food court digitization partner powering instant QR pickups and LX AI dining recommendations.
-            </p>
-          </div>
-        </div>
 
       </div>
     </section>

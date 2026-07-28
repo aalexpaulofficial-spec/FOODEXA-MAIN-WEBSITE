@@ -2,13 +2,15 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { supabase } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 
+type UserRole = 'student' | 'faculty' | 'guest';
+
 export interface Profile {
   user_id: string;
   email: string;
   full_name: string | null;
   phone: string | null;
   institution_id: string | null;
-  role: 'student' | 'faculty' | 'guest';
+  role: UserRole | null;
   created_at: string;
   institution_code: string | null;
 }
@@ -31,16 +33,21 @@ interface AuthContextType {
   institutionData: InstitutionData | null;
   setInstitutionData: (data: InstitutionData | null) => void;
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, fullName: string, role: 'student' | 'faculty' | 'guest', institutionCode?: string) => Promise<{ error: Error | null }>;
-  signInWithOtp: (email: string, fullName: string, role: 'student' | 'faculty' | 'guest', institutionCode?: string, phone?: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
+  signUp: (email: string, password: string, fullName: string, role: UserRole, institutionCode?: string) => Promise<{ error: Error | null }>;
+  signInWithOtp: (email: string, fullName: string, role: UserRole, institutionCode?: string, phone?: string) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  clearAllSessionData: () => void;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const normalizeRole = (value: unknown): UserRole | null => {
+  return value === 'student' || value === 'faculty' || value === 'guest' ? value : null;
+};
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -48,8 +55,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [institutionData, setInstitutionData] = useState<InstitutionData | null>(null);
+  const [pendingOtpProfile, setPendingOtpProfile] = useState<{
+    email: string;
+    fullName: string;
+    role: UserRole;
+    institutionCode: string | null;
+    institutionId: string | null;
+    phone: string | null;
+  } | null>(null);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string): Promise<Profile | null> => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -59,15 +74,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (error && error.code !== 'PGRST116') {
         console.error('[Auth] Profile fetch error:', error);
-        return;
+        return null;
       }
 
       if (data) {
-        setProfile(data as Profile);
+        const fetchedProfile = data as Profile;
+        setProfile(fetchedProfile);
+        return fetchedProfile;
       }
     } catch (err) {
       console.error('[Auth] Profile fetch exception:', err);
     }
+
+    setProfile(null);
+    return null;
   };
 
   const refreshProfile = async () => {
@@ -105,11 +125,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error ? new Error(error.message) : null };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      return {
+        error: new Error(error.message),
+        session: data.session,
+        user: data.user,
+        profile: null,
+      };
+    }
+
+    const liveProfile = data.user?.id ? await fetchProfile(data.user.id) : null;
+    return { 
+      error: null,
+      session: data.session, 
+      user: data.user,
+      profile: liveProfile,
+    };
   };
 
-  const signUp = async (email: string, password: string, fullName: string, role: 'student' | 'faculty' | 'guest', institutionCode?: string) => {
+  const signUp = async (email: string, password: string, fullName: string, role: UserRole, institutionCode?: string) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -124,16 +159,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { error: error ? new Error(error.message) : null };
   };
 
-  const signInWithOtp = async (email: string, fullName: string, role: 'student' | 'faculty' | 'guest', institutionCode?: string, phone?: string) => {
+  const signInWithOtp = async (email: string, fullName: string, role: UserRole, institutionCode?: string, phone?: string) => {
+    setPendingOtpProfile({
+      email: email.trim(),
+      fullName: fullName.trim(),
+      role,
+      institutionCode: institutionCode?.trim() || institutionData?.institution_code || null,
+      institutionId: institutionData?.institution_id || null,
+      phone: phone?.trim() || null,
+    });
+
     const { error } = await supabase.auth.signInWithOtp({
-      email,
+      email: email.trim(),
       options: {
         shouldCreateUser: true,
         data: {
-          full_name: fullName,
+          full_name: fullName.trim(),
           role,
-          institution_code: institutionCode,
-          phone,
+          institution_code: institutionCode?.trim() || institutionData?.institution_code,
+          institution_id: institutionData?.institution_id,
+          phone: phone?.trim() || null,
         },
       },
     });
@@ -188,11 +233,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const userId = authData.user.id;
       
       const userData = authData.user.user_metadata || {};
-      const fullName = userData.full_name || null;
-      const role = userData.role as 'student' | 'faculty' | 'guest' || 'guest';
-      const institutionCode = userData.institution_code || null;
-      const phone = userData.phone || null;
-      const institutionId = institutionData?.institution_id || null;
+      const role = normalizeRole(pendingOtpProfile?.role || userData.role);
+
+      if (!role) {
+        return { error: new Error('Account role is missing. Please restart registration and choose Student, Faculty, or Guest.') };
+      }
+      
+      const fullName = pendingOtpProfile?.fullName || userData.full_name || null;
+      const institutionCode = pendingOtpProfile?.institutionCode || userData.institution_code || null;
+      const phone = pendingOtpProfile?.phone || userData.phone || null;
+      const institutionId = pendingOtpProfile?.institutionId || userData.institution_id || institutionData?.institution_id || null;
       
       await supabase
         .from('profiles')
@@ -211,6 +261,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
       
       await fetchProfile(userId);
+      setPendingOtpProfile(null);
       
       if (institutionId) {
         const { data: instData } = await supabase
@@ -248,35 +299,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             institution_code: instData.institution_code,
           });
         }
-      } else if (institutionCode) {
-        const { data: instData } = await supabase
-          .from('institutions')
-          .select('id, name, campus, city, state, country, institution_code')
-          .ilike('institution_code', institutionCode)
-          .single();
-        
-        if (instData) {
-          setInstitutionData({
-            institution_id: instData.id,
-            institution_name: instData.name,
-            campus: instData.campus || '',
-            city: instData.city || '',
-            state: instData.state || '',
-            country: instData.country || '',
-            institution_code: instData.institution_code,
-          });
-        }
       }
     }
     
     return { error: error ? new Error(error.message) : null };
   };
 
+  const clearAllSessionData = () => {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key !== 'foodexa-theme-preference') {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+    
+    sessionStorage.clear();
+  };
+
   const signOut = async () => {
+    clearAllSessionData();
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
     setProfile(null);
+    setInstitutionData(null);
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
@@ -312,6 +360,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       signInWithOtp,
       verifyOtp,
       signOut,
+      clearAllSessionData,
       updateProfile,
       refreshProfile,
     }}>

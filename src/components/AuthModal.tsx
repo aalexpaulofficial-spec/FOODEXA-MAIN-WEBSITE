@@ -18,7 +18,7 @@ interface AuthModalProps {
   onClose: () => void;
   initialMode?: 'login' | 'create';
   selectedRole?: 'student' | 'faculty' | 'guest';
-  onLoginSuccess?: (institutionData: InstitutionData | null, userId?: string) => void;
+  onLoginSuccess?: (institutionData: InstitutionData | null) => void;
 }
 
 // ── Password strength helper ────────────────────────────────────────────────
@@ -42,9 +42,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   selectedRole = 'student',
   onLoginSuccess,
 }) => {
-  const { signInWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData } = useAuth();
+  const { signInWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signOut, signIn, user } = useAuth();
   const [mode, setMode] = useState<'login' | 'create'>(initialMode);
-  const [step, setStep] = useState<'form' | 'otp' | 'success'>('form');
+  const [step, setStep] = useState<'form' | 'institution' | 'otp' | 'success'>('form');
+  const [loginUserId, setLoginUserId] = useState<string | null>(null);
 
   // Login state
   const [loginEmail, setLoginEmail] = useState('');
@@ -117,13 +118,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-useEffect(() => {
+ useEffect(() => {
     if (!isOpen) return;
     setMode(initialMode);
     setStep('form');
     setCurrentEmail('');
     setOtpCode('');
     setValidatedInstitution(null);
+    setVerifiedInstitution(null);
     setInstitutionError(null);
   }, [initialMode, isOpen]);
 
@@ -168,15 +170,85 @@ useEffect(() => {
     });
   };
 
+  const handleLoginInstitutionVerify = async () => {
+    const code = validatedInstitution?.institution_code || institutionData?.institution_code || '';
+    if (!code) {
+      setInstitutionError('Please enter a valid Institution Code.');
+      return;
+    }
+    
+    const userId = loginUserId || user?.id;
+    
+    if (validatedInstitution && userId) {
+      await supabase
+        .from('profiles')
+        .upsert({
+          user_id: userId,
+          institution_id: validatedInstitution.institution_id,
+          institution_code: validatedInstitution.institution_code,
+        }, { onConflict: 'user_id' });
+      
+      setVerifiedInstitution(validatedInstitution);
+    }
+    
+    setStep('success');
+  };
+
   if (!isOpen) return null;
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentEmail(loginEmail);
-    if (institutionData?.institution_name) {
-      setVerifiedInstitution(institutionData);
+    setInstitutionError(null);
+    
+    const { error, session: authSession, user: authUser } = await signIn(loginEmail, loginPassword);
+    
+    if (error) {
+      alert(`Login failed: ${error.message}`);
+      return;
     }
-    setStep('success');
+    
+    if (!authUser) {
+      alert('Login failed: No user returned from authentication.');
+      return;
+    }
+    
+    setLoginUserId(authUser.id);
+    
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', authUser.id)
+      .single();
+    
+    if (profileError && profileError.code !== 'PGRST116') {
+      console.error('[Auth] Profile fetch after login error:', profileError);
+    }
+    
+    if (profileData?.institution_id) {
+      const { data: instData } = await supabase
+        .from('institutions')
+        .select('id, name, campus, city, state, country, institution_code')
+        .eq('id', profileData.institution_id)
+        .single();
+      
+      if (instData) {
+        const verified: InstitutionData = {
+          institution_id: instData.id,
+          institution_name: instData.name,
+          campus: instData.campus || '',
+          city: instData.city || '',
+          state: instData.state || '',
+          country: instData.country || '',
+          institution_code: instData.institution_code,
+        };
+        setVerifiedInstitution(verified);
+        setInstitutionData(verified);
+      }
+      setStep('success');
+    } else {
+      setStep('institution');
+    }
   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
@@ -204,24 +276,15 @@ useEffect(() => {
     setInstitutionData(validatedInst);
     setValidatingCode(false);
 
-    // Store form data in user metadata for OTP verification
-    // This will be used in the verifyOtp call from AuthContext
-    localStorage.setItem('tempFormData', JSON.stringify({
-      ...currentForm,
-      role: selectedRole,
-    }));
-    
-    // Call signInWithOtp with role and additional data
     signInWithOtp(currentForm.universityEmail, currentForm.fullName, selectedRole, currentForm.institutionCode, currentForm.phone)
       .then(({ error }) => {
         if (!error) {
-          // Advance to OTP verification
           setStep('otp');
-          localStorage.removeItem('tempFormData');
+        } else {
+          alert(`Registration failed: ${error.message}`);
         }
       });
   };
-
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otpCode.length < 8) {
@@ -237,7 +300,6 @@ useEffect(() => {
           if (fetchedInst && fetchedInst.institution_name) {
             setVerifiedInstitution(fetchedInst);
             setStep('success');
-            localStorage.removeItem('tempFormData');
           } else {
             const instId = institutionData?.institution_id;
             const instCode = institutionData?.institution_code || validatedInstitution?.institution_code;
@@ -262,7 +324,6 @@ useEffect(() => {
                 setVerifiedInstitution(inst);
                 setInstitutionData(inst);
                 setStep('success');
-                localStorage.removeItem('tempFormData');
               } else {
                 alert('Unable to verify institution details. Please try again.');
               }
@@ -286,7 +347,6 @@ useEffect(() => {
                 setVerifiedInstitution(inst);
                 setInstitutionData(inst);
                 setStep('success');
-                localStorage.removeItem('tempFormData');
               } else {
                 alert('Unable to verify institution details. Please try again.');
               }
@@ -309,12 +369,14 @@ useEffect(() => {
     setMode(initialMode);
     onClose();
     setVerifiedInstitution(null);
+    setValidatedInstitution(null);
+    setLoginUserId(null);
   };
 
   const handleContinueToPortal = () => {
     onClose();
     if (onLoginSuccess) {
-      onLoginSuccess(verifiedInstitution, undefined);
+      onLoginSuccess(verifiedInstitution);
     }
   };
 
@@ -753,6 +815,57 @@ useEffect(() => {
                 </form>
               </div>
             )}
+          </div>
+        )}
+
+        {/* INSTITUTION CODE VERIFICATION STEP (for login when profile lacks institution_id) */}
+        {step === 'institution' && (
+          <div className="space-y-5">
+            <div className="space-y-1 text-center">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                <Building2 className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-extrabold text-white">Verify Institution Code</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Please enter your Institution Code to access the campus portal.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={validatedInstitution?.institution_code || institutionData?.institution_code || ''}
+                    onChange={(e) => handleInstitutionCodeChange(e.target.value)}
+                    onBlur={(e) => handleInstitutionCodeBlur(e.target.value)}
+                    placeholder="e.g. YAWEHH264881"
+                    className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+                  />
+                  {validatingCode && (
+                    <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  )}
+                </div>
+                {institutionError && !validatingCode && (
+                  <p className="text-[10px] text-red-400 mt-1">✗ {institutionError}</p>
+                )}
+                {validatedInstitution && !institutionError && !validatingCode && (
+                  <p className="text-[10px] text-emerald-400 mt-1">✓ Institution Code Verified: {validatedInstitution.institution_name}</p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleLoginInstitutionVerify}
+                disabled={!validatedInstitution}
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-extrabold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <span>Continue to Campus Portal</span>
+                <ArrowRight className="w-4 h-4 text-slate-950" />
+              </button>
+            </div>
           </div>
         )}
 

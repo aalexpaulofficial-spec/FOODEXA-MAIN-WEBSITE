@@ -81,7 +81,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, refreshProfile, signOut } = useAuth();
   const [institutionName, setInstitutionName] = useState<string>('');
   const [institutionCode, setInstitutionCode] = useState<string>('');
   const [campus, setCampus] = useState<string>('');
@@ -1074,7 +1074,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
 
               {/* Logout Button */}
               <button
-                onClick={onClose}
+                onClick={async () => {
+                  await signOut();
+                  onClose();
+                }}
                 className="w-full py-3 rounded-2xl bg-slate-950 hover:bg-slate-900 border border-red-500/30 text-red-400 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
                 <LogOut className="w-4 h-4" />

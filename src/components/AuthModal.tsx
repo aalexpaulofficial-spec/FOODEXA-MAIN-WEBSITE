@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   X, Lock, User, ArrowRight, CheckCircle2, ExternalLink,
-  ShieldCheck, KeyRound, Building2, Eye, EyeOff,
+  ShieldCheck, KeyRound, Building2, Eye, EyeOff, Loader2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -63,6 +63,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [otpError, setOtpError]       = useState<string | null>(null);
   const [resendTimer, setResendTimer] = useState(0);
   const resendIntervalRef             = useRef<ReturnType<typeof setInterval> | null>(null);
+  const institutionCodeTimerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Shared flow state ────────────────────────────────────────────────────
   const [currentEmail, setCurrentEmail] = useState('');
@@ -137,13 +138,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   useEffect(() => () => stopResendTimer(), []);
+  useEffect(() => () => {
+    if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
+  }, []);
 
   if (!isOpen) return null;
 
   // ── Institution validation ────────────────────────────────────────────────
   const validateInstitutionCode = async (code: string) => {
-    if (!code?.trim()) {
+    const trimmed = code?.trim() || '';
+    if (!trimmed) {
       setInstitutionError('Institution Code is required.');
+      setInstitutionData(null);
       return null;
     }
     setInstitutionLoading(true);
@@ -152,7 +158,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const { data, error } = await supabase
         .from('institutions')
         .select('id, name, campus, code')
-        .eq('code', code.trim().toUpperCase())
+        .ilike('code', trimmed)
         .maybeSingle();
 
       if (error || !data) {
@@ -164,12 +170,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setInstitutionData(inst);
       return inst;
     } catch {
-      setInstitutionError('Failed to validate institution code. Please try again.');
+      setInstitutionError('Invalid Institution Code. Please check and try again.');
       setInstitutionData(null);
       return null;
     } finally {
       setInstitutionLoading(false);
     }
+  };
+
+  const handleInstitutionCodeChange = (code: string) => {
+    if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
+    setInstitutionData(null);
+    setInstitutionError(null);
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    institutionCodeTimerRef.current = setTimeout(() => {
+      validateInstitutionCode(trimmed);
+    }, 500);
+  };
+
+  const handleInstitutionCodeBlur = (code: string) => {
+    if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
+    validateInstitutionCode(code.trim());
   };
 
   // ── LOGIN ────────────────────────────────────────────────────────────────
@@ -188,7 +210,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         let q = supabase.from('institutions').select('id, name, campus, code');
         q = profile.institution_id
           ? q.eq('id', profile.institution_id)
-          : q.eq('code', (profile.institution_code || '').trim().toUpperCase());
+          : q.ilike('code', (profile.institution_code || '').trim());
         const { data } = await q.maybeSingle();
         if (data) {
           loginInstitution = { id: data.id, name: data.name, campus: data.campus, code: data.code };
@@ -668,14 +690,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         </div>
                         <div>
                           <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
-                          <input
-                            type="text"
-                            required
-                            value={studentForm.institutionCode}
-                            onChange={(e) => setStudentForm({ ...studentForm, institutionCode: e.target.value.toUpperCase() })}
-                            placeholder="e.g. CHRIST01"
-                            className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
-                          />
+                          <div className="relative">
+                            <input
+                              type="text"
+                              required
+                              value={studentForm.institutionCode}
+                              onChange={(e) => {
+                                setStudentForm({ ...studentForm, institutionCode: e.target.value });
+                                handleInstitutionCodeChange(e.target.value);
+                              }}
+                              onBlur={() => handleInstitutionCodeBlur(studentForm.institutionCode)}
+                              placeholder="e.g. CHRIST01"
+                              className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+                            />
+                            {institutionLoading && (
+                              <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            )}
+                          </div>
+                          {institutionError && (
+                            <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code. Please check and try again.</p>
+                          )}
+                          {institutionData && !institutionError && !institutionLoading && (
+                            <p className="text-[10px] text-emerald-400 mt-1">✓ Institution Code Verified</p>
+                          )}
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
@@ -745,14 +782,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </div>
                       <div>
                         <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
-                        <input
-                          type="text"
-                          required
-                          value={facultyForm.institutionCode}
-                          onChange={(e) => setFacultyForm({ ...facultyForm, institutionCode: e.target.value.toUpperCase() })}
-                          placeholder="e.g. CHRIST01"
-                          className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
-                        />
+                        <div className="relative">
+                          <input
+                            type="text"
+                            required
+                            value={facultyForm.institutionCode}
+                            onChange={(e) => {
+                              setFacultyForm({ ...facultyForm, institutionCode: e.target.value });
+                              handleInstitutionCodeChange(e.target.value);
+                            }}
+                            onBlur={() => handleInstitutionCodeBlur(facultyForm.institutionCode)}
+                            placeholder="e.g. CHRIST01"
+                            className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+                          />
+                          {institutionLoading && (
+                            <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          )}
+                        </div>
+                        {institutionError && (
+                          <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code. Please check and try again.</p>
+                        )}
+                        {institutionData && !institutionError && !institutionLoading && (
+                          <p className="text-[10px] text-emerald-400 mt-1">✓ Institution Code Verified</p>
+                        )}
                       </div>
                     </>
                   )}
@@ -761,23 +813,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   {selectedRole === 'guest' && (
                     <div>
                       <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
-                      <input
-                        type="text"
-                        required
-                        value={guestForm.institutionCode}
-                        onChange={(e) => setGuestForm({ ...guestForm, institutionCode: e.target.value.toUpperCase() })}
-                        placeholder="e.g. CHRIST01"
-                        className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none"
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          required
+                          value={guestForm.institutionCode}
+                          onChange={(e) => {
+                            setGuestForm({ ...guestForm, institutionCode: e.target.value });
+                            handleInstitutionCodeChange(e.target.value);
+                          }}
+                          onBlur={() => handleInstitutionCodeBlur(guestForm.institutionCode)}
+                          placeholder="e.g. CHRIST01"
+                          className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+                        />
+                        {institutionLoading && (
+                          <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        )}
+                      </div>
+                      {institutionError && (
+                        <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code. Please check and try again.</p>
+                      )}
+                      {institutionData && !institutionError && !institutionLoading && (
+                        <p className="text-[10px] text-emerald-400 mt-1">✓ Institution Code Verified</p>
+                      )}
                     </div>
                   )}
 
-                  {/* Institution name preview after validation error */}
-                  {institutionError && (
-                    <div className="p-3 bg-red-950/40 border border-red-500/40 rounded-xl text-[11px] text-red-300">
-                      {institutionError}
-                    </div>
-                  )}
                   {institutionData && (
                     <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl flex items-center gap-2 text-[11px] text-emerald-300">
                       <Building2 className="w-3.5 h-3.5 shrink-0" />
@@ -792,7 +853,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <button
                     type="submit"
-                    disabled={authLoading || institutionLoading || (!!regConfirm && regPassword !== regConfirm)}
+                    disabled={authLoading || institutionLoading || (!!regConfirm && regPassword !== regConfirm) || !institutionData}
                     className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <span>

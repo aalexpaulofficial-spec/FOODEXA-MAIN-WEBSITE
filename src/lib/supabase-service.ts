@@ -19,7 +19,7 @@ import type {
   InstitutionData,
   UserRole,
 } from '../types';
-import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 const ORDER_STATUS_FLOW: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready', 'completed'];
 
@@ -374,50 +374,120 @@ export async function fetchLiveStats(): Promise<{ value: string; label: string }
 // ==================== REALTIME SUBSCRIPTIONS ====================
 export type RealtimeCallback<T> = (payload: RealtimePostgresChangesPayload<T>) => void;
 
+type RealtimeRegistration = {
+  table: string;
+  filter?: string;
+  callback: RealtimeCallback<any>;
+};
+
+type ManagedRealtimeSubscription = {
+  channel: RealtimeChannel;
+  retryTimer: ReturnType<typeof setTimeout> | null;
+  active: boolean;
+};
+
+const realtimeSubscriptions = new Map<string, ManagedRealtimeSubscription>();
+let realtimeSubscriptionId = 0;
+
+function cleanupRealtimeSubscription(key: string) {
+  const existing = realtimeSubscriptions.get(key);
+  if (!existing) return;
+  existing.active = false;
+  if (existing.retryTimer) clearTimeout(existing.retryTimer);
+  realtimeSubscriptions.delete(key);
+  try {
+    supabase.removeChannel(existing.channel);
+  } catch {
+  }
+}
+
+function subscribeToRealtime(key: string, registrations: RealtimeRegistration[]) {
+  const subscriptionKey = `${key}:${++realtimeSubscriptionId}`;
+
+  let managed: ManagedRealtimeSubscription | null = null;
+
+  const connect = () => {
+    if (managed && !managed.active) return;
+
+    try {
+      const channel = supabase.channel(subscriptionKey);
+
+      registrations.forEach((registration) => {
+        channel.on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: registration.table,
+            filter: registration.filter,
+          },
+          (payload) => {
+            try {
+              registration.callback(payload);
+            } catch {
+            }
+          }
+        );
+      });
+
+      managed = { channel, retryTimer: null, active: true };
+      realtimeSubscriptions.set(subscriptionKey, managed);
+
+      channel.subscribe((status) => {
+        if (!managed?.active) return;
+        if (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT' && status !== 'CLOSED') return;
+
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+        }
+
+        managed.retryTimer = setTimeout(() => {
+          if (managed?.active && realtimeSubscriptions.get(subscriptionKey) === managed) {
+            connect();
+          }
+        }, 5000);
+      });
+    } catch {
+      managed = { channel: supabase.channel(`${subscriptionKey}-idle`), retryTimer: null, active: true };
+      realtimeSubscriptions.set(subscriptionKey, managed);
+      managed.retryTimer = setTimeout(() => {
+        if (managed?.active && realtimeSubscriptions.get(subscriptionKey) === managed) {
+          connect();
+        }
+      }, 5000);
+    }
+  };
+
+  connect();
+
+  return () => cleanupRealtimeSubscription(subscriptionKey);
+}
+
 export function subscribeOrders(
   callback: RealtimeCallback<any>,
   filter?: { user_id?: string; institution_id?: string }
 ) {
-  const channel = supabase.channel('orders-realtime');
-  let subscription: any = channel.on(
-    'postgres_changes',
-    {
-      event: '*',
-      schema: 'public',
-      table: 'orders',
-      filter: filter?.user_id ? `user_id=eq.${filter.user_id}` : filter?.institution_id ? `institution_id=eq.${filter.institution_id}` : undefined,
-    },
-    callback
-  );
-  channel.subscribe();
-  return () => { supabase.removeChannel(channel); };
+  const realtimeFilter = filter?.user_id ? `user_id=eq.${filter.user_id}` : filter?.institution_id ? `institution_id=eq.${filter.institution_id}` : undefined;
+  const key = `orders-realtime:${realtimeFilter || 'all'}`;
+  return subscribeToRealtime(key, [{ table: 'orders', filter: realtimeFilter, callback }]);
 }
 
 export function subscribeMenuItems(callback: RealtimeCallback<any>) {
-  const channel = supabase.channel('menu-items-realtime');
-  channel.on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items' }, callback);
-  channel.subscribe();
-  return () => { supabase.removeChannel(channel); };
+  return subscribeToRealtime('menu-items-realtime', [{ table: 'menu_items', callback }]);
 }
 
 export function subscribeAnnouncements(callback: RealtimeCallback<any>) {
-  const channel = supabase.channel('announcements-realtime');
-  channel.on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, callback);
-  channel.on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, callback);
-  channel.subscribe();
-  return () => { supabase.removeChannel(channel); };
+  return subscribeToRealtime('announcements-realtime', [
+    { table: 'announcements', callback },
+    { table: 'notifications', callback },
+  ]);
 }
 
 export function subscribeBanners(callback: RealtimeCallback<any>) {
-  const channel = supabase.channel('banners-realtime');
-  channel.on('postgres_changes', { event: '*', schema: 'public', table: 'banners' }, callback);
-  channel.subscribe();
-  return () => { supabase.removeChannel(channel); };
+  return subscribeToRealtime('banners-realtime', [{ table: 'banners', callback }]);
 }
 
 export function subscribeMenuCategories(callback: RealtimeCallback<any>) {
-  const channel = supabase.channel('menu-categories-realtime');
-  channel.on('postgres_changes', { event: '*', schema: 'public', table: 'menu_categories' }, callback);
-  channel.subscribe();
-  return () => { supabase.removeChannel(channel); };
+  return subscribeToRealtime('menu-categories-realtime', [{ table: 'menu_categories', callback }]);
 }

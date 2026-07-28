@@ -21,6 +21,20 @@ interface AuthModalProps {
   onLoginSuccess?: (institutionData: InstitutionData | null, userId?: string) => void;
 }
 
+// ── Password strength helper ────────────────────────────────────────────────
+function getPasswordStrength(pw: string): { score: number; label: string; color: string } {
+  let score = 0;
+  if (pw.length >= 8)  score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  if (score <= 1) return { score, label: 'Weak', color: 'bg-red-500' };
+  if (score <= 2) return { score, label: 'Medium', color: 'bg-yellow-400' };
+  if (score <= 3) return { score, label: 'Strong', color: 'bg-emerald-400' };
+  return { score, label: 'Very Strong', color: 'bg-emerald-500' };
+}
+
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
@@ -49,6 +63,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [institutionError, setInstitutionError] = useState<string | null>(null);
   const [verifiedInstitution, setVerifiedInstitution] = useState<InstitutionData | null>(null);
   const institutionCodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Registration password visibility
+  const [showRegPw, setShowRegPw] = useState(false);
+  const [showRegConfirm, setShowRegConfirm] = useState(false);
 
   // Create Student Account state
   const [studentForm, setStudentForm] = useState({
@@ -204,7 +222,7 @@ useEffect(() => {
       });
   };
 
-const handleVerifyOtp = async (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otpCode.length < 8) {
       alert('Please enter a valid 8-digit OTP code');
@@ -641,53 +659,97 @@ const handleVerifyOtp = async (e: React.FormEvent) => {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-xs font-semibold text-slate-300 mb-1 block">Password</label>
-                      <input
-                        type="password"
-                        required
-                        value={getCurrentForm().password}
-                        onChange={(e) => {
-                          if (selectedRole === 'student') setStudentForm({ ...studentForm, password: e.target.value });
-                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, password: e.target.value });
-                          else setGuestForm({ ...guestForm, password: e.target.value });
-                        }}
-                        placeholder="••••••••"
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showRegPw ? 'text' : 'password'}
+                          required
+                          value={getCurrentForm().password}
+                          onChange={(e) => {
+                            if (selectedRole === 'student') setStudentForm({ ...studentForm, password: e.target.value });
+                            else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, password: e.target.value });
+                            else setGuestForm({ ...guestForm, password: e.target.value });
+                          }}
+                          placeholder="Min. 8 characters"
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 pr-9 text-xs text-white placeholder-slate-500 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowRegPw(!showRegPw)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                        >
+                          {showRegPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      {getCurrentForm().password && (() => {
+                        const pwStrength = getPasswordStrength(getCurrentForm().password);
+                        return (
+                          <div className="mt-1.5 space-y-1">
+                            <div className="flex gap-0.5">
+                              {[1, 2, 3, 4, 5].map((i) => (
+                                <div
+                                  key={i}
+                                  className={`h-1 flex-1 rounded-full transition-all ${i <= pwStrength.score ? pwStrength.color : 'bg-slate-800'}`}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-[10px] text-slate-400">{pwStrength.label}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-slate-300 mb-1 block">Confirm Password</label>
-                      <input
-                        type="password"
-                        required
-                        value={getCurrentForm().confirmPassword}
-                        onChange={(e) => {
-                          if (selectedRole === 'student') setStudentForm({ ...studentForm, confirmPassword: e.target.value });
-                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, confirmPassword: e.target.value });
-                          else setGuestForm({ ...guestForm, confirmPassword: e.target.value });
-                        }}
-                        placeholder="••••••••"
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showRegConfirm ? 'text' : 'password'}
+                          required
+                          value={getCurrentForm().confirmPassword}
+                          onChange={(e) => {
+                            if (selectedRole === 'student') setStudentForm({ ...studentForm, confirmPassword: e.target.value });
+                            else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, confirmPassword: e.target.value });
+                            else setGuestForm({ ...guestForm, confirmPassword: e.target.value });
+                          }}
+                          placeholder="Re-enter password"
+                          className={`w-full bg-slate-950 border focus:outline-none rounded-xl px-3 py-2 pr-9 text-xs text-white placeholder-slate-500 ${
+                            getCurrentForm().confirmPassword && getCurrentForm().password !== getCurrentForm().confirmPassword
+                              ? 'border-red-500/60 focus:border-red-500'
+                              : 'border-slate-800 focus:border-emerald-500'
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowRegConfirm(!showRegConfirm)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                        >
+                          {showRegConfirm ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      {getCurrentForm().confirmPassword && getCurrentForm().password !== getCurrentForm().confirmPassword && (
+                        <p className="text-[10px] text-red-400 mt-1">✗ Passwords Do Not Match</p>
+                      )}
+                      {getCurrentForm().confirmPassword && getCurrentForm().password === getCurrentForm().confirmPassword && (
+                        <p className="text-[10px] text-emerald-400 mt-1">✓ Passwords Match</p>
+                      )}
                     </div>
                   </div>
 
-<button
-                     type="submit"
-                     disabled={validatingCode || !validatedInstitution}
-                     className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
-                   >
-                     {validatingCode ? (
-                       <>
-                         <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                         <span>Validating Institution Code…</span>
-                       </>
-                     ) : (
-                       <>
-                         <span>Proceed to OTP Email Verification</span>
-                         <ArrowRight className="w-4 h-4 text-slate-950" />
-                       </>
-                     )}
-                   </button>
+                  <button
+                    type="submit"
+                    disabled={validatingCode || !validatedInstitution || (getCurrentForm().confirmPassword && getCurrentForm().password !== getCurrentForm().confirmPassword) || getPasswordStrength(getCurrentForm().password).score < 2}
+                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {validatingCode ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                        <span>Validating & Sending OTP...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Send OTP & Verify Email</span>
+                        <ArrowRight className="w-4 h-4 text-slate-950" />
+                      </>
+                    )}
+                  </button>
                 </form>
               </div>
             )}

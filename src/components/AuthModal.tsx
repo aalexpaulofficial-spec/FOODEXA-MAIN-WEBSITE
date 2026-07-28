@@ -22,11 +22,10 @@ function getPasswordStrength(pw: string): { score: number; label: string; color:
   if (/[A-Z]/.test(pw)) score++;
   if (/[0-9]/.test(pw)) score++;
   if (/[^A-Za-z0-9]/.test(pw)) score++;
-  if (score <= 1) return { score, label: 'Weak',      color: 'bg-red-500' };
-  if (score <= 2) return { score, label: 'Fair',      color: 'bg-amber-500' };
-  if (score <= 3) return { score, label: 'Good',      color: 'bg-yellow-400' };
-  if (score <= 4) return { score, label: 'Strong',    color: 'bg-emerald-400' };
-  return               { score, label: 'Very Strong', color: 'bg-emerald-400' };
+  if (score <= 1) return { score, label: 'Weak', color: 'bg-red-500' };
+  if (score <= 2) return { score, label: 'Medium', color: 'bg-yellow-400' };
+  if (score <= 3) return { score, label: 'Strong', color: 'bg-emerald-400' };
+  return { score, label: 'Very Strong', color: 'bg-emerald-500' };
 }
 
 const OTP_LENGTH = 8;
@@ -157,20 +156,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       const { data, error } = await supabase
         .from('institutions')
-        .select('id, name, campus, code')
-        .ilike('code', trimmed)
+        .select('id, institution_name, campus, institution_code, status')
+        .ilike('institution_code', trimmed)
+        .eq('status', 'active')
         .maybeSingle();
 
-      if (error || !data) {
+      if (error) {
+        setInstitutionError('Unable to verify Institution Code. Please try again.');
+        setInstitutionData(null);
+        return null;
+      }
+      if (!data) {
         setInstitutionError('Invalid Institution Code. Please check and try again.');
         setInstitutionData(null);
         return null;
       }
-      const inst = { id: data.id, name: data.name, campus: data.campus, code: data.code };
+      const inst = { id: data.id, name: data.institution_name, campus: data.campus, code: data.institution_code };
       setInstitutionData(inst);
       return inst;
     } catch {
-      setInstitutionError('Invalid Institution Code. Please check and try again.');
+      setInstitutionError('Unable to verify Institution Code. Please try again.');
       setInstitutionData(null);
       return null;
     } finally {
@@ -207,13 +212,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
       let loginInstitution: typeof institutionData = null;
       if (profile?.institution_id || profile?.institution_code) {
-        let q = supabase.from('institutions').select('id, name, campus, code');
+        let q = supabase.from('institutions').select('id, institution_name, campus, institution_code');
         q = profile.institution_id
           ? q.eq('id', profile.institution_id)
-          : q.ilike('code', (profile.institution_code || '').trim());
+          : q.ilike('institution_code', (profile.institution_code || '').trim());
         const { data } = await q.maybeSingle();
         if (data) {
-          loginInstitution = { id: data.id, name: data.name, campus: data.campus, code: data.code };
+          loginInstitution = { id: data.id, name: data.institution_name, campus: data.campus, code: data.institution_code };
           setInstitutionData(loginInstitution);
         }
       }
@@ -664,12 +669,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           {showRegConfirm ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                         </button>
                       </div>
-                      {regConfirm && regPassword !== regConfirm && (
-                        <p className="text-[10px] text-red-400 mt-1">Passwords don't match</p>
-                      )}
-                      {regConfirm && regPassword === regConfirm && (
-                        <p className="text-[10px] text-emerald-400 mt-1">✓ Passwords match</p>
-                      )}
+                       {regConfirm && regPassword !== regConfirm && (
+                         <p className="text-[10px] text-red-400 mt-1">✗ Passwords Do Not Match</p>
+                       )}
+                       {regConfirm && regPassword === regConfirm && (
+                         <p className="text-[10px] text-emerald-400 mt-1">✓ Passwords Match</p>
+                       )}
                     </div>
                   </div>
 
@@ -853,7 +858,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <button
                     type="submit"
-                    disabled={authLoading || institutionLoading || (!!regConfirm && regPassword !== regConfirm) || !institutionData}
+                    disabled={authLoading || institutionLoading || (!!regConfirm && regPassword !== regConfirm) || !institutionData || pwStrength.score < 2}
                     className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <span>

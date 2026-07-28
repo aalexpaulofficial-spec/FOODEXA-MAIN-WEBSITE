@@ -330,11 +330,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
           try {
             const { data } = await supabase
               .from('institutions')
-              .select('id, name, campus, code')
-              .eq('code', code.trim().toUpperCase())
-              .single();
+              .select('id, institution_name, campus, institution_code')
+              .ilike('institution_code', code.trim())
+              .maybeSingle();
             if (data) {
-              setInstitutionData({ id: data.id, name: data.name, campus: data.campus, code: data.code });
+              setInstitutionData({ id: data.id, name: data.institution_name, campus: data.campus, code: data.institution_code });
             }
           } catch {
             // silently fail, fall back to props or placeholders

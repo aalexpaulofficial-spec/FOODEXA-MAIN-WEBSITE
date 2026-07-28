@@ -150,10 +150,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .from('institutions')
         .select('*')
         .ilike('institution_code', trimmed)
+        .eq('status', 'active')
         .maybeSingle();
 
-      if (error || !data) {
-        return { error: 'Invalid Institution Code', data: null };
+      if (error) {
+        return { error: 'Unable to verify Institution Code. Please try again.', data: null };
+      }
+      if (!data) {
+        return { error: 'Invalid Institution Code. Please check and try again.', data: null };
       }
 
       return {
@@ -169,7 +173,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } as InstitutionData,
       };
     } catch (err) {
-      return { error: 'Invalid Institution Code', data: null };
+      return { error: 'Unable to verify Institution Code. Please try again.', data: null };
     }
   };
 

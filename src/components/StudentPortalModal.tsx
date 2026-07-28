@@ -5,8 +5,14 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { formatINR, formatDateTime, subscribeOrders, subscribeMenuItems, subscribeAnnouncements, placeOrder } from '../lib/supabase-service';
+import { formatINR, formatDateTime, subscribeOrders, subscribeMenuItems, subscribeAnnouncements, placeOrder, createRazorpayOrder, verifyRazorpayPayment } from '../lib/supabase-service';
 import type { MenuItem, Order, OrderStatus, NotificationItem, UserRole } from '../types';
+
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 interface StudentPortalModalProps { isOpen: boolean; onClose: () => void; }
 type PortalTab = 'home' | 'menu' | 'orders' | 'announcements' | 'profile';
@@ -231,18 +237,132 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     if (!liveRole) { setError('Profile role missing.'); return; }
     if (!cart.length) return;
     setSubmittingOrder(true); setError(null);
-    const result = await placeOrder({
-      user_id: user.id, email: profile.email, role: liveRole,
-      institution_id: profile.institution_id, institution_code: profile.institution_code,
-      counter: firstItemCounter,
-      items: cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.price })),
-      total_amount: cartTotal,
-    });
-    setSubmittingOrder(false);
-    if (result.error) { setError(result.error); return; }
-    if (result.data) setOrders((prev) => [result.data!, ...prev]);
-    setCart([]);
-    setActiveTab('orders');
+
+    try {
+      // Step 1: Create a temporary order ID for Razorpay receipt
+      const tempOrderId = `FDX-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+
+      // Step 2: Call backend to create Razorpay order
+      const razorpayResult = await createRazorpayOrder({
+        amount: cartTotal,
+        currency: 'INR',
+        user_id: user.id,
+        email: profile.email,
+        phone: profile.phone || undefined,
+        name: profile.full_name || undefined,
+        institution_id: profile.institution_id || undefined,
+        order_id: tempOrderId,
+        counter: firstItemCounter,
+      });
+
+      if (!razorpayResult.success || !razorpayResult.order_id) {
+        setError(razorpayResult.error || 'Failed to initialize payment. Please try again.');
+        setSubmittingOrder(false);
+        return;
+      }
+
+      // Step 3: Launch Razorpay Checkout
+      const razorpayKeyId = razorpayResult.razorpay_key_id;
+      if (!razorpayKeyId) {
+        setError('Payment configuration error. Please contact support.');
+        setSubmittingOrder(false);
+        return;
+      }
+
+      const options = {
+        key: razorpayKeyId,
+        amount: razorpayResult.amount,
+        currency: razorpayResult.currency || 'INR',
+        name: 'FOODEXA',
+        description: `Campus Order - ${firstItemCounter}`,
+        order_id: razorpayResult.order_id,
+        handler: async function (response: any) {
+          // Step 4: Payment successful - verify signature on backend
+          const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = response;
+
+          try {
+            const verifyResult = await verifyRazorpayPayment({
+              razorpay_order_id,
+              razorpay_payment_id,
+              razorpay_signature,
+              user_id: user.id,
+              order_id: tempOrderId,
+            });
+
+            if (!verifyResult.success) {
+              setError(verifyResult.error || 'Payment verification failed. Please contact support.');
+              setSubmittingOrder(false);
+              return;
+            }
+
+            // Step 5: Payment verified - create the order in Supabase
+            const orderResult = await placeOrder({
+              user_id: user.id,
+              email: profile.email,
+              role: liveRole,
+              institution_id: profile.institution_id,
+              institution_code: profile.institution_code,
+              counter: firstItemCounter,
+              items: cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.price })),
+              total_amount: cartTotal,
+              razorpay_order_id,
+              razorpay_payment_id,
+              razorpay_signature,
+            });
+
+            if (orderResult.error) {
+              setError(`Payment verified but order creation failed: ${orderResult.error}`);
+              setSubmittingOrder(false);
+              return;
+            }
+
+            if (orderResult.data) setOrders((prev) => [orderResult.data!, ...prev]);
+            setCart([]);
+            setActiveTab('orders');
+            setSubmittingOrder(false);
+
+          } catch (verifyErr: any) {
+            console.error('Payment verification error:', verifyErr);
+            setError('Payment completed but verification failed. Contact support with Payment ID: ' + razorpay_payment_id);
+            setSubmittingOrder(false);
+          }
+        },
+        prefill: {
+          name: profile.full_name || '',
+          email: profile.email || '',
+          contact: profile.phone || '',
+        },
+        notes: {
+          institution_id: profile.institution_id || '',
+          order_id: tempOrderId,
+          counter: firstItemCounter,
+        },
+        theme: {
+          color: '#34d399',
+        },
+        modal: {
+          ondismiss: function () {
+            setSubmittingOrder(false);
+            setError('Payment was cancelled. Your order has not been placed.');
+          },
+        },
+      };
+
+      const razorpay = new window.Razorpay(options);
+
+      razorpay.on('payment.failed', function (response: any) {
+        const errorMsg = response?.error?.description || response?.error?.message || 'Payment failed. Please try again.';
+        setError(`Payment failed: ${errorMsg}`);
+        setSubmittingOrder(false);
+      });
+
+      razorpay.open();
+
+    } catch (err: any) {
+      console.error('Order initiation error:', err);
+      setError(err?.message || 'Failed to initiate payment. Please try again.');
+      setSubmittingOrder(false);
+    }
   };
 
   const tabs: { id: PortalTab; label: string; icon: React.ElementType; badge?: string }[] = [
@@ -385,7 +505,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                         <div className="mt-5 border-t border-slate-800 pt-4">
                           <div className="flex items-center justify-between text-sm"><span className="font-bold text-slate-300">Total</span><span className="font-black text-emerald-300">{formatINR(cartTotal)}</span></div>
                           <button onClick={handlePlaceOrder} disabled={!cart.length || submittingOrder} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 py-3 text-xs font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-50">
-                            {submittingOrder ? <Loader2 className="w-4 h-4 animate-spin text-slate-950" /> : <CreditCard className="w-4 h-4 text-slate-950" />}Place order
+                            {submittingOrder ? <Loader2 className="w-4 h-4 animate-spin text-slate-950" /> : <CreditCard className="w-4 h-4 text-slate-950" />}Proceed to Payment
                           </button>
                         </div>
                       </aside>

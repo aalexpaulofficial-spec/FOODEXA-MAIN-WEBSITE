@@ -123,7 +123,48 @@ ALTER TABLE public.menu_categories ADD COLUMN IF NOT EXISTS institution_id UUID 
 ALTER TABLE public.menu_categories ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
 ALTER TABLE public.menu_categories ADD COLUMN IF NOT EXISTS "order" INTEGER DEFAULT 0;
 
--- 11. Enable Realtime for all tables
+-- 11. PAYMENTS: Razorpay payment records
+CREATE TABLE IF NOT EXISTS public.payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  institution_id UUID REFERENCES public.institutions(id) ON DELETE SET NULL,
+  order_id TEXT NOT NULL,
+  razorpay_order_id TEXT NOT NULL,
+  razorpay_payment_id TEXT,
+  razorpay_signature TEXT,
+  amount NUMERIC(10,2) NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'INR',
+  payment_method TEXT,
+  payment_status TEXT NOT NULL DEFAULT 'created',
+  razorpay_status TEXT,
+  customer_email TEXT,
+  customer_phone TEXT,
+  customer_name TEXT,
+  transaction_time TIMESTAMPTZ,
+  webhook_verified BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_razorpay_order ON public.payments(razorpay_order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_user ON public.payments(user_id);
+CREATE INDEX IF NOT EXISTS idx_payments_order ON public.payments(order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON public.payments(payment_status);
+
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.payments;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- 12. Add Razorpay columns to orders table
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS razorpay_order_id TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS razorpay_payment_id TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS razorpay_signature TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_method TEXT;
+
+-- 13. Enable Realtime for all tables
 DO $$
 DECLARE
   tables TEXT[] := ARRAY['orders', 'order_items', 'menu_items', 'menu_categories', 'notifications', 'announcements', 'banners', 'pricing_plans', 'faq_items', 'platform_features', 'hero_stats', 'partner_universities'];

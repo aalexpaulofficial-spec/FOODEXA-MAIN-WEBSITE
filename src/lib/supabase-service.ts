@@ -212,10 +212,15 @@ export async function placeOrder(params: {
   counter: string;
   items: { id: string; name: string; quantity: number; price: number }[];
   total_amount: number;
+  razorpay_order_id?: string;
+  razorpay_payment_id?: string;
+  razorpay_signature?: string;
+  payment_method?: string;
 }): Promise<{ data: Order | null; error: string | null }> {
   const orderId = `FDX-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
   const pickupCode = `PC-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-  const payload = {
+  const isPaid = Boolean(params.razorpay_payment_id && params.razorpay_signature);
+  const payload: Record<string, any> = {
     user_id: params.user_id,
     email: params.email,
     role: params.role,
@@ -225,17 +230,82 @@ export async function placeOrder(params: {
     counter: params.counter,
     items: params.items,
     total_amount: params.total_amount,
-    status: 'pending',
-    payment_status: 'pending',
+    status: isPaid ? 'pending' : 'pending',
+    payment_status: isPaid ? 'paid' : 'pending',
     pickup_code: pickupCode,
     qr_code: `FOODEXA-${orderId}`,
     qr_code_data: JSON.stringify({ orderId, pickupCode, counter: params.counter }),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
+  if (params.razorpay_order_id) payload.razorpay_order_id = params.razorpay_order_id;
+  if (params.razorpay_payment_id) payload.razorpay_payment_id = params.razorpay_payment_id;
+  if (params.razorpay_signature) payload.razorpay_signature = params.razorpay_signature;
+  if (params.payment_method) payload.payment_method = params.payment_method;
   const { data, error } = await supabase.from('orders').insert([payload]).select().single();
   if (error) return { data: null, error: error.message };
   return { data: mapOrder(data), error: null };
+}
+
+export async function createRazorpayOrder(params: {
+  amount: number;
+  currency?: string;
+  user_id: string;
+  email?: string;
+  phone?: string;
+  name?: string;
+  institution_id?: string | null;
+  order_id: string;
+  counter?: string;
+}): Promise<{ success: boolean; order_id?: string; razorpay_key_id?: string; amount?: number; currency?: string; error?: string }> {
+  try {
+    const resp = await fetch('/api/razorpay/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: params.amount,
+        currency: params.currency || 'INR',
+        receipt: `fdx_${params.order_id}`,
+        user_id: params.user_id,
+        email: params.email,
+        phone: params.phone,
+        name: params.name,
+        institution_id: params.institution_id,
+        order_id: params.order_id,
+        counter: params.counter,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.success) {
+      return { success: false, error: data.error || 'Failed to create payment order.' };
+    }
+    return { success: true, order_id: data.order_id, razorpay_key_id: data.razorpay_key_id, amount: data.amount, currency: data.currency };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error while creating payment order.' };
+  }
+}
+
+export async function verifyRazorpayPayment(params: {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+  user_id: string;
+  order_id: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const resp = await fetch('/api/razorpay/verify-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.success) {
+      return { success: false, error: data.error || 'Payment verification failed.' };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error during payment verification.' };
+  }
 }
 
 // ==================== NOTIFICATIONS ====================

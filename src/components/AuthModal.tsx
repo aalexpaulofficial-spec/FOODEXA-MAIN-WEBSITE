@@ -29,7 +29,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   selectedRole = 'student',
   onLoginSuccess,
 }) => {
-  const { signInWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, setRememberMeFlag, refreshProfile, updateProfile, profile: authProfile } = useAuth();
+  const { signInWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
   const [mode, setMode] = useState<'login' | 'create'>(initialMode);
   const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success'>('form');
   const [loginUserId, setLoginUserId] = useState<string | null>(null);
@@ -342,7 +342,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setStep('form');
 
     const { error, session: authSession, user: authUser, profile: liveProfile } = await signIn(loginEmail, loginPassword);
-    setRememberMeFlag(rememberMe);
+    // Sessions persist automatically via Supabase — no need for rememberMe flag
 
     if (error) {
       setLoginError(error.message);

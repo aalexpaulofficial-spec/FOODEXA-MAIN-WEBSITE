@@ -29,7 +29,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   selectedRole = 'student',
   onLoginSuccess,
 }) => {
-  const { signInWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signOut, signIn, user, setRememberMeFlag, refreshProfile, profile: authProfile } = useAuth();
+  const { signInWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, setRememberMeFlag, refreshProfile, updateProfile, profile: authProfile } = useAuth();
   const [mode, setMode] = useState<'login' | 'create'>(initialMode);
   const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success'>('form');
   const [loginUserId, setLoginUserId] = useState<string | null>(null);
@@ -46,6 +46,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // OTP state
   const [otpCode, setOtpCode] = useState('');
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [registrationPhase, setRegistrationPhase] = useState<'idle' | 'validating' | 'connecting' | 'sending' | 'sent'>('idle');
 
   // Institution validation state
   const [validatedInstitution, setValidatedInstitution] = useState<InstitutionData | null>(null);
@@ -103,6 +104,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
+  const isCreatingAccount = registrationPhase !== 'idle';
+  const registrationProgress = registrationPhase === 'validating'
+    ? 28
+    : registrationPhase === 'connecting'
+      ? 58
+      : registrationPhase === 'sending'
+        ? 84
+        : registrationPhase === 'sent'
+          ? 100
+          : 0;
+  const registrationLabel = registrationPhase === 'validating'
+    ? 'Validating Institution Code...'
+    : registrationPhase === 'connecting'
+      ? 'Connecting to Supabase...'
+      : registrationPhase === 'sending'
+        ? 'Generating & Sending OTP...'
+        : registrationPhase === 'sent'
+          ? 'OTP Email Sent'
+          : 'Create Account';
+
  useEffect(() => {
     if (!isOpen) return;
     setMode(initialMode);
@@ -114,6 +135,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setInstitutionError(null);
     setLoginError(null);
     setOtpError(null);
+    setRegistrationPhase('idle');
   }, [initialMode, isOpen]);
 
   useEffect(() => () => {
@@ -229,17 +251,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const userId = loginUserId || user?.id;
 
     if (validatedInstitution && userId) {
-      const { error: upsertError } = await supabase
-        .from('profiles')
-        .upsert({
-          user_id: userId,
-          institution_id: validatedInstitution.institution_id,
-          institution_code: validatedInstitution.institution_code,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
+      const { error: upsertError } = await updateProfile({
+        institution_id: validatedInstitution.institution_id,
+        institution_code: validatedInstitution.institution_code,
+      });
 
       if (upsertError) {
-        setInstitutionError('Failed to save institution. Please try again.');
+        setInstitutionError(upsertError.message || 'Failed to save institution. Please try again.');
         return;
       }
 
@@ -378,25 +396,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCreatingAccount) return;
+
     const currentForm = getCurrentForm();
 
     setCurrentEmail(currentForm.universityEmail);
     setInstitutionError(null);
+    setOtpError(null);
+    setRegistrationPhase('validating');
     setValidatingCode(true);
 
     const { error: validateError, data: validatedInst } = await validateInstitutionCode(currentForm.institutionCode);
 
     if (validateError || !validatedInst) {
-      setInstitutionError('Invalid Institution Code');
+      setInstitutionError(validateError || 'Invalid Institution Code');
       setValidatingCode(false);
+      setRegistrationPhase('idle');
       return;
     }
 
+    setRegistrationPhase('connecting');
     setValidatedInstitution(validatedInst);
     setInstitutionData(validatedInst);
     setValidatingCode(false);
 
-    signInWithOtp(currentForm.universityEmail, currentForm.fullName, selectedRole, {
+    setRegistrationPhase('sending');
+    const { error } = await signInWithOtp(currentForm.universityEmail, currentForm.fullName, selectedRole, {
       institutionCode: currentForm.institutionCode,
       phone: currentForm.phone,
       department: (currentForm as any).department,
@@ -404,14 +429,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       programme: (currentForm as any).programme,
       campusBlock: (currentForm as any).campusBlock,
       designation: (currentForm as any).designation,
-    }).then(({ error }) => {
-      if (!error) {
-        setOtpError(null);
-        setStep('otp');
-      } else {
-        setInstitutionError(error.message || 'Registration failed');
-      }
     });
+
+    if (error) {
+      setInstitutionError(error.message || 'Registration failed');
+      setRegistrationPhase('idle');
+      return;
+    }
+
+    setRegistrationPhase('sent');
+    setOtpError(null);
+    setStep('otp');
   };
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -449,6 +477,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoginUserId(null);
     setLoginError(null);
     setOtpError(null);
+    setRegistrationPhase('idle');
   };
 
   const handleContinueToPortal = () => {
@@ -801,20 +830,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <button
                     type="submit"
-                    disabled={validatingCode || !validatedInstitution}
-                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+                    disabled={isCreatingAccount || validatingCode}
+                    className="relative w-full overflow-hidden py-3 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs hover:from-emerald-300 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer shadow-md disabled:opacity-80 disabled:cursor-not-allowed"
                   >
-                    {validatingCode ? (
+                    {isCreatingAccount && (
+                      <>
+                        <span
+                          className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-600 via-lime-300 to-emerald-400 transition-all duration-700 ease-out"
+                          style={{ width: `${registrationProgress}%` }}
+                        />
+                        <span className="absolute inset-0 bg-[linear-gradient(110deg,transparent,rgba(255,255,255,0.42),transparent)] animate-[registration-shimmer_1.1s_ease-in-out_infinite]" />
+                      </>
+                    )}
+                    <span className="relative z-10 flex items-center justify-center gap-2">
+                    {isCreatingAccount ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                        <span>Validating & Sending OTP...</span>
+                        <span>{registrationLabel}</span>
                       </>
                     ) : (
                       <>
-                        <span>Send OTP & Verify Email</span>
+                        <span>{registrationLabel}</span>
                         <ArrowRight className="w-4 h-4 text-slate-950" />
                       </>
                     )}
+                    </span>
                   </button>
                 </form>
               </div>

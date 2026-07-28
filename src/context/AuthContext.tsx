@@ -28,6 +28,16 @@ const normalizeRole = (value: unknown): UserRole | null => {
   return allowed.includes(value as UserRole) ? (value as UserRole) : null;
 };
 
+const devErrorMessage = (fallback: string, error?: { message?: string } | null) => {
+  return import.meta.env.DEV && error?.message ? error.message : fallback;
+};
+
+const getMissingColumnName = (message: string) => {
+  return message.match(/Could not find the '([^']+)' column/)?.[1] || null;
+};
+
+const unsupportedProfileColumns = new Set<string>();
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -86,6 +96,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       sessionStorage.setItem('foodexa-remember-me', 'true');
       localStorage.removeItem('foodexa-remember-me');
     }
+  }, []);
+
+  const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
+    const safePayload = { ...payload };
+    const ignoredColumns = new Set<string>();
+    unsupportedProfileColumns.forEach((column) => {
+      if (column in safePayload) {
+        delete safePayload[column];
+        ignoredColumns.add(column);
+      }
+    });
+
+    for (let attempt = 0; attempt < Object.keys(payload).length + 1; attempt++) {
+      const { error } = await supabase
+        .from('profiles')
+        .upsert(safePayload, { onConflict: 'user_id' });
+
+      if (!error) {
+        return { error: null as Error | null, ignoredColumns: Array.from(ignoredColumns) };
+      }
+
+      const missingColumn = getMissingColumnName(error.message);
+      if (!missingColumn || !(missingColumn in safePayload)) {
+        return { error: new Error(error.message), ignoredColumns: Array.from(ignoredColumns) };
+      }
+
+      delete safePayload[missingColumn];
+      ignoredColumns.add(missingColumn);
+      unsupportedProfileColumns.add(missingColumn);
+    }
+
+    return { error: new Error('Profile creation failed after removing unsupported profile columns.'), ignoredColumns: Array.from(ignoredColumns) };
   }, []);
 
   useEffect(() => {
@@ -203,7 +245,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .maybeSingle();
 
       if (error) {
-        return { error: 'Unable to verify Institution Code. Please try again.', data: null };
+        return { error: devErrorMessage('Unable to verify Institution Code. Please try again.', error), data: null };
       }
       if (!data) {
         return { error: 'Invalid Institution Code. Please check and try again.', data: null };
@@ -221,8 +263,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           institution_code: data.institution_code,
         } as InstitutionData,
       };
-    } catch (err) {
-      return { error: 'Unable to verify Institution Code. Please try again.', data: null };
+    } catch (err: any) {
+      return { error: devErrorMessage('Unable to verify Institution Code. Please try again.', err), data: null };
     }
   };
 
@@ -256,26 +298,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const campusBlock = pendingOtpProfile?.campusBlock || userData.campus_block || null;
       const designation = pendingOtpProfile?.designation || userData.designation || null;
 
-      const { error: upsertError } = await supabase
-        .from('profiles')
-        .upsert({
-          user_id: userId,
-          email: authData.user.email || email,
-          full_name: fullName,
-          phone,
-          role,
-          institution_id: institutionId,
-          institution_code: institutionCode,
-          department,
-          semester,
-          programme,
-          campus_block: campusBlock,
-          designation,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id',
-        });
+      const { error: upsertError } = await upsertProfileSafely({
+        user_id: userId,
+        email: authData.user.email || email,
+        full_name: fullName,
+        phone,
+        role,
+        institution_id: institutionId,
+        institution_code: institutionCode,
+        department,
+        semester,
+        programme,
+        campus_block: campusBlock,
+        designation,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
 
       if (upsertError) {
         return { error: new Error(`Profile creation failed: ${upsertError.message}`), profile: null, institution: null };
@@ -352,15 +390,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return { error: new Error('Not authenticated') };
 
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({
-        user_id: user.id,
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
+    const { error } = await upsertProfileSafely({
+      user_id: user.id,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    });
 
     if (!error) {
       await fetchProfile(user.id);

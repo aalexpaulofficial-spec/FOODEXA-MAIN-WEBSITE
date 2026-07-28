@@ -116,3 +116,12 @@ html.light .border-emerald-500\/30 {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+@keyframes registration-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

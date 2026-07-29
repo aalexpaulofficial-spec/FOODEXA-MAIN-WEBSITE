@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2 } from 'lucide-react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { UserRole, Profile } from '../types';
@@ -160,7 +160,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     counterCodeTimerRef.current = setTimeout(async () => {
       const userId = loginUserId || user?.id;
       if (!userId) {
-        setCounterError('Session expired. Please login again.');
+        setCounterError('Unable to verify. Please sign in again.');
         setValidatingCounter(false);
         return;
       }
@@ -191,7 +191,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setValidatingCounter(true);
     const userId = loginUserId || user?.id;
     if (!userId) {
-      setCounterError('Session expired. Please login again.');
+      setCounterError('Unable to verify. Please sign in again.');
       setValidatingCounter(false);
       return;
     }
@@ -309,7 +309,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     const userId = loginUserId || user?.id;
     if (!userId) {
-      setCounterError('Session expired. Please login again.');
+      setCounterError('Unable to verify. Please sign in again.');
       return;
     }
 
@@ -363,17 +363,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     // Sessions persist automatically via Supabase — no need for rememberMe flag
 
     if (error) {
-      setLoginError(error.message);
+      const msg = error.message.toLowerCase();
+      if (msg.includes('invalid login') || msg.includes('invalid credentials')) {
+        setLoginError('Invalid email or password. Please check your credentials and try again.');
+      } else if (msg.includes('email not confirmed')) {
+        setLoginError('Please verify your email before signing in. Check your inbox for a verification link.');
+      } else if (msg.includes('rate limit')) {
+        setLoginError('Too many login attempts. Please wait a moment and try again.');
+      } else {
+        setLoginError(error.message);
+      }
       return;
     }
 
     if (!authUser) {
-      setLoginError('Authentication failed. No user returned from Supabase.');
+      setLoginError('Unable to sign in. Please try again or contact support.');
       return;
     }
 
     if (!liveProfile) {
-      setLoginError('Your account exists in Supabase Auth but no profile was found. Please contact support or register again.');
+      setLoginError('Your account is not fully set up. Please contact support or register again.');
       return;
     }
 
@@ -489,6 +498,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setOtpError(null);
     setStep('otp');
   };
+  const handleResendOtp = async () => {
+    if (!currentEmail || registrationPhase === 'sending') return;
+    setOtpError(null);
+    setRegistrationPhase('sending');
+    try {
+      const { error } = await supabase.auth.resend({
+        email: currentEmail,
+        type: 'signup',
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (error) {
+        setOtpError(error.message.includes('rate limit')
+          ? 'Too many requests. Please wait a few minutes.'
+          : 'Failed to resend OTP. Please try again.');
+        setRegistrationPhase('sent');
+        return;
+      }
+      setRegistrationPhase('sent');
+    } catch {
+      setOtpError('Network error. Please check your connection.');
+      setRegistrationPhase('sent');
+    }
+  };
+
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otpCode.length < 8) {
@@ -499,12 +532,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const { error, profile, institution } = await verifyOtp(currentEmail, otpCode);
 
     if (error) {
-      setOtpError(error.message || 'OTP verification failed');
+      setOtpError(error.message || 'OTP verification failed. Please check your code and try again.');
       return;
     }
 
     if (!profile) {
-      setOtpError('Profile creation failed. Please try again.');
+      setOtpError('Unable to set up your profile. Please contact support.');
       return;
     }
 
@@ -1008,13 +1041,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <div className="text-center text-xs text-slate-400">
                 Didn't receive code?{' '}
-                <button
-                  type="button"
-                  onClick={() => {}}
-                  className="text-emerald-400 font-bold hover:underline cursor-pointer"
-                >
-                  Resend OTP
-                </button>
+              <button
+                type="button"
+                onClick={handleResendOtp}
+                disabled={registrationPhase === 'sending'}
+                className="text-emerald-400 font-bold hover:underline cursor-pointer disabled:text-slate-500"
+              >
+                {registrationPhase === 'sending' ? 'Sending...' : 'Resend OTP'}
+              </button>
               </div>
             </form>
           </div>

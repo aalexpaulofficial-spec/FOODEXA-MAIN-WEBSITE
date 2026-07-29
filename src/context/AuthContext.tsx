@@ -136,7 +136,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
 
-    for (let attempt = 0; attempt < Object.keys(payload).length + 1; attempt++) {
+    for (let attempt = 0; attempt < Math.max(Object.keys(payload).length, 1) + 1; attempt++) {
       const { error } = await supabase
         .from('profiles')
         .upsert(safePayload, { onConflict: 'user_id' });
@@ -147,15 +147,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const missingColumn = getMissingColumnName(error.message);
       if (!missingColumn || !(missingColumn in safePayload)) {
-        return { error: new Error(error.message), ignoredColumns: Array.from(ignoredColumns) };
+        const friendlyMessage = error.message.includes('duplicate key')
+          ? 'Your profile already exists. Please try logging in.'
+          : error.message.includes('violates row-level security')
+            ? 'Unable to create profile. Please contact support.'
+            : error.message;
+        return { error: new Error(friendlyMessage), ignoredColumns: Array.from(ignoredColumns) };
       }
 
       delete safePayload[missingColumn];
       ignoredColumns.add(missingColumn);
       unsupportedProfileColumns.add(missingColumn);
     }
-
-    return { error: new Error('Profile creation failed after removing unsupported profile columns.'), ignoredColumns: Array.from(ignoredColumns) };
+    return { error: new Error('Unable to complete profile setup. Please contact support.'), ignoredColumns: Array.from(ignoredColumns) };
   }, []);
 
   // ── Session initialization — Supabase handles persistence natively ────────
@@ -314,7 +318,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const { data: currentUserData, error: userError } = await supabase.auth.getUser();
     if (userError || !currentUserData.user?.id) {
-      return { error: new Error(userError?.message || 'OTP verified, but no authenticated Supabase user was found.'), profile: null, institution: null };
+      return { error: new Error(userError?.message || 'Verification successful but unable to load user data. Please try logging in.'), profile: null, institution: null };
     }
 
     const authUser = currentUserData.user;
@@ -327,7 +331,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const role = normalizeRole(pendingProfile?.role || userData.role);
 
       if (!role) {
-        return { error: new Error('Account role is missing. Please restart registration and choose a valid role.'), profile: null, institution: null };
+        return { error: new Error('Unable to complete registration. Please restart the process.'), profile: null, institution: null };
       }
 
       const fullName = pendingProfile?.fullName || userData.full_name || null;
@@ -358,7 +362,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
 
       if (upsertError) {
-        return { error: new Error(`Profile creation failed: ${upsertError.message}`), profile: null, institution: null };
+        return { error: new Error(upsertError.message), profile: null, institution: null };
       }
 
       fetchedProfile = await fetchProfile(userId);

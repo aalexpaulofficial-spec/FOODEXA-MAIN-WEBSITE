@@ -466,7 +466,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       setLoading(true); setError(null);
       try {
         await refreshProfile();
-        const instId = profile?.institution_id;
+        const currentProfile = profile;
+        const instId = currentProfile?.institution_id;
         const [menuResult, orderResult, notifResult] = await Promise.all([
           supabase.from('menu_items').select('*').order('item_name', { ascending: true }),
           user?.id ? supabase.from('orders').select('*').eq('user_id', user.id).order('created_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
@@ -690,7 +691,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       campus_block: profileForm.campus_block,
     });
     if (saveError) {
-      setProfileMessage(`Failed: ${saveError.message}`);
+      setProfileMessage(`Unable to update profile. Please try again.`);
     } else {
       setProfileMessage('Profile updated successfully!');
       setEditingProfile(false);

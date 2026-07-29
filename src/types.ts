@@ -55,6 +55,7 @@ export interface Profile {
   institution_id: string | null;
   role: UserRole | null;
   created_at: string;
+  updated_at?: string;
   institution_code: string | null;
   department: string | null;
   semester: string | null;

@@ -529,8 +529,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
    const handleVerifyOtp = async (e: React.FormEvent) => {
      e.preventDefault();
-     if (otpCode.length < 6) {
-       setOtpError('Please enter a valid 6-digit OTP code');
+     if (otpCode.length < 8) {
+       setOtpError('Please enter a valid 8-digit OTP code');
        return;
      }
 
@@ -971,9 +971,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <KeyRound className="w-6 h-6" />
               </div>
               <h3 className="text-xl font-extrabold text-white">Verify Your Email OTP</h3>
-              <p className="text-sm text-slate-300">
-                We sent a 6-digit security code to{' '}
-                <span className="font-bold text-emerald-400">{currentEmail}</span>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                We sent an 8-digit security code to{' '}
+                <strong className="text-emerald-400">{currentEmail || ''}</strong>
               </p>
             </div>
 
@@ -1000,15 +1000,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-2 block text-center">
-                  6-Digit Verification Code
+                <label className="text-xs font-semibold text-slate-300 mb-1 block text-center">
+                  8-Digit Verification Code
                 </label>
                 <input
                   type="text"
-                  maxLength={6}
+                  maxLength={8}
                   required
                   value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => setOtpCode(e.target.value)}
                   className="w-full bg-slate-950 border border-emerald-500/60 focus:border-emerald-400 rounded-2xl py-3 text-center text-xl font-mono tracking-[0.5em] text-emerald-300 font-bold focus:outline-none shadow-inner"
                 />
               </div>

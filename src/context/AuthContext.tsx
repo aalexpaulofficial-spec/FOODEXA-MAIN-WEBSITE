@@ -226,8 +226,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       },
     });
 
-    // Do NOT sign out here — Supabase requires the unconfirmed session to verify the OTP.
-    // The session will remain unverified until email OTP is confirmed.
+    if (data?.session) {
+      await supabase.auth.signOut();
+      return { error: new Error('OTP is disabled in Supabase. Please enable "Confirm Email" in Supabase -> Authentication -> Providers -> Email to require OTP verification.') };
+    }
 
     return { error: error ? new Error(error.message) : null };
   };

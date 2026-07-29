@@ -48,7 +48,6 @@ export interface CheckoutData {
   estimatedTime: string;
   items: CartItem[];
   subtotal: number;
-  gst: number;
   discount: number;
   couponCode: string;
   grandTotal: number;
@@ -140,8 +139,6 @@ export async function fetchMenuItems(params?: {
   if (params?.institution_id) query = query.eq('institution_id', params.institution_id);
   if (params?.counter) query = query.eq('counter', params.counter);
   if (params?.category && params.category !== 'ALL') query = query.eq('category', params.category);
-  if (params?.veg === true) query = query.eq('is_veg', true);
-  if (params?.nonVeg === true) query = query.eq('is_veg', false);
   if (params?.availableOnly !== false) query = query.eq('is_published', true);
   if (params?.popularOnly) query = query.eq('popular', true);
   if (params?.search) {
@@ -154,7 +151,7 @@ export async function fetchMenuItems(params?: {
     case 'newest': query = query.order('created_at', { ascending: false }); break;
     case 'price_asc': query = query.order('price', { ascending: true }); break;
     case 'price_desc': query = query.order('price', { ascending: false }); break;
-    case 'prep_time': query = query.order('prep_time_minutes', { ascending: true }); break;
+    case 'prep_time': query = query.order('prep_time', { ascending: true }); break;
     case 'rating': query = query.order('rating', { ascending: false }); break;
     default: query = query.order('item_name', { ascending: true });
   }
@@ -254,7 +251,7 @@ export function mapOrder(row: any): Order {
     counter_id: row.counter_id || null,
     category_id: row.category_id || null,
     order_id: String(row.order_id || row.id),
-    counter: String(row.counter || row.counter_name || 'Counter'),
+    counter: '',
     items: normalizeOrderItems(row.items),
     total_amount: Number(row.total_amount || row.total || 0),
     status: normalizeOrderStatus(row.status),
@@ -306,7 +303,6 @@ export async function placeOrder(params: {
   role: UserRole;
   institution_id: string | null;
   institution_code: string | null;
-  counter: string;
   items: { id: string; name: string; quantity: number; price: number };
   itemsFull: { id: string; name: string; quantity: number; price: number; image_url?: string | null; is_veg?: boolean }[];
   total_amount: number;
@@ -329,7 +325,6 @@ export async function placeOrder(params: {
     institution_code: params.institution_code,
     order_id: orderId,
     token_number: tokenNumber,
-    counter: params.counter,
     items: params.itemsFull,
     total_amount: params.total_amount,
     status: isPaid ? 'pending' : 'pending',
@@ -337,7 +332,7 @@ export async function placeOrder(params: {
     pickup_code: pickupCode,
     pickup_pin: pickupPin,
     qr_code: `FOODEXA-${orderId}`,
-    qr_code_data: JSON.stringify({ orderId, pickupCode, counter: params.counter, token: tokenNumber, pin: pickupPin }),
+    qr_code_data: JSON.stringify({ orderId, pickupCode, token: tokenNumber, pin: pickupPin }),
     kitchen_queue_status: 'incoming',
     estimated_prep_time: 15,
     created_at: now,
@@ -639,7 +634,7 @@ export function subscribeHomepageSections(callback: RealtimeCallback<any>) {
 }
 
 export function subscribeCounters(callback: RealtimeCallback<any>) {
-  return subscribeToRealtime('counters-realtime', [{ table: 'counters', callback }]);
+  return subscribeToRealtime('menu-items-realtime', [{ table: 'menu_items', callback }]);
 }
 
 // ==================== HOMEPAGE SECTIONS ====================
@@ -652,11 +647,14 @@ export async function fetchHomepageSections(institutionId?: string): Promise<any
 
 // ==================== COUNTERS ====================
 export async function fetchCounters(institutionId?: string): Promise<any[]> {
-  let query = supabase.from('counters').select('*').eq('is_active', true).order('order', { ascending: true });
+  let query = supabase.from('menu_items').select('counter').eq('is_published', true).order('counter', { ascending: true });
   if (institutionId) query = query.eq('institution_id', institutionId);
   const { data } = await query;
-  return data || [];
+  const counters = new Set((data || []).map((r: any) => r.counter).filter(Boolean));
+  return Array.from(counters).map((name: string) => ({ name }));
 }
+
+// ==================== SEARCH & FILTER ====================
 
 // ==================== SEARCH & FILTER ====================
 export async function searchMenuItems(query: string, institutionId?: string): Promise<MenuItem[]> {
@@ -679,20 +677,14 @@ export async function filterMenuItems(filters: FoodFilters, institutionId?: stri
     const searchTerm = `%${filters.search.toLowerCase()}%`;
     query = query.or(`item_name.ilike.${searchTerm},counter.ilike.${searchTerm},category.ilike.${searchTerm},description.ilike.${searchTerm}`);
   }
-  if (filters.veg !== undefined) {
-    query = query.eq('is_veg', filters.veg);
-  }
-  if (filters.nonVeg !== undefined) {
-    query = query.eq('is_veg', !filters.nonVeg);
+  if (filters.maxPrepTime !== undefined) {
+    query = query.lte('prep_time', filters.maxPrepTime);
   }
   if (filters.minPrice !== undefined) {
     query = query.gte('price', filters.minPrice);
   }
   if (filters.maxPrice !== undefined) {
     query = query.lte('price', filters.maxPrice);
-  }
-  if (filters.maxPrepTime !== undefined) {
-    query = query.lte('prep_time_minutes', filters.maxPrepTime);
   }
   if (filters.category && filters.category !== 'ALL') {
     query = query.eq('category', filters.category);
@@ -716,7 +708,7 @@ export async function filterMenuItems(filters: FoodFilters, institutionId?: stri
       query = query.order('price', { ascending: false });
       break;
     case 'prep_time':
-      query = query.order('prep_time_minutes', { ascending: true });
+      query = query.order('prep_time', { ascending: true });
       break;
     default:
       query = query.order('item_name', { ascending: true });
@@ -727,20 +719,15 @@ export async function filterMenuItems(filters: FoodFilters, institutionId?: stri
 }
 
 // ==================== CART CALCULATIONS ====================
-export const GST_RATE = 0.05; // 5% GST for food
-
 export function calculateCartTotals(items: CartItem[], couponDiscount: number = 0): {
   subtotal: number;
-  gst: number;
   discount: number;
   grandTotal: number;
 } {
   const subtotal = items.reduce((sum, item) => sum + (item.item.offer_price || item.item.price) * item.quantity, 0);
   const discount = Math.min(couponDiscount, subtotal);
-  const taxableAmount = subtotal - discount;
-  const gst = Math.round(taxableAmount * GST_RATE * 100) / 100;
-  const grandTotal = Math.round((taxableAmount + gst) * 100) / 100;
-  return { subtotal, gst, discount, grandTotal };
+  const grandTotal = Math.round((subtotal - discount) * 100) / 100;
+  return { subtotal, discount, grandTotal };
 }
 
 // ==================== COUPONS ====================
@@ -851,23 +838,22 @@ export async function fetchAIRecommendations(userId: string, institutionId: stri
     
     switch (type) {
       case 'healthy':
-        query = query.eq('is_healthy', true).order('calories', { ascending: true });
+        query = query.order('rating', { ascending: false });
         break;
       case 'trending':
         query = query.eq('trending', true).order('rating', { ascending: false });
         break;
       case 'popular_today':
-        query = query.order('today_orders', { ascending: false });
+        query = query.order('rating', { ascending: false });
         break;
       case 'fast_pickup':
-        query = query.lte('prep_time_minutes', 10).order('prep_time_minutes', { ascending: true });
+        query = query.lte('prep_time', '15 min').order('prep_time', { ascending: true });
         break;
       case 'offers':
         query = query.not('offer_price', 'is', null).order('offer_price', { ascending: true });
         break;
       case 'personalized':
       default:
-        // Would use user's order history to recommend
         query = query.order('rating', { ascending: false });
         break;
     }

@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       key_secret: razorpayKeySecret,
     });
 
-    const { amount, currency, receipt, user_id, institution_id, order_id, items, counter, email, phone, name } = req.body;
+    const { amount, currency, receipt, user_id, institution_id, order_id, items, email, phone, name } = req.body;
 
     if (!amount || amount <= 0) {
       return res.status(400).json({ error: "Invalid amount. Amount must be greater than 0." });
@@ -53,7 +53,6 @@ export default async function handler(req, res) {
         user_id: user_id,
         institution_id: institution_id || '',
         order_id: order_id,
-        counter: counter || '',
         platform: 'FOODEXA',
       },
     };

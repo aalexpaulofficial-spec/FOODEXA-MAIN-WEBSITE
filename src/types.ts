@@ -329,7 +329,6 @@ export interface CheckoutData {
   estimatedTime: string;
   items: CartItem[];
   subtotal: number;
-  gst: number;
   discount: number;
   couponCode: string;
   grandTotal: number;

@@ -17,7 +17,7 @@ import {
   placeOrder, createRazorpayOrder, verifyRazorpayPayment, mapMenuItem,
   fetchUserCart, saveUserCart, fetchBanners, fetchHomepageSections, fetchCounters,
   fetchMenuItems as fetchMenuItemsService, searchMenuItems, filterMenuItems,
-  calculateCartTotals, GST_RATE, validateCoupon, applyCouponUsage,
+  calculateCartTotals, validateCoupon, applyCouponUsage,
   fetchUserFavorites, toggleFavorite, fetchAIRecommendations, getOrderProgress, getEstimatedTimeRemaining, generateReceipt
 } from '../lib/supabase-service';
 import type { MenuItem, Order, OrderStatus, NotificationItem, UserRole, CartItem, FoodFilters, CheckoutData } from '../types';
@@ -836,7 +836,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     return result;
   }, [menuItems, searchQuery, selectedCounter, selectedCategory, showVegFilter, showNonVeg, selectedPriceRange, selectedPrepTime, sortBy]);
 
-  const { subtotal: cartSubtotal, gst: cartGST, discount: cartDiscount, grandTotal: cartGrandTotal } = useMemo(() => {
+  const { subtotal: cartSubtotal, discount: cartDiscount, grandTotal: cartGrandTotal } = useMemo(() => {
     return calculateCartTotals(cart, couponDiscount);
   }, [cart, couponDiscount]);
 
@@ -900,12 +900,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     try {
        const tempOrderId = `FDX-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
        const itemsForBackend = cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price }));
-       const razorpayResult = await createRazorpayOrder({
-         amount: cartTotal, currency: 'INR', user_id: user.id, email: profile.email,
-         phone: profile.phone || undefined, name: profile.full_name || undefined,
-         institution_id: profile.institution_id || undefined, order_id: tempOrderId, counter: firstItemCounter,
-         items: itemsForBackend,
-       });
+const razorpayResult = await createRazorpayOrder({
+          amount: cartGrandTotal, currency: 'INR', user_id: user.id, email: profile.email,
+          phone: profile.phone || undefined, name: profile.full_name || undefined,
+          institution_id: profile.institution_id || undefined, order_id: tempOrderId,
+          items: itemsForBackend,
+        });
       if (!razorpayResult.success || !razorpayResult.order_id) {
         setError(razorpayResult.error || 'Failed to initialize payment.'); setSubmittingOrder(false); if (triggerToast) triggerToast('Payment Initialization Failed', razorpayResult.error || 'Please try again.', 'warning'); return;
       }
@@ -915,7 +915,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
       const options: any = {
         key: razorpayKeyId, amount: razorpayResult.amount, currency: razorpayResult.currency || 'INR',
-        name: 'FOODEXA', description: `Campus Order — ${firstItemCounter}`,
+        name: 'FOODEXA', description: `Campus Order`,
         image: 'https://foodexa.com/logo.png',
         order_id: razorpayResult.order_id,
         handler: async function (response: any) {
@@ -923,13 +923,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           try {
             const verifyResult = await verifyRazorpayPayment({ razorpay_order_id, razorpay_payment_id, razorpay_signature, user_id: user.id, order_id: tempOrderId });
             if (!verifyResult.success) { setError(verifyResult.error || 'Payment verification failed.'); setActiveTab('payment_failed'); setSubmittingOrder(false); if (triggerToast) triggerToast('Payment Verification Failed', verifyResult.error || 'Contact support.', 'warning'); return; }
-            const orderResult = await placeOrder({
-              user_id: user.id, email: profile.email, role: liveRole, institution_id: profile.institution_id,
-               institution_code: institutionCode, counter: firstItemCounter,
-              items: itemsForBackend,
-              itemsFull: cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price, image_url: e.item.image_url, is_veg: e.item.is_veg })),
-              total_amount: cartGrandTotal, razorpay_order_id, razorpay_payment_id, razorpay_signature,
-            });
+const orderResult = await placeOrder({
+               user_id: user.id, email: profile.email, role: liveRole, institution_id: profile.institution_id,
+                institution_code: institutionCode,
+               items: itemsForBackend,
+               itemsFull: cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price, image_url: e.item.image_url, is_veg: e.item.is_veg })),
+               total_amount: cartGrandTotal, razorpay_order_id, razorpay_payment_id, razorpay_signature,
+             });
             if (orderResult.error) { setError(`Order failed: ${orderResult.error}`); setActiveTab('payment_failed'); setSubmittingOrder(false); if (triggerToast) triggerToast('Order Creation Failed', orderResult.error || 'Contact support.', 'warning'); return; }
             if (orderResult.data) setOrders((prev) => [orderResult.data!, ...prev]);
             setCart([]); setShowCart(false); setCouponDiscount(0); setCouponCode(''); setActiveTab('payment_success'); setSubmittingOrder(false); setError(null);
@@ -939,7 +939,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           }
         },
         prefill: { name: profile.full_name || '', email: profile.email || '', contact: profile.phone || '' },
-        notes: { institution_id: profile.institution_id || '', order_id: tempOrderId, counter: firstItemCounter },
+        notes: { institution_id: profile.institution_id || '', order_id: tempOrderId },
         theme: { color: '#10b981' },
         modal: { ondismiss: function () { setSubmittingOrder(false); } },
       };
@@ -1933,24 +1933,20 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           </div>
                           
                            <div className="pt-4 border-t border-slate-800 space-y-2">
-                             <div className="flex justify-between text-xs text-slate-400">
-                               <span>Subtotal</span>
-                               <span>{formatINR(cartSubtotal)}</span>
-                             </div>
-                             {cartDiscount > 0 && (
-                               <div className="flex justify-between text-xs text-emerald-400">
-                                 <span>Discount</span>
-                                 <span>-{formatINR(cartDiscount)}</span>
-                               </div>
-                             )}
-                             <div className="flex justify-between text-xs text-slate-400">
-                               <span>Taxes (5% GST)</span>
-                               <span>{formatINR(cartGST)}</span>
-                             </div>
-                             <div className="pt-2 flex justify-between text-lg font-black text-white">
-                               <span>Grand Total</span>
-                               <span className="text-emerald-400">{formatINR(cartGrandTotal)}</span>
-                             </div>
+<div className="flex justify-between text-xs text-slate-400">
+                                <span>Subtotal</span>
+                                <span>{formatINR(cartSubtotal)}</span>
+                              </div>
+                              {cartDiscount > 0 && (
+                                <div className="flex justify-between text-xs text-emerald-400">
+                                  <span>Discount</span>
+                                  <span>-{formatINR(cartDiscount)}</span>
+                                </div>
+                              )}
+                              <div className="pt-2 flex justify-between text-lg font-black text-white">
+                                <span>Grand Total</span>
+                                <span className="text-emerald-400">{formatINR(cartGrandTotal)}</span>
+                              </div>
                            </div>
                         </div>
 
@@ -2205,10 +2201,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                   <span>-{formatINR(cartDiscount)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-xs text-slate-400">
-                <span>GST (5%)</span>
-                <span>{formatINR(cartGST)}</span>
-              </div>
               <div className="flex justify-between text-sm font-black text-white pt-1">
                 <span>Total</span>
                 <span className="text-emerald-400">{formatINR(cartGrandTotal)}</span>

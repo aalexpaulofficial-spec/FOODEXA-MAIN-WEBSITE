@@ -233,7 +233,7 @@ Important rules:
         return res.status(503).json({ error: "Payment gateway not configured. Contact administrator." });
       }
 
-      const { amount, currency, receipt, user_id, institution_id, order_id, items, counter, email, phone, name } = req.body;
+      const { amount, currency, receipt, user_id, institution_id, order_id, items, email, phone, name } = req.body;
 
        // Validate required fields
        if (!amount || amount <= 0) {
@@ -254,13 +254,12 @@ Important rules:
          amount: amountInPaise,
          currency: currency || 'INR',
          receipt: receipt || `fdx_${order_id}`,
-         notes: {
-           user_id: user_id,
-           institution_id: institution_id || '',
-           order_id: order_id,
-           counter: counter || '',
-           platform: 'FOODEXA',
-         },
+notes: {
+            user_id: user_id,
+            institution_id: institution_id || '',
+            order_id: order_id,
+            platform: 'FOODEXA',
+          },
        };
 
        const razorpayOrder = await razorpay.orders.create(orderPayload);

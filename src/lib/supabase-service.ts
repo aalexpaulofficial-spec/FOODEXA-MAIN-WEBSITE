@@ -102,7 +102,7 @@ export async function fetchMenuItems(params?: {
   if (params?.counter) query = query.eq('counter', params.counter);
   if (params?.category) query = query.eq('category', params.category);
   if (params?.availableOnly !== false) query = query.eq('is_published', true);
-  query = query.order('name', { ascending: true });
+  query = query.order('item_name', { ascending: true });
   const { data } = await query;
   return (data || []).map(mapMenuItem);
 }
@@ -110,7 +110,7 @@ export async function fetchMenuItems(params?: {
 export function mapMenuItem(row: any): MenuItem {
   return {
     id: String(row.id),
-    name: String(row.item_name || row.name || 'Unnamed'),
+    name: String(row.item_name || 'Unnamed'),
     counter: String(row.counter || row.counter_name || 'Counter'),
     counter_name: String(row.counter_name || row.counter || 'Counter'),
     counter_id: row.counter_id || null,

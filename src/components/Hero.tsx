@@ -48,7 +48,7 @@ export const Hero: React.FC<HeroProps> = ({
     const loadMenu = async () => {
       const { data } = await supabase.from('menu_items').select('*').eq('is_published', true).limit(6).order('rating', { ascending: false });
       setMenuItems((data || []).map((r: any) => ({
-        id: String(r.id), name: String(r.name || 'Item'), counter: String(r.counter || r.counter_name || ''), counter_name: String(r.counter_name || r.counter || ''),
+        id: String(r.id), name: String(r.item_name || 'Item'), counter: String(r.counter || r.counter_name || ''), counter_name: String(r.counter_name || r.counter || ''),
         price: Number(r.price || 0), offer_price: null, offer_label: null, prep_time: r.prep_time || null, rating: Number(r.rating || 0),
         category: String(r.category || ''), category_id: null, image_url: r.image_url || r.image || null, description: String(r.description || ''),
         is_available: true, is_published: true, popular: Boolean(r.popular), nutrition: null, institution_id: null,

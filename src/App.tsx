@@ -32,7 +32,7 @@ import { useAuth } from './context/AuthContext';
 import type { Profile, UserRole } from './types';
 
 export default function App() {
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, session, isEmailVerified, loading: authLoading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const restoredDashboardRef = useRef(false);
@@ -93,10 +93,21 @@ export default function App() {
      }
    };
 
+// Enforce email verification: redirect unverified users to /verify-otp
+    useEffect(() => {
+      if (authLoading) return;
+      if (!session) return;
+
+      if (!isEmailVerified && location.pathname !== '/verify-otp' && location.pathname !== '/create-account') {
+        navigate('/verify-otp', { replace: true });
+      }
+    }, [authLoading, session, isEmailVerified, location.pathname, navigate]);
+
 // Redirect authenticated users away from public pages
     useEffect(() => {
       if (authLoading) return;
       if (!user || !profile) return;
+      if (!isEmailVerified) return;
 
       const path = location.pathname;
       const dashboardRoute = getDashboardRoute(profile.role);
@@ -113,7 +124,7 @@ export default function App() {
       } else if (path === '/student-dashboard' || path === '/student/dashboard') {
         return;
       }
-    }, [authLoading, user, profile, location.pathname, navigate]);
+    }, [authLoading, user, profile, isEmailVerified, location.pathname, navigate]);
 
   const getDashboardRoute = (role: UserRole | null): string | null => {
     if (role === 'student') return '/student-dashboard';
@@ -147,6 +158,9 @@ export default function App() {
      } else if (path === '/verify-otp') {
        setIsRoleSelectionOpen(false);
        setIsAuthOpen(true);
+       if (!session || isEmailVerified) {
+         navigate('/', { replace: true });
+       }
      } else if (path === '/student-login') {
        setIsRoleSelectionOpen(false);
        setAuthInitialMode('login');
@@ -158,6 +172,9 @@ export default function App() {
      } else if (path === '/student-dashboard' || path === '/student/dashboard') {
        setIsRoleSelectionOpen(false);
        setIsAuthOpen(false);
+       if (!session || !isEmailVerified || !profile) {
+         navigate('/', { replace: true });
+       }
      } else if (path === '/student/register') {
        setIsRoleSelectionOpen(false);
        setSelectedRole('student');
@@ -178,7 +195,7 @@ export default function App() {
        setAuthInitialMode('login');
        setIsAuthOpen(true);
      }
-   }, [authLoading, location.pathname, location.search, roleFromQuery, navigate]);
+   }, [authLoading, session, isEmailVerified, profile, location.pathname, location.search, roleFromQuery, navigate]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -186,7 +203,11 @@ export default function App() {
     if (!user) {
       restoredDashboardRef.current = false;
       setCurrentUserRole(null);
-      // Removed setIsAuthOpen(false) here to allow the registration modal to stay open
+      closeDashboards();
+      return;
+    }
+
+    if (!isEmailVerified) {
       closeDashboards();
       return;
     }
@@ -195,7 +216,7 @@ export default function App() {
       restoredDashboardRef.current = true;
       openDashboardForProfile(profile);
     }
-  }, [authLoading, user, profile, isAuthOpen]);
+  }, [authLoading, user, profile, isEmailVerified, isAuthOpen]);
 
   const handleOpenLogin = () => {
     setIsRoleSelectionOpen(false);

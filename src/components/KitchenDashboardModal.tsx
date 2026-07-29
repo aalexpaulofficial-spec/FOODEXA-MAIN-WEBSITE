@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { X, Loader2, LogOut, ChefHat, Clock, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -13,8 +14,21 @@ const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'rea
 
 export const KitchenDashboardModal: React.FC<KitchenDashboardModalProps> = ({ isOpen, onClose }) => {
   const { user, profile, signOut, institutionData } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const guard = async () => {
+      const { data: { session: s } } = await supabase.auth.getSession();
+      if (!s || !s.user?.email_confirmed_at) {
+        onClose();
+        navigate('/');
+      }
+    };
+    guard();
+  }, [isOpen]);
 
   const load = useCallback(async () => {
     if (!isOpen || !profile?.institution_id) return;

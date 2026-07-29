@@ -8,6 +8,7 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  isEmailVerified: boolean;
   institutionData: InstitutionData | null;
   setInstitutionData: (data: InstitutionData | null) => void;
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
@@ -37,6 +38,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [institutionData, setInstitutionData] = useState<InstitutionData | null>(null);
   const [pendingOtpProfile, setPendingOtpProfile] = useState<{
     email: string;
@@ -165,6 +167,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { data: { session: existingSession } } = await supabase.auth.getSession();
       setSession(existingSession);
       setUser(existingSession?.user ?? null);
+      setIsEmailVerified(!!existingSession?.user?.email_confirmed_at);
       if (existingSession?.user) {
         await fetchProfile(existingSession.user.id);
       }
@@ -176,6 +179,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
+      setIsEmailVerified(!!newSession?.user?.email_confirmed_at);
       if (newSession?.user) {
         await fetchProfile(newSession.user.id);
       } else {
@@ -218,7 +222,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       phone: metadata?.phone?.trim() || null,
     });
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: trimmedEmail,
       password,
       options: {
@@ -236,6 +240,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         },
       },
     });
+
+    if (data?.session) {
+      await supabase.auth.signOut();
+    }
+
     return { error: error ? new Error(error.message) : null };
   };
 
@@ -288,25 +297,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
      if (error) {
        console.error('[Auth] OTP signup verification failed:', error.message);
-
-       const { error: emailError } = await supabase.auth.verifyOtp({
-         email,
-         token,
-         type: 'email',
-       });
-
-       if (emailError) {
-         console.error('[Auth] OTP email verification also failed:', emailError.message);
-         return { error: new Error(error.message), profile: null, institution: null };
-       }
-
-       const { data: currentUserData } = await supabase.auth.getUser();
-       if (currentUserData?.user?.id) {
-         const profile = await fetchProfile(currentUserData.user.id);
-         return { error: null, profile, institution: null };
-       }
-
-       return { error: new Error('Verification successful but unable to load user data.'), profile: null, institution: null };
+       return { error: new Error(error.message), profile: null, institution: null };
      }
 
      console.log('[Auth] OTP signup verification succeeded');
@@ -400,6 +391,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setSession(null);
     setProfile(null);
     setInstitutionData(null);
+    setIsEmailVerified(false);
   };
 
   const leaveInstitution = async () => {
@@ -444,6 +436,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       session,
       profile,
       loading,
+      isEmailVerified,
       institutionData,
       setInstitutionData,
       validateInstitutionCode,

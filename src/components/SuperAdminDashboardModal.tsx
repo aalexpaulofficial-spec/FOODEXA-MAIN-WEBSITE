@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { X, Loader2, LogOut, Globe, Users, ClipboardList } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -10,9 +11,22 @@ interface SuperAdminDashboardModalProps {
 
 export const SuperAdminDashboardModal: React.FC<SuperAdminDashboardModalProps> = ({ isOpen, onClose }) => {
   const { signOut } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ institutions: 0, orders: 0, profiles: 0 });
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const guard = async () => {
+      const { data: { session: s } } = await supabase.auth.getSession();
+      if (!s || !s.user?.email_confirmed_at) {
+        onClose();
+        navigate('/');
+      }
+    };
+    guard();
+  }, [isOpen]);
 
   const load = useCallback(async () => {
     if (!isOpen) return;

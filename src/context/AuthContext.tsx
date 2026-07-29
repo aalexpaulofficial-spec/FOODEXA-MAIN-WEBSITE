@@ -9,6 +9,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   isEmailVerified: boolean;
+  isPendingOtpVerification: boolean;
   institutionData: InstitutionData | null;
   setInstitutionData: (data: InstitutionData | null) => void;
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
@@ -35,6 +36,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [isPendingOtpVerification, setIsPendingOtpVerification] = useState(false);
   const [institutionData, setInstitutionData] = useState<InstitutionData | null>(null);
   const [pendingOtpProfile, setPendingOtpProfile] = useState<{
     email: string;
@@ -199,6 +201,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signUpWithPassword = async (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; facultyId?: string; }) => {
     const trimmedEmail = email.trim().toLowerCase();
+
+    // Block any auto-redirect while OTP is pending
+    setIsPendingOtpVerification(true);
+
     setPendingRegistrationProfile({
       email: trimmedEmail,
       fullName: fullName.trim(),
@@ -226,12 +232,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       },
     });
 
-    if (data?.session) {
-      await supabase.auth.signOut();
-      return { error: new Error('OTP is disabled in Supabase. Please enable "Confirm Email" in Supabase -> Authentication -> Providers -> Email to require OTP verification.') };
+    if (error) {
+      setIsPendingOtpVerification(false);
+      return { error: new Error(error.message) };
     }
 
-    return { error: error ? new Error(error.message) : null };
+    // If Supabase returned a confirmed session, email confirmations are OFF.
+    // Sign out and show a clear error instead of bypassing OTP.
+    if (data?.session) {
+      await supabase.auth.signOut();
+      setIsPendingOtpVerification(false);
+      return { error: new Error('Please enable "Confirm Email" in Supabase → Authentication → Providers → Email, then try again.') };
+    }
+
+    // No session yet — user must verify via OTP email. isPendingOtpVerification stays true.
+    return { error: null };
   };
 
   const validateInstitutionCode = async (code: string) => {
@@ -283,12 +298,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
      if (error) {
        console.error('[Auth] OTP signup verification failed:', error.message);
+       // Keep isPendingOtpVerification true so user can retry OTP
        return { error: new Error(error.message), profile: null, institution: null };
      }
 
       console.log('[Auth] OTP signup verification succeeded');
 
-      // Ensure auth state is synced — email is now confirmed
+      // OTP verified — clear the pending flag and mark email as confirmed
+      setIsPendingOtpVerification(false);
       setIsEmailVerified(true);
 
       const { data: currentUserData, error: userError } = await supabase.auth.getUser();
@@ -425,6 +442,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       profile,
       loading,
       isEmailVerified,
+      isPendingOtpVerification,
       institutionData,
       setInstitutionData,
       validateInstitutionCode,

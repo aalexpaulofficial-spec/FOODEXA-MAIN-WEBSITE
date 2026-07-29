@@ -32,7 +32,7 @@ import { useAuth } from './context/AuthContext';
 import type { Profile, UserRole } from './types';
 
 export default function App() {
-  const { user, profile, session, isEmailVerified, loading: authLoading } = useAuth();
+  const { user, profile, session, isEmailVerified, isPendingOtpVerification, loading: authLoading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const restoredDashboardRef = useRef(false);
@@ -186,10 +186,12 @@ export default function App() {
   }, [authLoading, user, profile, isEmailVerified, location.pathname]);
 
   // ── Redirect verified+profiled users away from public/auth pages ──
-  // Happens ONLY when user is fully logged in AND email is verified AND profile exists.
+  // Happens ONLY when user is fully logged in AND email is verified AND profile exists
+  // AND we are NOT in the middle of an OTP verification flow.
   useEffect(() => {
     if (authLoading) return;
     if (!user || !profile || !isEmailVerified) return;
+    if (isPendingOtpVerification) return; // ← GUARD: don't redirect until OTP is done
 
     const path = location.pathname;
     const dashboardRoute = getDashboardRoute(profile.role);
@@ -202,7 +204,7 @@ export default function App() {
     if (isPublicOrAuthPath && dashboardRoute) {
       navigate(dashboardRoute, { replace: true });
     }
-  }, [authLoading, user, profile, isEmailVerified, location.pathname, navigate]);
+  }, [authLoading, user, profile, isEmailVerified, isPendingOtpVerification, location.pathname, navigate]);
 
   const handleOpenLogin = () => {
     setIsRoleSelectionOpen(false);

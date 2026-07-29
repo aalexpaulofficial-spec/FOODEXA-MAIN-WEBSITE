@@ -71,65 +71,28 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-   const closeDashboards = () => {
-     setIsStudentPortalOpen(false);
-     setIsInstitutionDashboardOpen(false);
-     setIsKitchenDashboardOpen(false);
-     setIsSuperAdminDashboardOpen(false);
-   };
+  const closeDashboards = () => {
+    setIsStudentPortalOpen(false);
+    setIsInstitutionDashboardOpen(false);
+    setIsKitchenDashboardOpen(false);
+    setIsSuperAdminDashboardOpen(false);
+  };
 
-   const openDashboardForProfile = (liveProfile: Profile) => {
-     closeDashboards();
-     const role = liveProfile.role;
-     setCurrentUserRole(role);
-     if (role === 'institution_admin') {
-       setIsInstitutionDashboardOpen(true);
-     } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
-       setIsKitchenDashboardOpen(true);
-     } else if (role === 'super_admin') {
-       setIsSuperAdminDashboardOpen(true);
-     } else {
-       setIsStudentPortalOpen(true);
-     }
-   };
-
-// Enforce email verification: redirect unverified users to /verify-otp
-// Never redirect away from dashboard paths to prevent race conditions after OTP
-    const isDashboardPath = (path: string) =>
-      path === '/student-dashboard' || path === '/student/dashboard' ||
-      path === '/institution/dashboard' || path === '/kitchen/dashboard' || path === '/admin/dashboard';
-
-    useEffect(() => {
-      if (authLoading) return;
-      if (!session) return;
-
-      if (!isEmailVerified && !isDashboardPath(location.pathname) && location.pathname !== '/verify-otp' && location.pathname !== '/create-account') {
-        navigate('/verify-otp', { replace: true });
-      }
-    }, [authLoading, session, isEmailVerified, location.pathname, navigate]);
-
-// Redirect authenticated users away from public pages
-    useEffect(() => {
-      if (authLoading) return;
-      if (!user || !profile) return;
-      if (!isEmailVerified) return;
-
-      const path = location.pathname;
-      const dashboardRoute = getDashboardRoute(profile.role);
-
-      const publicPaths = ['/', '/login', '/create-account', '/student-login', '/institution-login'];
-      const isPublicPath = publicPaths.includes(path) || (path.endsWith('/register') && !path.includes('/dashboard'));
-      
-      if (isPublicPath) {
-        if (dashboardRoute) {
-          navigate(dashboardRoute, { replace: true });
-        }
-      } else if (path === '/verify-otp') {
-        return;
-      } else if (path === '/student-dashboard' || path === '/student/dashboard') {
-        return;
-      }
-    }, [authLoading, user, profile, isEmailVerified, location.pathname, navigate]);
+  const openDashboardForProfile = (liveProfile: Profile) => {
+    closeDashboards();
+    const role = liveProfile.role;
+    setCurrentUserRole(role);
+    if (role === 'institution_admin') {
+      setIsInstitutionDashboardOpen(true);
+    } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
+      setIsKitchenDashboardOpen(true);
+    } else if (role === 'super_admin') {
+      setIsSuperAdminDashboardOpen(true);
+    } else {
+      // student, faculty, guest
+      setIsStudentPortalOpen(true);
+    }
+  };
 
   const getDashboardRoute = (role: UserRole | null): string | null => {
     if (role === 'student') return '/student-dashboard';
@@ -141,70 +104,63 @@ export default function App() {
     return null;
   };
 
-   // Route-based initialization: handle URL on mount
-   useEffect(() => {
-     if (authLoading) return;
-     const path = location.pathname;
-     const role = roleFromQuery;
+  const isDashboardPath = (path: string) =>
+    path === '/student-dashboard' || path === '/student/dashboard' ||
+    path === '/institution/dashboard' || path === '/kitchen/dashboard' || path === '/admin/dashboard';
 
-     if (path === '/create-account') {
-       const savedRole = sessionStorage.getItem('foodexa_role');
-       const roleToUse = roleFromQuery || savedRole;
+  // ── Route-based initialization: open the correct modal based on the URL ──
+  // NOTE: We never redirect to '/' during registration or OTP flow.
+  // The AuthModal manages OTP step internally — no URL change needed.
+  useEffect(() => {
+    if (authLoading) return;
+    const path = location.pathname;
 
-       if (roleToUse && ['student', 'faculty', 'guest'].includes(roleToUse)) {
-         setIsRoleSelectionOpen(false);
-         setSelectedRole(roleToUse as any);
-         setAuthInitialMode('create');
-         setIsAuthOpen(true);
-       } else {
-         setIsRoleSelectionOpen(true);
-         setIsAuthOpen(false);
-       }
-      } else if (path === '/verify-otp') {
+    if (path === '/create-account') {
+      const savedRole = sessionStorage.getItem('foodexa_role');
+      const roleToUse = roleFromQuery || savedRole;
+
+      if (roleToUse && ['student', 'faculty', 'guest'].includes(roleToUse)) {
         setIsRoleSelectionOpen(false);
-        if (!session || isEmailVerified) {
-          navigate('/', { replace: true });
-        } else {
-          setIsAuthOpen(true);
-        }
-     } else if (path === '/student-login') {
-       setIsRoleSelectionOpen(false);
-       setAuthInitialMode('login');
-       setIsAuthOpen(true);
-     } else if (path === '/institution-login') {
-       setIsRoleSelectionOpen(false);
-       setAuthInitialMode('login');
-       setIsAuthOpen(true);
-      } else if (path === '/student-dashboard' || path === '/student/dashboard') {
-        setIsRoleSelectionOpen(false);
+        setSelectedRole(roleToUse as 'student' | 'faculty' | 'guest');
+        setAuthInitialMode('create');
+        setIsAuthOpen(true);
+      } else {
+        setIsRoleSelectionOpen(true);
         setIsAuthOpen(false);
-        if (!session || !isEmailVerified) {
-          navigate('/', { replace: true });
-        } else if (!profile && !authLoading) {
-          navigate('/', { replace: true });
-        }
-     } else if (path === '/student/register') {
-       setIsRoleSelectionOpen(false);
-       setSelectedRole('student');
-       setAuthInitialMode('create');
-       setIsAuthOpen(true);
-     } else if (path === '/faculty/register') {
-       setIsRoleSelectionOpen(false);
-       setSelectedRole('faculty');
-       setAuthInitialMode('create');
-       setIsAuthOpen(true);
-     } else if (path === '/guest/register') {
-       setIsRoleSelectionOpen(false);
-       setSelectedRole('guest');
-       setAuthInitialMode('create');
-       setIsAuthOpen(true);
-     } else if (path === '/login') {
-       setIsRoleSelectionOpen(false);
-       setAuthInitialMode('login');
-       setIsAuthOpen(true);
-     }
-   }, [authLoading, session, isEmailVerified, profile, location.pathname, location.search, roleFromQuery, navigate]);
+      }
+    } else if (path === '/student-login' || path === '/login') {
+      setIsRoleSelectionOpen(false);
+      setAuthInitialMode('login');
+      setIsAuthOpen(true);
+    } else if (path === '/institution-login') {
+      setIsRoleSelectionOpen(false);
+      setAuthInitialMode('login');
+      setIsAuthOpen(true);
+    } else if (path === '/student/register') {
+      setIsRoleSelectionOpen(false);
+      setSelectedRole('student');
+      setAuthInitialMode('create');
+      setIsAuthOpen(true);
+    } else if (path === '/faculty/register') {
+      setIsRoleSelectionOpen(false);
+      setSelectedRole('faculty');
+      setAuthInitialMode('create');
+      setIsAuthOpen(true);
+    } else if (path === '/guest/register') {
+      setIsRoleSelectionOpen(false);
+      setSelectedRole('guest');
+      setAuthInitialMode('create');
+      setIsAuthOpen(true);
+    } else if (isDashboardPath(path)) {
+      // On a dashboard path — the session restore effect below handles opening
+      // the correct dashboard. We close auth & role modals.
+      setIsRoleSelectionOpen(false);
+      setIsAuthOpen(false);
+    }
+  }, [authLoading, location.pathname, location.search, roleFromQuery]);
 
+  // ── Session restore: open the correct dashboard on refresh ──
+  // Only fires when auth finishes loading and a verified session exists.
   useEffect(() => {
     if (authLoading) return;
 
@@ -222,13 +178,31 @@ export default function App() {
 
     if (!profile) return;
 
-    // Only auto-restore dashboard when on a dashboard path or when modals are not visible
     const isOnDashboardPath = isDashboardPath(location.pathname);
     if (isOnDashboardPath && !restoredDashboardRef.current) {
       restoredDashboardRef.current = true;
       openDashboardForProfile(profile);
     }
-  }, [authLoading, user, profile, isEmailVerified, isAuthOpen, location.pathname]);
+  }, [authLoading, user, profile, isEmailVerified, location.pathname]);
+
+  // ── Redirect verified+profiled users away from public/auth pages ──
+  // Happens ONLY when user is fully logged in AND email is verified AND profile exists.
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user || !profile || !isEmailVerified) return;
+
+    const path = location.pathname;
+    const dashboardRoute = getDashboardRoute(profile.role);
+
+    const publicPaths = ['/', '/login', '/create-account', '/student-login', '/institution-login'];
+    const isPublicOrAuthPath =
+      publicPaths.includes(path) ||
+      (path.endsWith('/register') && !path.includes('/dashboard'));
+
+    if (isPublicOrAuthPath && dashboardRoute) {
+      navigate(dashboardRoute, { replace: true });
+    }
+  }, [authLoading, user, profile, isEmailVerified, location.pathname, navigate]);
 
   const handleOpenLogin = () => {
     setIsRoleSelectionOpen(false);
@@ -400,9 +374,7 @@ export default function App() {
         isOpen={isRoleSelectionOpen}
         onClose={() => {
           setIsRoleSelectionOpen(false);
-          if (location.pathname !== '/') {
-            navigate('/', { replace: false });
-          }
+          navigate('/', { replace: false });
         }}
         onRoleSelected={handleRoleSelected}
       />
@@ -411,9 +383,8 @@ export default function App() {
         isOpen={isAuthOpen}
         onClose={() => {
           setIsAuthOpen(false);
-          if (location.pathname !== '/') {
-            navigate('/', { replace: false });
-          }
+          sessionStorage.removeItem('foodexa_role');
+          navigate('/', { replace: false });
         }}
         onBack={() => {
           setIsAuthOpen(false);
@@ -421,11 +392,13 @@ export default function App() {
         }}
         initialMode={authInitialMode}
         selectedRole={selectedRole}
-        onLoginSuccess={({ profile: liveProfile, institution }) => {
+        onLoginSuccess={({ profile: liveProfile }) => {
           setIsAuthOpen(false);
+          sessionStorage.removeItem('foodexa_role');
           restoredDashboardRef.current = true;
           openDashboardForProfile(liveProfile);
-          navigate('/student-dashboard', { replace: true });
+          const dashRoute = getDashboardRoute(liveProfile.role) || '/student-dashboard';
+          navigate(dashRoute, { replace: true });
         }}
       />
 
@@ -433,9 +406,7 @@ export default function App() {
         isOpen={isStudentPortalOpen}
         onClose={() => {
           setIsStudentPortalOpen(false);
-          if (location.pathname !== '/') {
-            navigate('/', { replace: false });
-          }
+          navigate('/', { replace: false });
         }}
         role={currentUserRole as any}
       />
@@ -444,9 +415,7 @@ export default function App() {
         isOpen={isInstitutionDashboardOpen}
         onClose={() => {
           setIsInstitutionDashboardOpen(false);
-          if (location.pathname !== '/') {
-            navigate('/', { replace: false });
-          }
+          navigate('/', { replace: false });
         }}
       />
 
@@ -454,9 +423,7 @@ export default function App() {
         isOpen={isKitchenDashboardOpen}
         onClose={() => {
           setIsKitchenDashboardOpen(false);
-          if (location.pathname !== '/') {
-            navigate('/', { replace: false });
-          }
+          navigate('/', { replace: false });
         }}
       />
 
@@ -464,9 +431,7 @@ export default function App() {
         isOpen={isSuperAdminDashboardOpen}
         onClose={() => {
           setIsSuperAdminDashboardOpen(false);
-          if (location.pathname !== '/') {
-            navigate('/', { replace: false });
-          }
+          navigate('/', { replace: false });
         }}
       />
 

@@ -265,8 +265,10 @@ export interface Order {
   completed_at: string | null;
   updated_at: string;
   estimated_prep_time?: number;
-  kitchen_status?: string;
   token_number?: string;
+  pickup_pin?: string;
+  kitchen_queue_status?: string;
+  kitchen_status?: string;
 }
 
 export interface NotificationItem {

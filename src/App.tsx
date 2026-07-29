@@ -421,6 +421,7 @@ export default function App() {
           navigate('/', { replace: false });
         }}
         role={currentUserRole as any}
+        triggerToast={addToast}
       />
 
       <InstitutionDashboardModal

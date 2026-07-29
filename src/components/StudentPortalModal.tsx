@@ -24,7 +24,7 @@ import type { MenuItem, Order, OrderStatus, NotificationItem, UserRole, CartItem
 
 declare global { interface Window { Razorpay: any } }
 
-interface StudentPortalModalProps { isOpen: boolean; onClose: () => void; role?: UserRole }
+interface StudentPortalModalProps { isOpen: boolean; onClose: () => void; role?: UserRole; triggerToast?: (title: string, description: string, type?: 'success' | 'warning' | 'info' | 'ai') => void }
 type PortalTab = 'home' | 'menu' | 'orders' | 'profile' | 'checkout' | 'payment_success' | 'payment_failed';
 
 const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready'];
@@ -485,7 +485,7 @@ const OrderProgressBar = ({ status }: { status: OrderStatus }) => {
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, onClose, role }) => {
+export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, onClose, role, triggerToast }) => {
   const { user, profile, refreshProfile, signOut, updateProfile, leaveInstitution } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<PortalTab>('home');
@@ -844,10 +844,20 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const cartCount = cart.reduce((s, e) => s + e.quantity, 0);
 
   // Cart actions
-  const addToCart = (item: MenuItem) => setCart((prev) => {
-    const ex = prev.find((e) => e.item.id === item.id);
-    return ex ? prev.map((e) => e.item.id === item.id ? { ...e, quantity: e.quantity + 1 } : e) : [...prev, { item, quantity: 1 }];
-  });
+  const addToCart = (item: MenuItem) => {
+    let found = false;
+    setCart((prev) => {
+      const ex = prev.find((e) => e.item.id === item.id);
+      if (ex) {
+        found = true;
+        return prev.map((e) => e.item.id === item.id ? { ...e, quantity: e.quantity + 1 } : e);
+      }
+      return [...prev, { item, quantity: 1 }];
+    });
+    if (triggerToast) {
+      triggerToast(found ? 'Updated quantity' : 'Added to cart', `${item.name} · ${formatINR(item.offer_price || item.price)}`, 'success');
+    }
+  };
 
   const updateQuantity = (id: string, delta: number) => setCart((prev) =>
     prev.map((e) => e.item.id === id ? { ...e, quantity: e.quantity + delta } : e).filter((e) => e.quantity > 0)
@@ -889,19 +899,20 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     setSubmittingOrder(true); setError(null);
     try {
       const tempOrderId = `FDX-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      const itemsForBackend = cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price }));
       const razorpayResult = await createRazorpayOrder({
         amount: cartTotal, currency: 'INR', user_id: user.id, email: profile.email,
         phone: profile.phone || undefined, name: profile.full_name || undefined,
         institution_id: profile.institution_id || undefined, order_id: tempOrderId, counter: firstItemCounter,
       });
       if (!razorpayResult.success || !razorpayResult.order_id) {
-        setError(razorpayResult.error || 'Failed to initialize payment.'); setSubmittingOrder(false); return;
+        setError(razorpayResult.error || 'Failed to initialize payment.'); setSubmittingOrder(false); if (triggerToast) triggerToast('Payment Initialization Failed', razorpayResult.error || 'Please try again.', 'warning'); return;
       }
 
       const razorpayKeyId = razorpayResult.razorpay_key_id;
       if (!razorpayKeyId) { setError('Payment configuration error.'); setSubmittingOrder(false); return; }
 
-      const options = {
+      const options: any = {
         key: razorpayKeyId, amount: razorpayResult.amount, currency: razorpayResult.currency || 'INR',
         name: 'FOODEXA', description: `Campus Order — ${firstItemCounter}`,
         image: 'https://foodexa.com/logo.png',
@@ -910,18 +921,20 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = response;
           try {
             const verifyResult = await verifyRazorpayPayment({ razorpay_order_id, razorpay_payment_id, razorpay_signature, user_id: user.id, order_id: tempOrderId });
-            if (!verifyResult.success) { setError(verifyResult.error || 'Payment verification failed.'); setSubmittingOrder(false); return; }
+            if (!verifyResult.success) { setError(verifyResult.error || 'Payment verification failed.'); setActiveTab('payment_failed'); setSubmittingOrder(false); if (triggerToast) triggerToast('Payment Verification Failed', verifyResult.error || 'Contact support.', 'warning'); return; }
             const orderResult = await placeOrder({
               user_id: user.id, email: profile.email, role: liveRole, institution_id: profile.institution_id,
                institution_code: institutionCode, counter: firstItemCounter,
-              items: cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price })),
+              items: itemsForBackend,
+              itemsFull: cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price, image_url: e.item.image_url, is_veg: e.item.is_veg })),
               total_amount: cartGrandTotal, razorpay_order_id, razorpay_payment_id, razorpay_signature,
             });
-            if (orderResult.error) { setError(`Order failed: ${orderResult.error}`); setActiveTab('payment_failed'); setSubmittingOrder(false); return; }
+            if (orderResult.error) { setError(`Order failed: ${orderResult.error}`); setActiveTab('payment_failed'); setSubmittingOrder(false); if (triggerToast) triggerToast('Order Creation Failed', orderResult.error || 'Contact support.', 'warning'); return; }
             if (orderResult.data) setOrders((prev) => [orderResult.data!, ...prev]);
-            setCart([]); setShowCart(false); setActiveTab('payment_success'); setSubmittingOrder(false);
+            setCart([]); setShowCart(false); setCouponDiscount(0); setCouponCode(''); setActiveTab('payment_success'); setSubmittingOrder(false); setError(null);
+            if (triggerToast) triggerToast('Order Placed Successfully', `Order ${orderResult.data.order_id} is being prepared.`, 'success');
           } catch (verifyErr: any) {
-            setError('Payment completed but verification failed. Contact support.'); setActiveTab('payment_failed'); setSubmittingOrder(false);
+            setError('Payment completed but verification failed. Contact support.'); setActiveTab('payment_failed'); setSubmittingOrder(false); if (triggerToast) triggerToast('Verification Error', 'Payment completed but order creation failed.', 'warning');
           }
         },
         prefill: { name: profile.full_name || '', email: profile.email || '', contact: profile.phone || '' },
@@ -932,11 +945,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
       const razorpay = new window.Razorpay(options);
       razorpay.on('payment.failed', function (response: any) {
-        setError(`Payment failed: ${response?.error?.description || 'Please try again.'}`); setActiveTab('payment_failed'); setSubmittingOrder(false);
+        setError(`Payment failed: ${response?.error?.description || 'Please try again.'}`); setActiveTab('payment_failed'); setSubmittingOrder(false); if (triggerToast) triggerToast('Payment Failed', response?.error?.description || 'Please try again.', 'warning');
       });
       razorpay.open();
     } catch (err: any) {
-      setError(err?.message || 'Failed to initiate payment.'); setActiveTab('payment_failed'); setSubmittingOrder(false);
+      setError(err?.message || 'Failed to initiate payment.'); setActiveTab('payment_failed'); setSubmittingOrder(false); if (triggerToast) triggerToast('Payment Error', err?.message || 'Failed to initiate payment.', 'warning');
     }
   };
 
@@ -2020,33 +2033,57 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                   </div>
                 )}
 
-                {/* ═══════════════════ PAYMENT SUCCESS TAB ═══════════════════ */}
-                {activeTab === 'payment_success' && (
+                {/* PAYMENT SUCCESS TAB */}
+                {activeTab === 'payment_success' && orders[0] && (
                   <div className="max-w-md mx-auto space-y-6 text-center py-10">
-                    <div className="w-24 h-24 mx-auto bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/30 animate-[bounce_1s_ease-in-out]">
+                    <div className="w-24 h-24 mx-auto bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/30">
                       <CheckCircle className="w-12 h-12 text-slate-950" />
                     </div>
                     <div className="space-y-2">
-                      <h2 className="text-3xl font-black text-white">Payment Successful!</h2>
+                      <h2 className="text-3xl font-black text-white">Order Confirmed!</h2>
                       <p className="text-sm text-emerald-400 font-semibold">Your order has been sent to the kitchen.</p>
                     </div>
 
                     <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4 text-left">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500 font-bold">Order ID</span>
-                        <span className="text-white font-mono">{orders[0]?.order_id || 'PENDING'}</span>
+                      <div className="flex flex-wrap items-center justify-between text-xs gap-2">
+                        <span className="text-slate-500 font-bold">Order Number</span>
+                        <span className="text-white font-mono font-black">{orders[0].order_id}</span>
                       </div>
-                      <div className="flex justify-between items-center text-xs">
+                      <div className="flex flex-wrap items-center justify-between text-xs gap-2">
+                        <span className="text-slate-500 font-bold">Token Number</span>
+                        <span className="text-amber-300 font-black">{orders[0].token_number || 'PENDING'}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between text-xs gap-2">
                         <span className="text-slate-500 font-bold">Counter</span>
-                        <span className="text-white font-bold">{orders[0]?.counter || 'N/A'}</span>
+                        <span className="text-white font-bold">{orders[0].counter}</span>
                       </div>
-                      <div className="flex justify-between items-center text-xs">
+                      <div className="flex flex-wrap items-center justify-between text-xs gap-2">
+                        <span className="text-slate-500 font-bold">Pickup PIN</span>
+                        <span className="text-cyan-300 font-black">{orders[0].pickup_code || orders[0].pickup_pin || 'N/A'}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between text-xs gap-2">
                         <span className="text-slate-500 font-bold">Est. Wait Time</span>
-                        <span className="text-amber-400 font-bold">~15 mins</span>
+                        <span className="text-amber-400 font-bold">~{orders[0].estimated_prep_time || 15} mins</span>
                       </div>
-                      <div className="pt-4 border-t border-slate-800">
-                        <button onClick={() => setQrOrder(orders[0])} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-800 py-3 text-xs font-bold text-white hover:bg-slate-700 transition-colors">
-                          <QrCode className="w-4 h-4" /> View Pickup QR Code
+                      <div className="pt-4 border-t border-slate-800 space-y-2">
+                        <button onClick={() => setActiveTab('orders')} className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 text-slate-950 py-2.5 text-xs font-black hover:bg-emerald-400 transition-colors">
+                          <Activity className="w-3.5 h-3.5" /> Live Order Tracking
+                        </button>
+                        <button onClick={() => setQrOrder(orders[0])} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-white hover:bg-slate-700 transition-colors">
+                          <QrCode className="w-3.5 h-3.5" /> Show Pickup QR Code
+                        </button>
+                        <button onClick={() => {
+                          const receipt = generateReceipt(orders[0]);
+                          const blob = new Blob([receipt], { type: 'text/plain' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `receipt-${orders[0].order_id}.txt`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          if (triggerToast) triggerToast('Receipt Downloaded', `Receipt for ${orders[0].order_id} saved.`, 'success');
+                        }} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors">
+                          <Receipt className="w-3.5 h-3.5" /> Download Payment Receipt
                         </button>
                       </div>
                     </div>
@@ -2094,9 +2131,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
         {/* ── CART DRAWER ────────────────────────────────────────────── */}
         {showCart && (
-          <div className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm lg:hidden" onClick={() => setShowCart(false)} />
+          <div className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm hidden lg:block" onClick={() => setShowCart(false)} />
         )}
-        <aside className={`fixed bottom-0 right-0 top-0 z-50 w-full max-w-sm border-l border-slate-800 bg-slate-950 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${showCart ? 'translate-x-0' : 'translate-x-full'} lg:hidden`}>
+        <aside className={`fixed bottom-0 right-0 top-0 z-50 w-full max-w-sm border-l border-slate-800 bg-slate-950 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${showCart ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0`}>
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
             <h3 className="text-base font-black text-white flex items-center gap-2">
               <ShoppingCart className="w-4 h-4 text-emerald-400" /> Cart
@@ -2108,45 +2145,73 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           </div>
 
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-            {cart.length ? cart.map((entry) => (
-              <div key={entry.item.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-extrabold text-white truncate">{entry.item.name}</p>
-                    <p className="text-[9px] text-slate-500">{entry.item.counter_name}</p>
-                  </div>
-                  <p className="shrink-0 text-xs font-black text-emerald-300">
-                    {formatINR((entry.item.offer_price || entry.item.price) * entry.quantity)}
-                  </p>
+            {cart.length ? cart.map((entry) => {
+              const itemTotal = (entry.item.offer_price || entry.item.price) * entry.quantity;
+              return (
+              <div key={entry.item.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-3 flex gap-3">
+                <div className="w-16 h-16 shrink-0 rounded-xl bg-slate-800 overflow-hidden flex items-center justify-center">
+                  {entry.item.image_url ? (
+                    <img src={entry.item.image_url} alt={entry.item.name} className="w-full h-full object-cover" onError={() => {}} />
+                  ) : (
+                    <Utensils className="w-6 h-6 text-slate-700" />
+                  )}
                 </div>
-                <div className="flex items-center gap-2 mt-2.5">
-                  <button
-                    onClick={() => updateQuantity(entry.item.id, -1)}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
-                  >
-                    <Minus className="w-3 h-3" />
-                  </button>
-                  <span className="text-xs font-bold text-white w-6 text-center">{entry.quantity}</span>
-                  <button
-                    onClick={() => updateQuantity(entry.item.id, 1)}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
-                  >
-                    <Plus className="w-3 h-3" />
-                  </button>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-extrabold text-white truncate">{entry.item.name}</p>
+                      <p className="text-[9px] text-slate-500 truncate">{entry.item.counter_name}</p>
+                    </div>
+                    <p className="shrink-0 text-xs font-black text-emerald-300">{formatINR(itemTotal)}</p>
+                  </div>
+                  <p className="text-[9px] text-slate-500 mt-0.5">{formatINR(entry.item.offer_price || entry.item.price)} each</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={() => updateQuantity(entry.item.id, -1)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                    >
+                      <Minus className="w-3 h-3" />
+                    </button>
+                    <span className="text-xs font-bold text-white w-6 text-center">{entry.quantity}</span>
+                    <button
+                      onClick={() => updateQuantity(entry.item.id, 1)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            )) : (
+              );
+            }) : (
               <EmptyState icon={ShoppingCart} title="Cart is empty" message="Add items from the menu to start an order." />
             )}
           </div>
 
           {cart.length > 0 && (
-            <div className="border-t border-slate-800 px-5 py-4 space-y-3 bg-slate-950">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-black text-white">Total</span>
-                <span className="text-lg font-black text-emerald-300">{formatINR(cartTotal)}</span>
+            <div className="border-t border-slate-800 px-5 py-4 space-y-2 bg-slate-950">
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>Subtotal</span>
+                <span>{formatINR(cartSubtotal)}</span>
               </div>
-              <p className="text-[9px] text-slate-500 text-center">Items from: {firstItemCounter}</p>
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>Counter</span>
+                <span className="font-semibold text-white truncate max-w-32 ml-2 text-right">{firstItemCounter || 'Multiple'}</span>
+              </div>
+              {cartDiscount > 0 && (
+                <div className="flex justify-between text-xs text-emerald-400">
+                  <span>Discount</span>
+                  <span>-{formatINR(cartDiscount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>GST (5%)</span>
+                <span>{formatINR(cartGST)}</span>
+              </div>
+              <div className="flex justify-between text-sm font-black text-white pt-1">
+                <span>Total</span>
+                <span className="text-emerald-400">{formatINR(cartGrandTotal)}</span>
+              </div>
               <button
                 onClick={() => { setShowCart(false); setActiveTab('checkout'); }}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 text-sm font-black text-slate-950 shadow-lg hover:from-emerald-400 hover:to-teal-400 transition-all"
@@ -2157,20 +2222,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           )}
         </aside>
       </div>
-
-      {/* ── DESKTOP CART ────────────────────────────────────────────── */}
-      {cart.length > 0 && (
-        <div className="hidden lg:block fixed right-6 bottom-6 z-30">
-          <button
-            onClick={() => setShowCart(!showCart)}
-            className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-3 text-sm font-black text-slate-950 shadow-2xl shadow-emerald-950/40 hover:from-emerald-400 hover:to-teal-400 transition-all hover:scale-105"
-          >
-            <ShoppingCart className="w-4 h-4" />
-            {cartCount} items · {formatINR(cartTotal)}
-            <ArrowUpRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       {/* ── EDIT PROFILE MODAL ─────────────────────────────────────── */}
       {editingProfile && (

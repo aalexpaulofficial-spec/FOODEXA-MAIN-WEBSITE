@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Loader2, LogOut, ChefHat, Clock, CheckCircle2 } from 'lucide-react';
+import { X, Loader2, LogOut, ChefHat, Clock, CheckCircle2, QrCode, Inbox } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { OrderStatus } from '../types';
@@ -17,18 +17,6 @@ export const KitchenDashboardModal: React.FC<KitchenDashboardModalProps> = ({ is
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const guard = async () => {
-      const { data: { session: s } } = await supabase.auth.getSession();
-      if (!s || !s.user?.email_confirmed_at) {
-        onClose();
-        navigate('/');
-      }
-    };
-    guard();
-  }, [isOpen]);
 
   const load = useCallback(async () => {
     if (!isOpen || !profile?.institution_id) return;
@@ -50,11 +38,48 @@ export const KitchenDashboardModal: React.FC<KitchenDashboardModalProps> = ({ is
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (!isOpen || !profile?.institution_id) return;
+    const channel = supabase.channel('kitchen-orders');
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'orders', filter: `institution_id=eq.${profile.institution_id}` },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const row = payload.new as any;
+          if (ACTIVE_STATUSES.includes(row.status)) {
+            setOrders((prev) => [row, ...prev]);
+          }
+        } else if (payload.eventType === 'UPDATE') {
+          const row = payload.new as any;
+          if (ACTIVE_STATUSES.includes(row.status)) {
+            setOrders((prev) => prev.map((o) => o.id === row.id ? row : o));
+          } else {
+            setOrders((prev) => prev.filter((o) => o.id !== row.id));
+          }
+        } else if (payload.eventType === 'DELETE') {
+          setOrders((prev) => prev.filter((o) => o.id !== payload.old.id));
+        }
+      }
+    );
+    channel.subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [isOpen, profile?.institution_id]);
+
   if (!isOpen) return null;
 
   const handleSignOut = async () => {
     await signOut();
     onClose();
+  };
+
+  const updateStatus = async (orderId: string, newStatus: OrderStatus) => {
+    const { error } = await supabase.from('orders').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', orderId);
+    if (error) {
+      console.error('Status update failed:', error);
+    } else {
+      setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
+    }
   };
 
   return (
@@ -65,7 +90,7 @@ export const KitchenDashboardModal: React.FC<KitchenDashboardModalProps> = ({ is
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-500 text-sm font-black text-slate-950 shadow-lg shadow-emerald-950">FX</div>
               <div className="min-w-0">
-                <h2 className="truncate text-base font-black tracking-tight text-white sm:text-lg">Kitchen Dashboard</h2>
+                <h2 className="truncate text-base font-black tracking-tight text-white sm:text-lg">Kitchen Display</h2>
                 <p className="truncate text-[11px] text-slate-400">{institutionData?.institution_code ? `Institution: ${institutionData.institution_code}` : 'Institution sync pending'}</p>
               </div>
             </div>
@@ -80,23 +105,51 @@ export const KitchenDashboardModal: React.FC<KitchenDashboardModalProps> = ({ is
             <div className="flex items-center justify-center py-20 text-sm font-bold text-slate-300"><Loader2 className="w-5 h-5 animate-spin text-emerald-400 mr-2" />Loading kitchen orders...</div>
           ) : (
             <div className="mx-auto w-full max-w-[1800px] space-y-6">
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="rounded-3xl border border-slate-800 bg-slate-950 p-5"><ChefHat className="w-5 h-5 text-emerald-400" /><p className="mt-4 text-3xl font-black text-white">{orders.length}</p><p className="text-xs font-bold text-slate-500">Active Orders</p></div>
-                <div className="rounded-3xl border border-slate-800 bg-slate-950 p-5"><Clock className="w-5 h-5 text-emerald-400" /><p className="mt-4 text-3xl font-black text-white">{orders.filter((o) => o.status === 'preparing').length}</p><p className="text-xs font-bold text-slate-500">Preparing</p></div>
-                <div className="rounded-3xl border border-slate-800 bg-slate-950 p-5"><CheckCircle2 className="w-5 h-5 text-emerald-400" /><p className="mt-4 text-3xl font-black text-white">{orders.filter((o) => o.status === 'ready').length}</p><p className="text-xs font-bold text-slate-500">Ready for Pickup</p></div>
+              <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                  <Inbox className="w-5 h-5 text-amber-400" />
+                  <p className="mt-4 text-3xl font-black text-white">{orders.filter((o) => o.kitchen_queue_status === 'incoming' || o.status === 'pending').length}</p>
+                  <p className="text-xs font-bold text-slate-500">Incoming</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                  <ChefHat className="w-5 h-5 text-violet-400" />
+                  <p className="mt-4 text-3xl font-black text-white">{orders.filter((o) => o.status === 'preparing').length}</p>
+                  <p className="text-xs font-bold text-slate-500">Preparing</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                  <QrCode className="w-5 h-5 text-emerald-400" />
+                  <p className="mt-4 text-3xl font-black text-white">{orders.filter((o) => o.status === 'ready').length}</p>
+                  <p className="text-xs font-bold text-slate-500">Ready</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                  <CheckCircle2 className="w-5 h-5 text-slate-400" />
+                  <p className="mt-4 text-3xl font-black text-white">{orders.filter((o) => o.status === 'completed').length}</p>
+                  <p className="text-xs font-bold text-slate-500">Completed</p>
+                </div>
               </div>
               <section className="space-y-4">
-                <h3 className="text-sm font-extrabold text-white">Active Orders</h3>
+                <h3 className="text-sm font-extrabold text-white">Live Queue</h3>
                 {orders.length === 0 ? (
                   <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 text-center text-xs text-slate-500">No active orders right now.</div>
                 ) : (
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {orders.map((o) => (
-                      <div key={o.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                        <div className="flex items-center justify-between"><p className="text-xs font-black text-emerald-300">{o.order_id}</p><span className={`text-[10px] font-mono ${o.status === 'ready' ? 'text-emerald-300' : o.status === 'preparing' ? 'text-indigo-300' : 'text-yellow-300'}`}>{o.status}</span></div>
-                        <p className="mt-2 text-xs text-slate-300">Counter: {o.counter}</p>
-                        <p className="text-xs text-slate-300">Items: {o.items?.length || 0}</p>
-                        <p className="text-xs text-slate-300">Total: {o.total_amount}</p>
+                      <div key={o.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-black text-emerald-300">{o.order_id}</p>
+                            <p className="text-[9px] text-slate-500">{o.token_number || ''}</p>
+                          </div>
+                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${o.status === 'ready' ? 'text-emerald-300 bg-emerald-950/40' : o.status === 'preparing' ? 'text-indigo-300 bg-indigo-950/40' : 'text-yellow-300 bg-yellow-950/40'}`}>{o.status}</span>
+                        </div>
+                        <p className="text-xs text-slate-300">Counter: {o.counter}</p>
+                        <p className="text-xs text-slate-300">PIN: {o.pickup_pin || o.pickup_code || 'N/A'}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <button onClick={() => updateStatus(o.id, 'accepted')} className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[10px] font-bold text-amber-300 hover:bg-amber-950 transition-colors">Accept</button>
+                          <button onClick={() => updateStatus(o.id, 'preparing')} className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[10px] font-bold text-violet-300 hover:bg-violet-950 transition-colors">Prepare</button>
+                          <button onClick={() => updateStatus(o.id, 'ready')} className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[10px] font-bold text-emerald-300 hover:bg-emerald-950 transition-colors">Ready</button>
+                          <button onClick={() => updateStatus(o.id, 'completed')} className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[10px] font-bold text-slate-300 hover:bg-slate-800 transition-colors">Complete</button>
+                        </div>
                       </div>
                     ))}
                   </div>

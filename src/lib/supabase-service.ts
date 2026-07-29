@@ -262,6 +262,7 @@ export function mapOrder(row: any): Order {
     pickup_code: row.pickup_code || row.qr_code || null,
     qr_code: row.qr_code || row.qr || null,
     qr_code_data: row.qr_code_data || null,
+    pickup_pin: row.pickup_pin || null,
     locker_number: row.locker_number || row.locker || null,
     created_at: row.created_at || row.inserted_at || '',
     accepted_at: row.accepted_at || null,
@@ -269,6 +270,9 @@ export function mapOrder(row: any): Order {
     ready_at: row.ready_at || null,
     completed_at: row.completed_at || null,
     updated_at: row.updated_at || row.created_at || '',
+    estimated_prep_time: row.estimated_prep_time || undefined,
+    token_number: row.token_number || undefined,
+    kitchen_queue_status: row.kitchen_queue_status || undefined,
   };
 }
 
@@ -303,7 +307,8 @@ export async function placeOrder(params: {
   institution_id: string | null;
   institution_code: string | null;
   counter: string;
-  items: { id: string; name: string; quantity: number; price: number }[];
+  items: { id: string; name: string; quantity: number; price: number };
+  itemsFull: { id: string; name: string; quantity: number; price: number; image_url?: string | null; is_veg?: boolean }[];
   total_amount: number;
   razorpay_order_id?: string;
   razorpay_payment_id?: string;
@@ -311,8 +316,11 @@ export async function placeOrder(params: {
   payment_method?: string;
 }): Promise<{ data: Order | null; error: string | null }> {
   const orderId = `FDX-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  const tokenNumber = `TKN-${Math.floor(1000 + Math.random() * 9000)}`;
   const pickupCode = `PC-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  const pickupPin = `${Math.floor(1000 + Math.random() * 9000)}`;
   const isPaid = Boolean(params.razorpay_payment_id && params.razorpay_signature);
+  const now = new Date().toISOString();
   const payload: Record<string, any> = {
     user_id: params.user_id,
     email: params.email,
@@ -320,24 +328,44 @@ export async function placeOrder(params: {
     institution_id: params.institution_id,
     institution_code: params.institution_code,
     order_id: orderId,
+    token_number: tokenNumber,
     counter: params.counter,
-    items: params.items,
+    items: params.itemsFull,
     total_amount: params.total_amount,
     status: isPaid ? 'pending' : 'pending',
     payment_status: isPaid ? 'paid' : 'pending',
     pickup_code: pickupCode,
+    pickup_pin: pickupPin,
     qr_code: `FOODEXA-${orderId}`,
-    qr_code_data: JSON.stringify({ orderId, pickupCode, counter: params.counter }),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    qr_code_data: JSON.stringify({ orderId, pickupCode, counter: params.counter, token: tokenNumber, pin: pickupPin }),
+    kitchen_queue_status: 'incoming',
+    estimated_prep_time: 15,
+    created_at: now,
+    updated_at: now,
   };
   if (params.razorpay_order_id) payload.razorpay_order_id = params.razorpay_order_id;
   if (params.razorpay_payment_id) payload.razorpay_payment_id = params.razorpay_payment_id;
   if (params.razorpay_signature) payload.razorpay_signature = params.razorpay_signature;
   if (params.payment_method) payload.payment_method = params.payment_method;
-  const { data, error } = await supabase.from('orders').insert([payload]).select().single();
-  if (error) return { data: null, error: error.message };
-  return { data: mapOrder(data), error: null };
+
+  const { data: orderData, error: orderError } = await supabase.from('orders').insert([payload]).select().single();
+  if (orderError || !orderData) {
+    return { data: null, error: orderError?.message || 'Failed to create order.' };
+  }
+
+  const orderItemsPayload = params.itemsFull.map((item) => ({
+    order_id: orderData.id,
+    menu_item_id: item.id,
+    name: item.name,
+    quantity: item.quantity,
+    price: item.price,
+  }));
+  const { error: itemsError } = await supabase.from('order_items').insert(orderItemsPayload);
+  if (itemsError) {
+    console.error('[Supabase] Failed to create order_items:', itemsError);
+  }
+
+  return { data: mapOrder(orderData), error: null };
 }
 
 export async function createRazorpayOrder(params: {
@@ -909,7 +937,7 @@ export function getEstimatedTimeRemaining(order: Order): number {
 }
 
 // ==================== RECEIPT / INVOICE ====================
-export async function generateReceipt(order: Order): Promise<string> {
+export function generateReceipt(order: Order): string {
   const lines = [
     'FOODEXA CAMPUS FOOD ORDER',
     '========================',

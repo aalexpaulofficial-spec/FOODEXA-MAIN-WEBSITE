@@ -58,20 +58,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       .from('institutions')
       .select('id, name, campus, city, state, country, institution_code');
 
-     query = profileData.institution_id
-       ? query.eq('id', profileData.institution_id)
-       : query.ilike('institution_code', profileData.institution_code || '');
+query = profileData.institution_id
+        ? query.eq('id', profileData.institution_id)
+        : query.ilike('institution_code', profileData.institution_code || '');
 
-     const { data, error } = await query.maybeSingle();
-     if (error) {
-       console.error('[Auth] Institution load error:', error.message);
-       setInstitutionData(null);
-       return null;
-     }
-     if (!data) {
-       setInstitutionData(null);
-       return null;
-     }
+      const { data, error } = await query.maybeSingle();
+      if (error) {
+        console.error('[Auth] Institution load error:', error.message);
+        setInstitutionData(null);
+        return null;
+      }
+      if (!data) {
+        setInstitutionData(null);
+        return null;
+      }
 
     const institution = {
       institution_id: data.id,
@@ -81,7 +81,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       state: data.state || '',
       country: data.country || '',
       institution_code: data.institution_code || '',
-      logo_url: data.logo_url || null,
     };
     setInstitutionData(institution);
     return institution;

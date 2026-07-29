@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
@@ -54,6 +54,9 @@ export default function App() {
   const [activePrompt, setActivePrompt] = useState<string>('');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
+  const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const roleFromQuery = queryParams.get('role') as 'student' | 'faculty' | 'guest' | null;
+
   const addToast = (title: string, description: string, type: 'success' | 'warning' | 'info' | 'ai' = 'info') => {
     const newToast: ToastMessage = {
       id: Date.now().toString() + Math.random().toString(36).substring(2, 5),
@@ -90,25 +93,32 @@ export default function App() {
      }
    };
 
-   // Redirect authenticated users away from public pages
-   useEffect(() => {
-     if (authLoading) return;
-     if (!user || !profile) return;
+// Redirect authenticated users away from public pages
+    useEffect(() => {
+      if (authLoading) return;
+      if (!user || !profile) return;
 
-     const path = location.pathname;
-     const dashboardRoute = getDashboardRoute(profile.role);
+      const path = location.pathname;
+      const dashboardRoute = getDashboardRoute(profile.role);
 
-     if (path === '/' || path === '/login' || path === '/create-account' || path.endsWith('/register')) {
-       if (dashboardRoute) {
-         navigate(dashboardRoute, { replace: true });
-       }
-     }
-   }, [authLoading, user, profile, location.pathname, navigate]);
+      const publicPaths = ['/', '/login', '/create-account', '/student-login', '/institution-login'];
+      const isPublicPath = publicPaths.includes(path) || (path.endsWith('/register') && !path.includes('/dashboard'));
+      
+      if (isPublicPath) {
+        if (dashboardRoute) {
+          navigate(dashboardRoute, { replace: true });
+        }
+      } else if (path === '/verify-otp') {
+        return;
+      } else if (path === '/student-dashboard' || path === '/student/dashboard') {
+        return;
+      }
+    }, [authLoading, user, profile, location.pathname, navigate]);
 
   const getDashboardRoute = (role: UserRole | null): string | null => {
-    if (role === 'student') return '/student/dashboard';
-    if (role === 'faculty') return '/faculty/dashboard';
-    if (role === 'guest') return '/guest/dashboard';
+    if (role === 'student') return '/student-dashboard';
+    if (role === 'faculty') return '/student-dashboard';
+    if (role === 'guest') return '/student-dashboard';
     if (role === 'institution_admin') return '/institution/dashboard';
     if (role === 'kitchen_staff' || role === 'canteen_manager') return '/kitchen/dashboard';
     if (role === 'super_admin') return '/admin/dashboard';
@@ -119,26 +129,53 @@ export default function App() {
    useEffect(() => {
      if (authLoading) return;
      const path = location.pathname;
+     const role = roleFromQuery;
 
      if (path === '/create-account') {
-       setIsRoleSelectionOpen(true);
+       if (role && ['student', 'faculty', 'guest'].includes(role)) {
+         setIsRoleSelectionOpen(false);
+         setSelectedRole(role);
+         setAuthInitialMode('create');
+         setIsAuthOpen(true);
+       } else {
+         setIsRoleSelectionOpen(true);
+         setIsAuthOpen(false);
+       }
+     } else if (path === '/verify-otp') {
+       setIsRoleSelectionOpen(false);
+       setIsAuthOpen(true);
+     } else if (path === '/student-login') {
+       setIsRoleSelectionOpen(false);
+       setAuthInitialMode('login');
+       setIsAuthOpen(true);
+     } else if (path === '/institution-login') {
+       setIsRoleSelectionOpen(false);
+       setAuthInitialMode('login');
+       setIsAuthOpen(true);
+     } else if (path === '/student-dashboard' || path === '/student/dashboard') {
+       setIsRoleSelectionOpen(false);
+       setIsAuthOpen(false);
      } else if (path === '/student/register') {
+       setIsRoleSelectionOpen(false);
        setSelectedRole('student');
        setAuthInitialMode('create');
        setIsAuthOpen(true);
      } else if (path === '/faculty/register') {
+       setIsRoleSelectionOpen(false);
        setSelectedRole('faculty');
        setAuthInitialMode('create');
        setIsAuthOpen(true);
      } else if (path === '/guest/register') {
+       setIsRoleSelectionOpen(false);
        setSelectedRole('guest');
        setAuthInitialMode('create');
        setIsAuthOpen(true);
      } else if (path === '/login') {
+       setIsRoleSelectionOpen(false);
        setAuthInitialMode('login');
        setIsAuthOpen(true);
      }
-   }, [authLoading, location.pathname, navigate]);
+   }, [authLoading, location.pathname, location.search, roleFromQuery, navigate]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -188,8 +225,8 @@ export default function App() {
     setAuthInitialMode('create');
     setIsAuthOpen(true);
     setSelectedRole(role);
-    const registerRoute = `/${role}/register`;
-    if (location.pathname !== registerRoute) {
+    const registerRoute = `/create-account?role=${role}`;
+    if (location.pathname + location.search !== registerRoute) {
       navigate(registerRoute, { replace: false });
     }
   };
@@ -347,10 +384,7 @@ export default function App() {
           setIsAuthOpen(false);
           restoredDashboardRef.current = true;
           openDashboardForProfile(liveProfile);
-          const dashboardRoute = getDashboardRoute(liveProfile.role);
-          if (dashboardRoute && location.pathname !== dashboardRoute) {
-            navigate(dashboardRoute, { replace: true });
-          }
+          navigate('/student-dashboard', { replace: true });
         }}
       />
 

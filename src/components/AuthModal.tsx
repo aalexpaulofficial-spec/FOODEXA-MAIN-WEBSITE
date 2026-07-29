@@ -224,7 +224,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     institutionCodeTimerRef.current = setTimeout(async () => {
       const { error, data } = await validateInstitutionCode(trimmed);
       if (error || !data) {
-        setInstitutionError('Invalid Institution Code. Please check and try again.');
+        setInstitutionError('Institution Code not found.');
         setValidatedInstitution(null);
       } else {
         setValidatedInstitution(data);
@@ -242,7 +242,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setValidatingCode(true);
     validateInstitutionCode(trimmed).then(({ error, data }) => {
       if (error || !data) {
-        setInstitutionError('Invalid Institution Code. Please check and try again.');
+        setInstitutionError('Institution Code not found.');
         setValidatedInstitution(null);
       } else {
         setValidatedInstitution(data);
@@ -469,7 +469,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const { error: validateError, data: validatedInst } = await validateInstitutionCode(currentForm.institutionCode);
 
     if (validateError || !validatedInst) {
-      setInstitutionError(validateError || 'Invalid Institution Code');
+      setInstitutionError('Institution Code not found.');
       setValidatingCode(false);
       setRegistrationPhase('idle');
       return;
@@ -701,7 +701,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </span>
                   </div>
                   <h3 className="text-2xl font-extrabold text-white">
-                    {selectedRole === 'student' ? 'Create Student Account' : selectedRole === 'faculty' ? 'Create Faculty Account' : 'Create Guest Account'}
+                    Register as {selectedRole === 'student' ? 'Student' : selectedRole === 'faculty' ? 'Faculty' : 'Guest'}
                   </h3>
                   <p className="text-xs text-slate-300">
                     {selectedRole === 'student' ? 'Sign up for instant queue skipping, express pickup, and LX AI dining recommendations.' : 'Sign up to access campus dining services.'}
@@ -736,10 +736,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       )}
                     </div>
                     {institutionError && !validatingCode && (
-                      <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code. Please check and try again.</p>
+                      <p className="text-[10px] text-red-400 mt-1">✗ Institution Code not found.</p>
                     )}
-                    {validatedInstitution && !institutionError && !validatingCode && (
-                      <p className="text-[10px] text-emerald-400 mt-1">✓ {validatedInstitution.institution_name} — Verified</p>
+                    {!institutionError && validatedInstitution && !validatingCode && (
+                      <div className="text-[10px] text-emerald-400 mt-1 space-y-0.5">
+                        <p>✓ {validatedInstitution.institution_name}</p>
+                        <p className="text-emerald-500">Code: {validatedInstitution.institution_code}</p>
+                      </div>
                     )}
                   </div>
 

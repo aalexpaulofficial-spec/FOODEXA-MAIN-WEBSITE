@@ -755,6 +755,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               </div>
               <p className="truncate text-[10px] text-slate-500 max-w-[150px] sm:max-w-[280px]">
                 {institutionName || 'Campus Portal'}
+                {institutionCode && <span className="ml-1 text-slate-600"> · {institutionCode}</span>}
               </p>
             </div>
           </div>
@@ -922,7 +923,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           <div className="space-y-2">
                             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-950/60 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-400 backdrop-blur-sm">
                               <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                              Live Campus Ordering
+                              {roleLabel(liveRole)} Dashboard
                             </div>
                             <h2 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
                               {getGreeting()},<br />
@@ -932,6 +933,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                               <div className="flex items-center gap-1.5 text-slate-400">
                                 <Building2 className="w-3.5 h-3.5 text-emerald-500/70" />
                                 <span className="text-xs font-semibold">{institutionName}</span>
+                                {institutionCode && <span className="text-[10px] text-slate-500 ml-1">· {institutionCode}</span>}
                               </div>
                             )}
                             <div className="flex items-center gap-1.5 text-slate-500">

@@ -898,13 +898,14 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     if (!cart.length) return;
     setSubmittingOrder(true); setError(null);
     try {
-      const tempOrderId = `FDX-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-      const itemsForBackend = cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price }));
-      const razorpayResult = await createRazorpayOrder({
-        amount: cartTotal, currency: 'INR', user_id: user.id, email: profile.email,
-        phone: profile.phone || undefined, name: profile.full_name || undefined,
-        institution_id: profile.institution_id || undefined, order_id: tempOrderId, counter: firstItemCounter,
-      });
+       const tempOrderId = `FDX-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+       const itemsForBackend = cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price }));
+       const razorpayResult = await createRazorpayOrder({
+         amount: cartTotal, currency: 'INR', user_id: user.id, email: profile.email,
+         phone: profile.phone || undefined, name: profile.full_name || undefined,
+         institution_id: profile.institution_id || undefined, order_id: tempOrderId, counter: firstItemCounter,
+         items: itemsForBackend,
+       });
       if (!razorpayResult.success || !razorpayResult.order_id) {
         setError(razorpayResult.error || 'Failed to initialize payment.'); setSubmittingOrder(false); if (triggerToast) triggerToast('Payment Initialization Failed', razorpayResult.error || 'Please try again.', 'warning'); return;
       }

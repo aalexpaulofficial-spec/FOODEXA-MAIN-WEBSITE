@@ -15,19 +15,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    const razorpayKeyId = process.env.RAZORPAY_KEY_ID || '';
-    const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || '';
+    console.log("Creating Razorpay Order");
+    console.log(req.body);
+    console.log(process.env.RAZORPAY_KEY_ID ? "KEY FOUND":"KEY MISSING");
+    console.log(process.env.RAZORPAY_KEY_SECRET ? "SECRET FOUND":"SECRET MISSING");
 
-    if (!razorpayKeyId || !razorpayKeySecret) {
-      return res.status(503).json({ error: "Payment gateway not configured. Contact administrator." });
-    }
+    if (!process.env.RAZORPAY_KEY_ID) throw new Error("Missing RAZORPAY_KEY_ID");
+    if (!process.env.RAZORPAY_KEY_SECRET) throw new Error("Missing RAZORPAY_KEY_SECRET");
+
+    const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
+    const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
 
     const razorpay = new Razorpay({
       key_id: razorpayKeyId,
       key_secret: razorpayKeySecret,
     });
 
-    const { amount, currency, receipt, user_id, institution_id, order_id, items, counter } = req.body;
+    const { amount, currency, receipt, user_id, institution_id, order_id, items, counter, email, phone, name } = req.body;
 
     if (!amount || amount <= 0) {
       return res.status(400).json({ error: "Invalid amount. Amount must be greater than 0." });

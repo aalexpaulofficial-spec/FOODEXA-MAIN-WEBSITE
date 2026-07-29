@@ -16,12 +16,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    const razorpayKeyId = process.env.RAZORPAY_KEY_ID || '';
-    const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || '';
+    console.log("Verifying Razorpay Payment");
+    console.log(req.body);
+    console.log(process.env.RAZORPAY_KEY_ID ? "KEY FOUND":"KEY MISSING");
+    console.log(process.env.RAZORPAY_KEY_SECRET ? "SECRET FOUND":"SECRET MISSING");
 
-    if (!razorpayKeyId || !razorpayKeySecret) {
-      return res.status(503).json({ error: "Payment gateway not configured. Contact administrator." });
-    }
+    if (!process.env.RAZORPAY_KEY_ID) throw new Error("Missing RAZORPAY_KEY_ID");
+    if (!process.env.RAZORPAY_KEY_SECRET) throw new Error("Missing RAZORPAY_KEY_SECRET");
+
+    const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
+    const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
 
     const razorpay = new Razorpay({
       key_id: razorpayKeyId,
@@ -104,7 +108,7 @@ export default async function handler(req, res) {
     // Update the order in Supabase
     await supabasePatch('orders', {
       payment_status: 'paid',
-      status: 'pending',
+      status: 'accepted',
       razorpay_order_id: razorpay_order_id,
       razorpay_payment_id: razorpay_payment_id,
       razorpay_signature: razorpay_signature,

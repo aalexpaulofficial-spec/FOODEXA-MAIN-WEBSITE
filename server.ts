@@ -33,9 +33,11 @@ async function startServer() {
   }
 
   // ==================== RAZORPAY INITIALIZATION ====================
-  const razorpayKeyId = process.env.RAZORPAY_KEY_ID || '';
-  const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || '';
-  const razorpayWebhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || '';
+  if (!process.env.RAZORPAY_KEY_ID) throw new Error("Missing RAZORPAY_KEY_ID");
+  if (!process.env.RAZORPAY_KEY_SECRET) throw new Error("Missing RAZORPAY_KEY_SECRET");
+
+  const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
+  const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
 
   let razorpay: Razorpay | null = null;
 
@@ -44,6 +46,9 @@ async function startServer() {
       key_id: razorpayKeyId,
       key_secret: razorpayKeySecret,
     });
+    console.log("Creating Razorpay Order");
+    console.log(process.env.RAZORPAY_KEY_ID ? "KEY FOUND" : "KEY MISSING");
+    console.log(process.env.RAZORPAY_KEY_SECRET ? "SECRET FOUND" : "SECRET MISSING");
     console.log("[FOODEXA] Razorpay initialized in LIVE mode");
   } else {
     console.warn("[FOODEXA] Razorpay keys not configured. Payment endpoints will be unavailable.");
@@ -219,83 +224,103 @@ Important rules:
   // ==================== RAZORPAY: CREATE ORDER ====================
   app.post("/api/razorpay/create-order", async (req, res) => {
     try {
+      console.log("Creating Razorpay Order");
+      console.log(req.body);
+      console.log(process.env.RAZORPAY_KEY_ID ? "KEY FOUND":"KEY MISSING");
+      console.log(process.env.RAZORPAY_KEY_SECRET ? "SECRET FOUND":"SECRET MISSING");
+
       if (!razorpay) {
         return res.status(503).json({ error: "Payment gateway not configured. Contact administrator." });
       }
 
-      const { amount, currency, receipt, user_id, institution_id, order_id, items, counter } = req.body;
+      const { amount, currency, receipt, user_id, institution_id, order_id, items, counter, email, phone, name } = req.body;
 
-      // Validate required fields
-      if (!amount || amount <= 0) {
-        return res.status(400).json({ error: "Invalid amount. Amount must be greater than 0." });
-      }
-      if (!user_id || !order_id) {
-        return res.status(400).json({ error: "Missing required fields: user_id, order_id." });
-      }
+       // Validate required fields
+       if (!amount || amount <= 0) {
+         return res.status(400).json({ error: "Invalid amount. Amount must be greater than 0." });
+       }
+       if (!user_id || !order_id) {
+         return res.status(400).json({ error: "Missing required fields: user_id, order_id." });
+       }
 
-      // Ensure amount is integer (Razorpay expects paise as integer)
-      const amountInPaise = Math.round(Number(amount) * 100);
+       // Ensure amount is integer (Razorpay expects paise as integer)
+       const amountInPaise = Math.round(Number(amount) * 100);
 
-      if (amountInPaise < 100) {
-        return res.status(400).json({ error: "Minimum order amount is ₹1." });
-      }
+       if (amountInPaise < 100) {
+         return res.status(400).json({ error: "Minimum order amount is ₹1." });
+       }
 
-      const orderPayload: any = {
-        amount: amountInPaise,
-        currency: currency || 'INR',
-        receipt: receipt || `fdx_${order_id}`,
-        notes: {
-          user_id: user_id,
-          institution_id: institution_id || '',
-          order_id: order_id,
-          counter: counter || '',
-          platform: 'FOODEXA',
-        },
-      };
+       const orderPayload: any = {
+         amount: amountInPaise,
+         currency: currency || 'INR',
+         receipt: receipt || `fdx_${order_id}`,
+         notes: {
+           user_id: user_id,
+           institution_id: institution_id || '',
+           order_id: order_id,
+           counter: counter || '',
+           platform: 'FOODEXA',
+         },
+       };
 
-      const razorpayOrder = await razorpay.orders.create(orderPayload);
+       const razorpayOrder = await razorpay.orders.create(orderPayload);
 
-      // Create a pending payment record in Supabase
-      const paymentRecord = {
-        user_id: user_id,
-        institution_id: institution_id || null,
-        order_id: order_id,
-        razorpay_order_id: razorpayOrder.id,
-        amount: Number(amount),
-        currency: currency || 'INR',
-        payment_status: 'created',
-        customer_email: req.body.email || null,
-        customer_phone: req.body.phone || null,
-        customer_name: req.body.name || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+       // Save pending payment record to Supabase via fetch (bypassing RLS with service role)
+       const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+       const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+       
+       if (supabaseUrl && supabaseServiceKey) {
+         const paymentRecord = {
+           user_id: user_id,
+           institution_id: institution_id || null,
+           order_id: order_id,
+           razorpay_order_id: razorpayOrder.id,
+           amount: Number(amount),
+           currency: currency || 'INR',
+           payment_status: 'created',
+           customer_email: email || null,
+           customer_phone: phone || null,
+           customer_name: name || null,
+           created_at: new Date().toISOString(),
+           updated_at: new Date().toISOString(),
+         };
 
-      // Insert payment record (best effort - don't fail the order creation)
-      const { error: insertError } = await supabaseQuery('payments', 'POST', paymentRecord);
-      if (insertError) {
-        console.error("[Razorpay] Failed to create payment record:", insertError);
-      }
+         await fetch(`${supabaseUrl.replace(/\/+$/, '')}/rest/v1/payments`, {
+           method: 'POST',
+           headers: {
+             'apikey': supabaseServiceKey,
+             'Authorization': `Bearer ${supabaseServiceKey}`,
+             'Content-Type': 'application/json',
+             'Prefer': 'return=minimal'
+           },
+           body: JSON.stringify(paymentRecord)
+         }).catch(err => console.error("[Razorpay] Failed to save pending payment:", err));
+       }
 
-      return res.json({
-        success: true,
-        order_id: razorpayOrder.id,
-        amount: amountInPaise,
-        currency: razorpayOrder.currency,
-        razorpay_key_id: razorpayKeyId,
-      });
+       return res.json({
+         success: true,
+         order_id: razorpayOrder.id,
+         amount: amountInPaise,
+         currency: razorpayOrder.currency,
+         razorpay_key_id: razorpayKeyId,
+       });
 
-    } catch (error: any) {
-      console.error("[Razorpay] Create order error:", error);
-      return res.status(500).json({
-        error: error?.error?.description || error?.message || "Failed to create payment order. Please try again.",
-      });
-    }
-  });
+     } catch (error: any) {
+       console.error("[Razorpay] Create order error:", error);
+       return res.status(500).json({
+         error: error?.error?.description || error?.message || "Failed to create payment order. Please try again.",
+       });
+     }
+   });
 
   // ==================== RAZORPAY: VERIFY PAYMENT ====================
   app.post("/api/razorpay/verify-payment", async (req, res) => {
     try {
+      console.log("Verifying Razorpay Payment");
+      console.log(req.body);
+      console.log(process.env.RAZORPAY_KEY_ID ? "KEY FOUND":"KEY MISSING");
+      console.log(process.env.RAZORPAY_KEY_SECRET ? "SECRET FOUND":"SECRET MISSING");
+
       if (!razorpay) {
         return res.status(503).json({ error: "Payment gateway not configured." });
       }
@@ -356,16 +381,16 @@ Important rules:
 
       await supabaseQuery('payments', 'PATCH', paymentUpdate, { razorpay_order_id: razorpay_order_id });
 
-      // Update the order in Supabase
-      const orderUpdate: any = {
-        payment_status: 'paid',
-        status: 'pending',
-        razorpay_order_id: razorpay_order_id,
-        razorpay_payment_id: razorpay_payment_id,
-        razorpay_signature: razorpay_signature,
-        payment_method: paymentDetails?.method || null,
-        updated_at: new Date().toISOString(),
-      };
+       // Update the order in Supabase
+       const orderUpdate: any = {
+         payment_status: 'paid',
+         status: 'accepted',
+         razorpay_order_id: razorpay_order_id,
+         razorpay_payment_id: razorpay_payment_id,
+         razorpay_signature: razorpay_signature,
+         payment_method: paymentDetails?.method || null,
+         updated_at: new Date().toISOString(),
+       };
 
       const { error: orderUpdateError } = await supabaseQuery('orders', 'PATCH', orderUpdate, { order_id: order_id });
       if (orderUpdateError) {

@@ -378,6 +378,7 @@ export async function createRazorpayOrder(params: {
   institution_id?: string | null;
   order_id: string;
   counter?: string;
+  items?: any[];
 }): Promise<{ success: boolean; order_id?: string; razorpay_key_id?: string; amount?: number; currency?: string; error?: string }> {
   try {
     const resp = await fetch('/api/razorpay/create-order', {
@@ -394,6 +395,7 @@ export async function createRazorpayOrder(params: {
         institution_id: params.institution_id,
         order_id: params.order_id,
         counter: params.counter,
+        items: params.items,
       }),
     });
     const data = await resp.json();

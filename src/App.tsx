@@ -94,11 +94,16 @@ export default function App() {
    };
 
 // Enforce email verification: redirect unverified users to /verify-otp
+// Never redirect away from dashboard paths to prevent race conditions after OTP
+    const isDashboardPath = (path: string) =>
+      path === '/student-dashboard' || path === '/student/dashboard' ||
+      path === '/institution/dashboard' || path === '/kitchen/dashboard' || path === '/admin/dashboard';
+
     useEffect(() => {
       if (authLoading) return;
       if (!session) return;
 
-      if (!isEmailVerified && location.pathname !== '/verify-otp' && location.pathname !== '/create-account') {
+      if (!isEmailVerified && !isDashboardPath(location.pathname) && location.pathname !== '/verify-otp' && location.pathname !== '/create-account') {
         navigate('/verify-otp', { replace: true });
       }
     }, [authLoading, session, isEmailVerified, location.pathname, navigate]);
@@ -155,12 +160,13 @@ export default function App() {
          setIsRoleSelectionOpen(true);
          setIsAuthOpen(false);
        }
-     } else if (path === '/verify-otp') {
-       setIsRoleSelectionOpen(false);
-       setIsAuthOpen(true);
-       if (!session || isEmailVerified) {
-         navigate('/', { replace: true });
-       }
+      } else if (path === '/verify-otp') {
+        setIsRoleSelectionOpen(false);
+        if (!session || isEmailVerified) {
+          navigate('/', { replace: true });
+        } else {
+          setIsAuthOpen(true);
+        }
      } else if (path === '/student-login') {
        setIsRoleSelectionOpen(false);
        setAuthInitialMode('login');
@@ -169,12 +175,14 @@ export default function App() {
        setIsRoleSelectionOpen(false);
        setAuthInitialMode('login');
        setIsAuthOpen(true);
-     } else if (path === '/student-dashboard' || path === '/student/dashboard') {
-       setIsRoleSelectionOpen(false);
-       setIsAuthOpen(false);
-       if (!session || !isEmailVerified || !profile) {
-         navigate('/', { replace: true });
-       }
+      } else if (path === '/student-dashboard' || path === '/student/dashboard') {
+        setIsRoleSelectionOpen(false);
+        setIsAuthOpen(false);
+        if (!session || !isEmailVerified) {
+          navigate('/', { replace: true });
+        } else if (!profile && !authLoading) {
+          navigate('/', { replace: true });
+        }
      } else if (path === '/student/register') {
        setIsRoleSelectionOpen(false);
        setSelectedRole('student');
@@ -212,11 +220,15 @@ export default function App() {
       return;
     }
 
-    if (profile && !restoredDashboardRef.current && !isAuthOpen) {
+    if (!profile) return;
+
+    // Only auto-restore dashboard when on a dashboard path or when modals are not visible
+    const isOnDashboardPath = isDashboardPath(location.pathname);
+    if (isOnDashboardPath && !restoredDashboardRef.current) {
       restoredDashboardRef.current = true;
       openDashboardForProfile(profile);
     }
-  }, [authLoading, user, profile, isEmailVerified, isAuthOpen]);
+  }, [authLoading, user, profile, isEmailVerified, isAuthOpen, location.pathname]);
 
   const handleOpenLogin = () => {
     setIsRoleSelectionOpen(false);

@@ -29,10 +29,6 @@ const normalizeRole = (value: unknown): UserRole | null => {
   return allowed.includes(value as UserRole) ? (value as UserRole) : null;
 };
 
-const getMissingColumnName = (message: string) => {
-  return message.match(/Could not find the '([^']+)' column/)?.[1] || null;
-};
-
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -84,11 +80,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return institution;
   }, []);
 
+  const PROFILE_COLUMNS = 'user_id, email, full_name, role, institution_id';
+
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
        const { data, error } = await supabase
          .from('profiles')
-         .select('user_id, email, full_name, phone, role, institution_id, created_at, updated_at')
+         .select(PROFILE_COLUMNS)
          .eq('user_id', userId)
          .maybeSingle();
 
@@ -98,7 +96,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        }
 
       if (data) {
-        const fetchedProfile = data as Profile;
+        const fetchedProfile = { ...data, phone: null, created_at: '', updated_at: '' } as Profile;
         setProfile(fetchedProfile);
         await loadInstitutionForProfile(fetchedProfile);
         return fetchedProfile;
@@ -124,42 +122,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
    const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-     const safePayload = { ...payload };
+      const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'role', 'institution_id'];
+      const safePayload: Record<string, any> = {};
+      for (const key of KNOWN_PROFILE_COLUMNS) {
+        if (key in payload) {
+          safePayload[key] = payload[key];
+        }
+      }
 
-     const { error } = await supabase
-       .from('profiles')
-       .upsert(safePayload, { onConflict: 'user_id' });
+      const { error } = await supabase
+        .from('profiles')
+        .upsert(safePayload, { onConflict: 'user_id' });
 
-     if (!error) {
-       return { error: null as Error | null };
-     }
+      if (error) {
+        const friendlyMessage = error.message.includes('duplicate key')
+          ? 'Your profile already exists. Please try logging in.'
+          : error.message.includes('violates row-level security')
+            ? 'Unable to create profile. Please contact support.'
+            : error.message;
+        return { error: new Error(friendlyMessage) };
+      }
 
-     const missingColumn = getMissingColumnName(error.message);
-     if (missingColumn && missingColumn in safePayload) {
-       delete safePayload[missingColumn];
-       const retryResult = await supabase
-         .from('profiles')
-         .upsert(safePayload, { onConflict: 'user_id' });
-
-       if (!retryResult.error) {
-         return { error: null as Error | null };
-       }
-
-       const friendlyMessage = retryResult.error.message.includes('duplicate key')
-         ? 'Your profile already exists. Please try logging in.'
-         : retryResult.error.message.includes('violates row-level security')
-           ? 'Unable to create profile. Please contact support.'
-           : retryResult.error.message;
-       return { error: new Error(friendlyMessage) };
-     }
-
-     const friendlyMessage = error.message.includes('duplicate key')
-       ? 'Your profile already exists. Please try logging in.'
-       : error.message.includes('violates row-level security')
-         ? 'Unable to create profile. Please contact support.'
-         : error.message;
-     return { error: new Error(friendlyMessage) };
-   }, []);
+      return { error: null as Error | null };
+    }, []);
 
   // ── Session initialization — Supabase handles persistence natively ────────
   useEffect(() => {
@@ -300,9 +285,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        return { error: new Error(error.message), profile: null, institution: null };
      }
 
-     console.log('[Auth] OTP signup verification succeeded');
+      console.log('[Auth] OTP signup verification succeeded');
 
-     const { data: currentUserData, error: userError } = await supabase.auth.getUser();
+      // Ensure auth state is synced — email is now confirmed
+      setIsEmailVerified(true);
+
+      const { data: currentUserData, error: userError } = await supabase.auth.getUser();
      if (userError || !currentUserData.user?.id) {
        console.error('[Auth] Unable to get user after OTP verification:', userError?.message);
        return { error: new Error(userError?.message || 'Verification successful but unable to load user data.'), profile: null, institution: null };
@@ -330,7 +318,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         user_id: userId,
         email: authUser.email || email,
         full_name: fullName,
-        phone,
         role,
         institution_id: institutionId,
       });
@@ -401,7 +388,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { error } = await upsertProfileSafely({
       user_id: activeUser.id,
       institution_id: null,
-      updated_at: new Date().toISOString(),
     });
 
     if (error) {
@@ -417,10 +403,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const activeUser = user || (await supabase.auth.getUser()).data.user;
     if (!activeUser) return { error: new Error('Not authenticated') };
 
+    const safeUpdates = { ...updates };
+    delete (safeUpdates as any).user_id;
     const { error } = await upsertProfileSafely({
       user_id: activeUser.id,
-      ...updates,
-      updated_at: new Date().toISOString(),
+      ...safeUpdates,
     });
 
     if (!error) {

@@ -287,11 +287,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
        setInstitutionData(liveInstitution);
 
        const { data: profileData } = await supabase
-         .from('profiles')
-         .select('*')
-         .eq('user_id', userId)
-         .maybeSingle();
-       if (profileData) freshProfile = profileData as Profile;
+          .from('profiles')
+          .select('user_id, email, full_name, role, institution_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+       if (profileData) freshProfile = { ...profileData, phone: null, created_at: '', updated_at: '' } as Profile;
      }
 
      setStep('success');
@@ -529,41 +529,51 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
    const handleVerifyOtp = async (e: React.FormEvent) => {
-     e.preventDefault();
-     if (otpCode.length < 8) {
-       setOtpError('Please enter a valid 8-digit OTP code');
-       return;
-     }
+      e.preventDefault();
+      if (otpCode.length < 8) {
+        setOtpError('Please enter a valid 8-digit OTP code');
+        return;
+      }
 
-     const { error, profile: liveProfile, institution } = await verifyOtp(currentEmail, otpCode);
+      const { error, profile: liveProfile, institution } = await verifyOtp(currentEmail, otpCode);
 
-     if (error) {
-       setOtpError(error.message || 'OTP verification failed. Please check your code and try again.');
-       return;
-     }
+      if (error) {
+        setOtpError(error.message || 'OTP verification failed. Please check your code and try again.');
+        return;
+      }
 
-     if (!liveProfile) {
-       setOtpError('Unable to set up your profile. Please contact support.');
-       return;
-     }
+      if (!liveProfile) {
+        setOtpError('Unable to set up your profile. Please contact support.');
+        return;
+      }
 
-     setRegistrationPhase('idle');
+      setRegistrationPhase('idle');
 
-      const hasInstitution = liveProfile.institution_id || institution;
+      if (institution?.institution_code) {
+        setInstitutionVerifyCode(institution.institution_code);
+      }
 
-     if (hasInstitution) {
-       setVerifiedInstitution(institution || null);
-       if (institution?.institution_code) {
-         setInstitutionVerifyCode(institution.institution_code);
-       }
-       setStep('success');
-       if (onLoginSuccess) {
-         onLoginSuccess({ profile: liveProfile, institution: institution || null });
-       }
-     } else {
-       setStep('institution_verify');
-     }
-   };
+      if (onLoginSuccess) {
+        onLoginSuccess({ profile: liveProfile, institution: institution || null });
+      }
+    };
+
+  const handleBack = () => {
+    if (step === 'otp') {
+      setStep('form');
+      setOtpError(null);
+      setRegistrationPhase('idle');
+    } else if (step === 'institution_verify') {
+      setStep('form');
+      setInstitutionError(null);
+    } else if (step === 'counter_verify') {
+      setStep('form');
+      setCounterError(null);
+    } else if (step === 'form' && mode === 'create') {
+      handleReset();
+      onBack?.();
+    }
+  };
 
   const handleReset = () => {
     setStep('form');
@@ -592,14 +602,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
-        {mode === 'create' && step === 'form' && onBack && (
+        {(step === 'otp' || step === 'institution_verify' || step === 'counter_verify' || (mode === 'create' && step === 'form')) && (
           <button
-            onClick={() => {
-              handleReset();
-              onBack();
-            }}
+            onClick={handleBack}
             className="absolute top-5 left-5 p-2 rounded-full bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
-            title="Back to Role Selection"
+            title="Back"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>

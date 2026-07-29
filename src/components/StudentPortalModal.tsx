@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle, ArrowRight, Award, Bell, BookOpen, Building2, CheckCircle2, ChefHat, Clock,
   CreditCard, Heart, Home, Loader2, LogOut, MapPin, QrCode, Receipt, Search, Settings,
@@ -410,7 +411,8 @@ const OrderProgressBar = ({ status }: { status: OrderStatus }) => {
 // ── Main Component ──────────────────────────────────────────────────────────
 
 export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, onClose, role }) => {
-  const { user, profile, refreshProfile, signOut, updateProfile } = useAuth();
+  const { user, profile, refreshProfile, signOut, updateProfile, leaveInstitution } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<PortalTab>('home');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -434,6 +436,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadNotif, setUnreadNotif] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
+  const [showLeaveInstitution, setShowLeaveInstitution] = useState(false);
+  const [leavingInstitution, setLeavingInstitution] = useState(false);
+  const [leaveInstitutionMessage, setLeaveInstitutionMessage] = useState<string | null>(null);
 
   const liveRole = profile?.role || null;
   const displayName = profile?.full_name || profile?.email || user?.email || 'User';
@@ -665,6 +670,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const handleSignOut = async () => {
     await signOut();
     onClose();
+    navigate('/', { replace: true });
   };
 
   const handleEditProfile = () => {
@@ -698,6 +704,25 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       await refreshProfile();
     }
     setSavingProfile(false);
+  };
+
+  const handleLeaveInstitution = async () => {
+    setLeavingInstitution(true);
+    setLeaveInstitutionMessage(null);
+    const { error } = await leaveInstitution();
+    if (error) {
+      setLeaveInstitutionMessage(error.message || 'Failed to leave institution. Please try again.');
+    } else {
+      setLeaveInstitutionMessage('Success! You have left your institution. You can join another institution anytime.');
+      setInstitutionName('');
+      setInstitutionCode('');
+      await refreshProfile();
+      setTimeout(() => {
+        setShowLeaveInstitution(false);
+        setLeaveInstitutionMessage(null);
+      }, 2000);
+    }
+    setLeavingInstitution(false);
   };
 
   const tabs = [
@@ -1443,12 +1468,22 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                       </button>
                     </div>
 
+                    {/* Leave Institution */}
+                    {institutionCode && (
+                      <button
+                        onClick={() => setShowLeaveInstitution(true)}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-950/20 py-3.5 text-sm font-black text-amber-300 hover:bg-amber-950/40 hover:border-amber-500/50 transition-all"
+                      >
+                        <Building2 className="w-4 h-4" /> Leave Institution
+                      </button>
+                    )}
+
                     {/* Sign Out */}
                     <button
                       onClick={handleSignOut}
                       className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-950/20 py-3.5 text-sm font-black text-red-300 hover:bg-red-950/40 hover:border-red-500/50 transition-all"
                     >
-                      <LogOut className="w-4 h-4" /> Sign Out
+                      <LogOut className="w-4 h-4" /> Sign Out Account
                     </button>
 
                     <p className="text-center text-[9px] text-slate-700">FOODEXA v3.0 · Powered by Supabase · {new Date().getFullYear()}</p>
@@ -1584,6 +1619,64 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {savingProfile ? 'Saving...' : 'Save Changes'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── LEAVE INSTITUTION MODAL ──────────────────────────────── */}
+      {showLeaveInstitution && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-slate-950/85 backdrop-blur-xl p-4" onClick={() => { setShowLeaveInstitution(false); setLeaveInstitutionMessage(null); }}>
+          <div className="w-full max-w-md rounded-3xl border border-amber-500/30 bg-slate-900 p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-950 border border-amber-500/40 flex items-center justify-center">
+                  <Building2 className="w-4 h-4 text-amber-400" />
+                </div>
+                <h3 className="text-lg font-black text-white">Leave Institution</h3>
+              </div>
+              <button onClick={() => { setShowLeaveInstitution(false); setLeaveInstitutionMessage(null); }} className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {leaveInstitutionMessage ? (
+              <div className={`rounded-xl p-4 text-xs font-bold text-center ${leaveInstitutionMessage.includes('Success') ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300' : 'bg-red-950/60 border border-red-500/40 text-red-300'}`}>
+                {leaveInstitutionMessage}
+              </div>
+            ) : (
+              <>
+                <div className="rounded-xl bg-amber-950/30 border border-amber-500/20 p-4 space-y-2">
+                  <p className="text-xs text-amber-200 font-semibold">This will:</p>
+                  <ul className="text-[11px] text-amber-300/80 space-y-1.5 ml-4 list-disc">
+                    <li>Remove your current institution membership</li>
+                    <li>Keep your account active and unchanged</li>
+                    <li>Allow you to join another institution with a new code</li>
+                  </ul>
+                </div>
+                <p className="text-[11px] text-slate-400 text-center">
+                  Your account, orders, and profile data will be preserved.
+                </p>
+              </>
+            )}
+
+            {!leaveInstitutionMessage && (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowLeaveInstitution(false); setLeaveInstitutionMessage(null); }}
+                  className="flex-1 py-3 rounded-2xl border border-slate-700 bg-slate-800 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleLeaveInstitution}
+                  disabled={leavingInstitution}
+                  className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 text-xs font-black hover:from-amber-400 hover:to-orange-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {leavingInstitution ? <Loader2 className="w-4 h-4 animate-spin" /> : <Building2 className="w-4 h-4" />}
+                  {leavingInstitution ? 'Leaving...' : 'Leave Institution'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

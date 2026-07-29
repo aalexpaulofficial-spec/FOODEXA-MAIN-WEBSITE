@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { LxPlayground } from './components/LxPlayground';
@@ -28,10 +29,12 @@ import { ScrollProgress } from './components/ScrollProgress';
 import { Footer } from './components/Footer';
 import { Sparkles, Mic } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
-import type { Profile } from './types';
+import type { Profile, UserRole } from './types';
 
 export default function App() {
   const { user, profile, loading: authLoading } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const restoredDashboardRef = useRef(false);
   const [isBookDemoOpen, setIsBookDemoOpen] = useState(false);
   const [isInstitutionRegistrationOpen, setIsInstitutionRegistrationOpen] = useState(false);
@@ -87,6 +90,51 @@ export default function App() {
     }
   };
 
+  const getDashboardRoute = (role: UserRole | null): string | null => {
+    if (role === 'student') return '/student/dashboard';
+    if (role === 'faculty') return '/faculty/dashboard';
+    if (role === 'guest') return '/guest/dashboard';
+    if (role === 'institution_admin') return '/institution/dashboard';
+    if (role === 'kitchen_staff' || role === 'canteen_manager') return '/kitchen/dashboard';
+    if (role === 'super_admin') return '/admin/dashboard';
+    return null;
+  };
+
+  // Route-based initialization: handle URL on mount
+  useEffect(() => {
+    if (authLoading) return;
+    const path = location.pathname;
+
+    if (path === '/create-account') {
+      setIsRoleSelectionOpen(true);
+    } else if (path === '/student/register') {
+      setSelectedRole('student');
+      setAuthInitialMode('create');
+      setIsAuthOpen(true);
+    } else if (path === '/faculty/register') {
+      setSelectedRole('faculty');
+      setAuthInitialMode('create');
+      setIsAuthOpen(true);
+    } else if (path === '/guest/register') {
+      setSelectedRole('guest');
+      setAuthInitialMode('create');
+      setIsAuthOpen(true);
+    } else if (path === '/login') {
+      setAuthInitialMode('login');
+      setIsAuthOpen(true);
+    }
+
+    // Redirect authenticated users from auth routes to dashboard
+    if (user && profile) {
+      if (path === '/login' || path === '/create-account' || path.endsWith('/register')) {
+        const dashboardRoute = getDashboardRoute(profile.role);
+        if (dashboardRoute) {
+          navigate(dashboardRoute, { replace: true });
+        }
+      }
+    }
+  }, [authLoading, user, profile, location.pathname, navigate]);
+
   useEffect(() => {
     if (authLoading) return;
 
@@ -109,6 +157,9 @@ export default function App() {
     setIsPortalAccessOpen(false);
     setAuthInitialMode('login');
     setIsAuthOpen(true);
+    if (location.pathname !== '/login') {
+      navigate('/login', { replace: false });
+    }
   };
 
   const handleOpenCreateAccount = (role: 'student' | 'faculty' | 'guest') => {
@@ -122,14 +173,20 @@ export default function App() {
     setIsAuthOpen(false);
     setIsPortalAccessOpen(false);
     setIsRoleSelectionOpen(true);
+    if (location.pathname !== '/create-account') {
+      navigate('/create-account', { replace: false });
+    }
   };
 
   const handleRoleSelected = (role: 'student' | 'faculty' | 'guest') => {
     setIsRoleSelectionOpen(false);
     setAuthInitialMode('create');
     setIsAuthOpen(true);
-    // Store selected role for pass to AuthModal
     setSelectedRole(role);
+    const registerRoute = `/${role}/register`;
+    if (location.pathname !== registerRoute) {
+      navigate(registerRoute, { replace: false });
+    }
   };
 
   const handleSelectPrompt = (promptText: string) => {
@@ -262,41 +319,75 @@ export default function App() {
 
       <RoleSelectionModal
         isOpen={isRoleSelectionOpen}
-        onClose={() => setIsRoleSelectionOpen(false)}
+        onClose={() => {
+          setIsRoleSelectionOpen(false);
+          if (location.pathname !== '/') {
+            navigate('/', { replace: false });
+          }
+        }}
         onRoleSelected={handleRoleSelected}
       />
 
       <AuthModal
         isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
+        onClose={() => {
+          setIsAuthOpen(false);
+          if (location.pathname !== '/') {
+            navigate('/', { replace: false });
+          }
+        }}
         initialMode={authInitialMode}
         selectedRole={selectedRole}
-        onLoginSuccess={({ profile, institution }) => {
+        onLoginSuccess={({ profile: liveProfile, institution }) => {
           setIsAuthOpen(false);
           restoredDashboardRef.current = true;
-          openDashboardForProfile(profile);
+          openDashboardForProfile(liveProfile);
+          const dashboardRoute = getDashboardRoute(liveProfile.role);
+          if (dashboardRoute && location.pathname !== dashboardRoute) {
+            navigate(dashboardRoute, { replace: true });
+          }
         }}
       />
 
       <StudentPortalModal
         isOpen={isStudentPortalOpen}
-        onClose={() => setIsStudentPortalOpen(false)}
+        onClose={() => {
+          setIsStudentPortalOpen(false);
+          if (location.pathname !== '/') {
+            navigate('/', { replace: false });
+          }
+        }}
         role={currentUserRole as any}
       />
 
       <InstitutionDashboardModal
         isOpen={isInstitutionDashboardOpen}
-        onClose={() => setIsInstitutionDashboardOpen(false)}
+        onClose={() => {
+          setIsInstitutionDashboardOpen(false);
+          if (location.pathname !== '/') {
+            navigate('/', { replace: false });
+          }
+        }}
       />
 
       <KitchenDashboardModal
         isOpen={isKitchenDashboardOpen}
-        onClose={() => setIsKitchenDashboardOpen(false)}
+        onClose={() => {
+          setIsKitchenDashboardOpen(false);
+          if (location.pathname !== '/') {
+            navigate('/', { replace: false });
+          }
+        }}
       />
 
       <SuperAdminDashboardModal
         isOpen={isSuperAdminDashboardOpen}
-        onClose={() => setIsSuperAdminDashboardOpen(false)}
+        onClose={() => {
+          setIsSuperAdminDashboardOpen(false);
+          if (location.pathname !== '/') {
+            navigate('/', { replace: false });
+          }
+        }}
       />
 
       <DownloadModal

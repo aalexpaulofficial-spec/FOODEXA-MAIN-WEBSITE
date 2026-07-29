@@ -83,6 +83,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     phone: '',
     department: '',
     designation: '',
+    facultyId: '',
     institutionCode: '',
     password: '',
     confirmPassword: '',
@@ -416,16 +417,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const role = liveProfile.role;
 
     if (role === 'institution_admin') {
-      if (!institution) {
-        setStep('institution_verify');
-        return;
-      }
       setStep('institution_verify');
       return;
     } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
       setStep('counter_verify');
       return;
     } else if (role === 'student' || role === 'faculty' || role === 'guest') {
+      if (liveProfile.institution_code && institution) {
+        setInstitutionVerifyCode(liveProfile.institution_code);
+        setValidatedInstitution(institution);
+        setVerifiedInstitution(institution);
+        setInstitutionData(institution);
+        setStep('success');
+        if (onLoginSuccess) {
+          onLoginSuccess({ profile: liveProfile, institution });
+        }
+        return;
+      }
       if (liveProfile.institution_code && !institutionVerifyCode) {
         setInstitutionVerifyCode(liveProfile.institution_code);
       }
@@ -486,6 +494,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       programme: (currentForm as any).programme,
       campusBlock: (currentForm as any).campusBlock,
       designation: (currentForm as any).designation,
+      facultyId: (currentForm as any).facultyId,
     });
 
     if (error) {
@@ -697,6 +706,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
 
                 <form onSubmit={handleCreateSubmit} className="space-y-3">
+                  {/* Institution Code - TOP OF ALL FORMS (required by spec) */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code <span className="text-emerald-400">*</span></label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        value={getCurrentForm().institutionCode}
+                        onChange={(e) => {
+                          if (selectedRole === 'student') setStudentForm({ ...studentForm, institutionCode: e.target.value });
+                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, institutionCode: e.target.value });
+                          else setGuestForm({ ...guestForm, institutionCode: e.target.value });
+                          handleInstitutionCodeChange(e.target.value);
+                        }}
+                        onBlur={() => {
+                          if (selectedRole === 'student') handleInstitutionCodeBlur(studentForm.institutionCode);
+                          else if (selectedRole === 'faculty') handleInstitutionCodeBlur(facultyForm.institutionCode);
+                          else handleInstitutionCodeBlur(guestForm.institutionCode);
+                        }}
+                        placeholder="e.g. YAWEHH264881"
+                        className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+                      />
+                      {validatingCode && (
+                        <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      )}
+                    </div>
+                    {institutionError && !validatingCode && (
+                      <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code. Please check and try again.</p>
+                    )}
+                    {validatedInstitution && !institutionError && !validatingCode && (
+                      <p className="text-[10px] text-emerald-400 mt-1">✓ {validatedInstitution.institution_name} — Verified</p>
+                    )}
+                  </div>
+
                   <div>
                     <label className="text-xs font-semibold text-slate-300 mb-1 block">Full Name</label>
                     <input
@@ -715,7 +758,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">University Email</label>
+                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Email Address</label>
                       <input
                         type="email"
                         required
@@ -725,7 +768,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, universityEmail: e.target.value });
                           else setGuestForm({ ...guestForm, universityEmail: e.target.value });
                         }}
-                        placeholder="e.g. alex@christuniversity.in"
+                        placeholder="e.g. alex@university.in"
                         className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
                       />
                     </div>
@@ -796,35 +839,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
-                          <div className="relative">
-                            <input
-                              type="text"
-                              required
-                              value={studentForm.institutionCode}
-                              onChange={(e) => {
-                                setStudentForm({ ...studentForm, institutionCode: e.target.value });
-                                handleInstitutionCodeChange(e.target.value);
-                              }}
-                              onBlur={() => handleInstitutionCodeBlur(studentForm.institutionCode)}
-                              placeholder="e.g. YAWEHH264881"
-                              className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
-                            />
-                            {validatingCode && (
-                              <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                            )}
-                          </div>
-                          {institutionError && !validatingCode && (
-                            <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code. Please check and try again.</p>
-                          )}
-                          {validatedInstitution && !institutionError && !validatingCode && (
-                            <p className="text-[10px] text-emerald-400 mt-1">✓ Institution Code Verified</p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
                           <label className="text-xs font-semibold text-slate-300 mb-1 block">Department</label>
                           <input
                             type="text"
@@ -835,6 +849,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                             className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
                           />
                         </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-xs font-semibold text-slate-300 mb-1 block">Semester</label>
                           <input
@@ -846,18 +863,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                             className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
                           />
                         </div>
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Campus Block</label>
-                        <input
-                          type="text"
-                          required
-                          value={studentForm.campusBlock}
-                          onChange={(e) => setStudentForm({ ...studentForm, campusBlock: e.target.value })}
-                          placeholder="e.g. Block A"
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
-                        />
+                        <div>
+                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Campus Block</label>
+                          <input
+                            type="text"
+                            required
+                            value={studentForm.campusBlock}
+                            onChange={(e) => setStudentForm({ ...studentForm, campusBlock: e.target.value })}
+                            placeholder="e.g. Block A"
+                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                          />
+                        </div>
                       </div>
                     </>
                   )}
@@ -890,61 +906,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </div>
 
                       <div>
-                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            required
-                            value={facultyForm.institutionCode}
-                            onChange={(e) => {
-                              setFacultyForm({ ...facultyForm, institutionCode: e.target.value });
-                              handleInstitutionCodeChange(e.target.value);
-                            }}
-                            onBlur={() => handleInstitutionCodeBlur(facultyForm.institutionCode)}
-                            placeholder="e.g. YAWEHH264881"
-                            className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
-                          />
-                          {validatingCode && (
-                            <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                          )}
-                        </div>
-                        {institutionError && !validatingCode && (
-                          <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code. Please check and try again.</p>
-                        )}
-                        {validatedInstitution && !institutionError && !validatingCode && (
-                          <p className="text-[10px] text-emerald-400 mt-1">✓ Institution Code Verified</p>
-                        )}
+                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Faculty ID</label>
+                        <input
+                          type="text"
+                          required
+                          value={facultyForm.facultyId}
+                          onChange={(e) => setFacultyForm({ ...facultyForm, facultyId: e.target.value })}
+                          placeholder="e.g. FAC-2024-001"
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                        />
                       </div>
                     </>
                   )}
 
                   {selectedRole === 'guest' && (
-                    <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          required
-                          value={guestForm.institutionCode}
-                          onChange={(e) => {
-                            setGuestForm({ ...guestForm, institutionCode: e.target.value });
-                            handleInstitutionCodeChange(e.target.value);
-                          }}
-                          onBlur={() => handleInstitutionCodeBlur(guestForm.institutionCode)}
-                          placeholder="e.g. YAWEHH264881"
-                          className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
-                        />
-                        {validatingCode && (
-                          <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        )}
-                      </div>
-                      {institutionError && !validatingCode && (
-                        <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code. Please check and try again.</p>
-                      )}
-                      {validatedInstitution && !institutionError && !validatingCode && (
-                        <p className="text-[10px] text-emerald-400 mt-1">✓ Institution Code Verified</p>
-                      )}
-                    </div>
+                    <></>
                   )}
 
                   <button

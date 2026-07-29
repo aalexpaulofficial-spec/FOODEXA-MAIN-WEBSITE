@@ -12,12 +12,13 @@ interface AuthContextType {
   setInstitutionData: (data: InstitutionData | null) => void;
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
-  signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; }) => Promise<{ error: Error | null }>;
+  signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
   signOut: () => Promise<void>;
   clearAllSessionData: () => void;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
+  leaveInstitution: () => Promise<{ error: Error | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -211,7 +212,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   };
 
-  const signUpWithPassword = async (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; }) => {
+  const signUpWithPassword = async (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; facultyId?: string; }) => {
     const trimmedEmail = email.trim().toLowerCase();
     setPendingRegistrationProfile({
       email: trimmedEmail,
@@ -242,6 +243,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           programme: metadata?.programme?.trim() || null,
           campus_block: metadata?.campusBlock?.trim() || null,
           designation: metadata?.designation?.trim() || null,
+          faculty_id: metadata?.facultyId?.trim() || null,
         },
       },
     });
@@ -416,7 +418,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key !== 'foodexa-theme-preference') {
+      if (key && key !== 'foodexa-theme-preference' && key !== 'foodexa-main-auth') {
         keysToRemove.push(key);
       }
     }
@@ -425,13 +427,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const signOut = async () => {
-    // Do NOT modify profile institution data on sign out — preserve user data
     await supabase.auth.signOut();
     clearAllSessionData();
     setUser(null);
     setSession(null);
     setProfile(null);
     setInstitutionData(null);
+  };
+
+  const leaveInstitution = async () => {
+    const activeUser = user || (await supabase.auth.getUser()).data.user;
+    if (!activeUser) return { error: new Error('Not authenticated') };
+
+    const { error } = await upsertProfileSafely({
+      user_id: activeUser.id,
+      institution_id: null,
+      institution_code: null,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      return { error: new Error(error.message) };
+    }
+
+    setInstitutionData(null);
+    await fetchProfile(activeUser.id);
+    return { error: null };
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
@@ -467,6 +488,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       clearAllSessionData,
       updateProfile,
       refreshProfile,
+      leaveInstitution,
     }}>
       {children}
     </AuthContext.Provider>

@@ -102,21 +102,41 @@ Important rules:
         return res.status(400).json({ error: 'Institution code is required.' });
       }
 
+      if (!supabaseUrl || !supabaseServiceKey) {
+        console.error('[Institutions] Missing Supabase server environment variables');
+        return res.status(503).json({
+          error: 'Institution verification is not configured yet. Please contact Foodexa support.',
+          code: 'MISSING_SUPABASE_SERVER_ENV',
+        });
+      }
+
       const trimmed = code.trim();
 
       // Use the service role key so RLS is bypassed for this public lookup
-      const url = `${supabaseUrl}/rest/v1/institutions?institution_code=ilike.${encodeURIComponent(trimmed)}&select=id,name,campus,city,state,country,institution_code&limit=1`;
+      const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/institutions?institution_code=ilike.${encodeURIComponent(trimmed)}&select=id,name,institution_name,campus,city,state,country,institution_code&limit=1`;
       const resp = await fetch(url, {
         headers: {
           'apikey': supabaseServiceKey,
           'Authorization': `Bearer ${supabaseServiceKey}`,
+          'Accept': 'application/json',
         },
       });
 
       if (!resp.ok) {
         const errText = await resp.text();
         console.error('[Institutions] Query failed:', errText);
-        return res.status(500).json({ error: 'Unable to verify Institution Code. Please try again.' });
+        const isMissingTable = resp.status === 404 || errText.includes('PGRST205') || errText.includes('Could not find the table');
+        if (isMissingTable) {
+          return res.status(503).json({
+            error: 'Institution verification is being set up. Please try again after the Foodexa database is updated.',
+            code: 'INSTITUTIONS_TABLE_MISSING',
+          });
+        }
+
+        return res.status(502).json({
+          error: 'Unable to verify Institution Code. Please try again.',
+          code: 'SUPABASE_LOOKUP_FAILED',
+        });
       }
 
       const rows = await resp.json();
@@ -127,7 +147,7 @@ Important rules:
       const inst = rows[0];
       return res.json({
         institution_id: inst.id,
-        institution_name: inst.name || '',
+        institution_name: inst.name || inst.institution_name || '',
         campus: inst.campus || '',
         city: inst.city || '',
         state: inst.state || '',

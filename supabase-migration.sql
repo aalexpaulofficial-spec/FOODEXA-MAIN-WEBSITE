@@ -3,6 +3,162 @@
 -- Run this in Supabase SQL Editor
 -- ============================================================
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- 0. CORE TABLES: Required by the main website, student registration, and live portal.
+CREATE TABLE IF NOT EXISTS public.institutions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  institution_name TEXT,
+  campus TEXT DEFAULT '',
+  city TEXT DEFAULT '',
+  state TEXT DEFAULT '',
+  country TEXT DEFAULT 'India',
+  institution_code TEXT NOT NULL UNIQUE,
+  institution_email TEXT,
+  contact_person TEXT,
+  phone_number TEXT,
+  logo_url TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.profiles (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  full_name TEXT,
+  phone TEXT,
+  role TEXT,
+  institution_id UUID REFERENCES public.institutions(id) ON DELETE SET NULL,
+  department TEXT,
+  semester TEXT,
+  programme TEXT,
+  campus_block TEXT,
+  designation TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.menu_categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  institution_id UUID REFERENCES public.institutions(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  "order" INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.menu_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  institution_id UUID REFERENCES public.institutions(id) ON DELETE CASCADE,
+  category_id UUID REFERENCES public.menu_categories(id) ON DELETE SET NULL,
+  item_name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  price NUMERIC(10,2) NOT NULL DEFAULT 0,
+  counter TEXT DEFAULT '',
+  counter_name TEXT DEFAULT '',
+  counter_id UUID,
+  category TEXT DEFAULT '',
+  image_url TEXT,
+  prep_time TEXT,
+  rating NUMERIC(3,2) DEFAULT 4.5,
+  popular BOOLEAN DEFAULT false,
+  nutrition TEXT,
+  is_available BOOLEAN DEFAULT true,
+  is_published BOOLEAN DEFAULT true,
+  offer_price NUMERIC(10,2),
+  offer_label TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.orders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  email TEXT,
+  role TEXT,
+  institution_id UUID REFERENCES public.institutions(id) ON DELETE SET NULL,
+  institution_code TEXT,
+  counter TEXT DEFAULT '',
+  items JSONB DEFAULT '[]'::jsonb,
+  total_amount NUMERIC(10,2) DEFAULT 0,
+  status TEXT DEFAULT 'pending',
+  order_id TEXT UNIQUE,
+  pickup_code TEXT,
+  qr_code TEXT,
+  qr_code_data TEXT,
+  locker_number TEXT,
+  category_id UUID,
+  counter_id UUID,
+  payment_status TEXT DEFAULT 'pending',
+  accepted_at TIMESTAMPTZ,
+  preparing_at TIMESTAMPTZ,
+  ready_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.order_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id UUID REFERENCES public.orders(id) ON DELETE CASCADE,
+  menu_item_id UUID REFERENCES public.menu_items(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  price NUMERIC(10,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  institution_id UUID REFERENCES public.institutions(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT 'Update',
+  message TEXT NOT NULL DEFAULT '',
+  type TEXT DEFAULT 'announcement',
+  read BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.institution_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  institution_name TEXT NOT NULL,
+  campus TEXT NOT NULL,
+  city TEXT NOT NULL,
+  state TEXT NOT NULL,
+  country TEXT NOT NULL DEFAULT 'India',
+  institution_email TEXT NOT NULL,
+  contact_person TEXT NOT NULL,
+  role TEXT NOT NULL,
+  phone_number TEXT NOT NULL,
+  institution_website TEXT,
+  student_population TEXT,
+  food_courts INTEGER DEFAULT 1,
+  vendors INTEGER DEFAULT 1,
+  message TEXT DEFAULT '',
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.demo_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  full_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  role TEXT,
+  institution_name TEXT,
+  campus_student_count TEXT,
+  preferred_date TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+INSERT INTO public.institutions (name, institution_name, campus, city, state, country, institution_code, status)
+VALUES ('Yeshua Institution', 'Yeshua Institution', 'Main Campus', 'Bengaluru', 'Karnataka', 'India', 'YESHUA339537', 'active')
+ON CONFLICT (institution_code) DO UPDATE SET
+  status = 'active',
+  updated_at = now();
+
 -- 1. BANNERS: Hero section banners controlled by Institution Dashboard
 CREATE TABLE IF NOT EXISTS public.banners (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

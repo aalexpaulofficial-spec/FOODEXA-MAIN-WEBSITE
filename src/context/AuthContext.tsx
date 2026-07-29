@@ -14,7 +14,7 @@ interface AuthContextType {
   setInstitutionData: (data: InstitutionData | null) => void;
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
-  signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
+  signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; facultyId?: string; }) => Promise<{ error: Error | null; profile?: Profile | null; institution?: InstitutionData | null; verified?: boolean }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
   signOut: () => Promise<void>;
   clearAllSessionData: () => void;
@@ -250,16 +250,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { error: new Error(error.message) };
     }
 
-    // If Supabase returned a confirmed session, email confirmations are OFF.
-    // Sign out and show a clear error instead of bypassing OTP.
+    // If Supabase returned a session, email confirmations are off or auto-confirmed.
+    // Finish profile setup immediately instead of sending the user to the OTP step.
     if (data?.session) {
-      await supabase.auth.signOut();
+      const authUser = data.user;
+      if (!authUser?.id) {
+        setIsPendingOtpVerification(false);
+        return { error: new Error('Registration succeeded but user data could not be loaded.') };
+      }
+
+      const { error: upsertError } = await upsertProfileSafely({
+        user_id: authUser.id,
+        email: authUser.email || trimmedEmail,
+        full_name: fullName.trim(),
+        role,
+        institution_id: institutionData?.institution_id || null,
+      });
+
+      if (upsertError) {
+        setIsPendingOtpVerification(false);
+        return { error: new Error(upsertError.message) };
+      }
+
+      setIsEmailVerified(true);
+      setSession(data.session);
+      setUser(authUser);
       setIsPendingOtpVerification(false);
-      return { error: new Error('Please enable "Confirm Email" in Supabase → Authentication → Providers → Email, then try again.') };
+      setPendingRegistrationProfile(null);
+
+      const liveProfile = await fetchProfile(authUser.id);
+      const liveInstitution = await loadInstitutionForProfile(liveProfile);
+      return {
+        error: null,
+        profile: liveProfile,
+        institution: liveInstitution,
+        verified: true,
+      };
     }
 
     // No session yet — user must verify via OTP email. isPendingOtpVerification stays true.
-    return { error: null };
+    return { error: null, verified: false };
   };
 
   const validateInstitutionCode = async (code: string) => {

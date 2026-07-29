@@ -483,7 +483,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setValidatingCode(false);
 
     setRegistrationPhase('sending');
-    const { error } = await signUpWithPassword(currentForm.universityEmail, currentForm.password, currentForm.fullName, selectedRole, {
+    const { error, profile: liveProfile, institution, verified } = await signUpWithPassword(currentForm.universityEmail, currentForm.password, currentForm.fullName, selectedRole, {
       institutionCode: currentForm.institutionCode,
       phone: currentForm.phone,
       department: (currentForm as any).department,
@@ -497,6 +497,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (error) {
       setInstitutionError(error.message || 'Registration failed');
       setRegistrationPhase('idle');
+      return;
+    }
+
+    if (verified && liveProfile) {
+      setRegistrationPhase('idle');
+      setVerifiedInstitution(institution || validatedInst);
+      setStep('success');
+      if (onLoginSuccess) {
+        onLoginSuccess({ profile: liveProfile, institution: institution || validatedInst });
+      }
       return;
     }
 

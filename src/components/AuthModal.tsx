@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { X, Lock, User, ArrowRight, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2, RefreshCw } from 'lucide-react';
+import { X, Lock, User, ArrowRight, ArrowLeft, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { UserRole, Profile } from '../types';
@@ -20,6 +20,7 @@ interface AuthModalProps {
   initialMode?: 'login' | 'create';
   selectedRole?: UserRole;
   onLoginSuccess?: (data: { profile: Profile; institution: InstitutionData | null }) => void;
+  onBack?: () => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -28,6 +29,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   initialMode = 'login',
   selectedRole = 'student',
   onLoginSuccess,
+  onBack,
 }) => {
   const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
   const [mode, setMode] = useState<'login' | 'create'>(initialMode);
@@ -584,13 +586,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
       <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl my-8 space-y-6">
         
-        {/* Close Button */}
         <button
           onClick={handleReset}
           className="absolute top-5 right-5 p-2 rounded-full bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
+
+        {mode === 'create' && step === 'form' && onBack && (
+          <button
+            onClick={() => {
+              handleReset();
+              onBack();
+            }}
+            className="absolute top-5 left-5 p-2 rounded-full bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            title="Back to Role Selection"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        )}
 
         {step === 'form' && (
           <div>

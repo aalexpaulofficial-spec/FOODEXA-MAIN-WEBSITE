@@ -382,6 +382,10 @@ export default function App() {
             navigate('/', { replace: false });
           }
         }}
+        onBack={() => {
+          setIsAuthOpen(false);
+          setIsRoleSelectionOpen(true);
+        }}
         initialMode={authInitialMode}
         selectedRole={selectedRole}
         onLoginSuccess={({ profile: liveProfile, institution }) => {

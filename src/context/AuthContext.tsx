@@ -32,8 +32,6 @@ const getMissingColumnName = (message: string) => {
   return message.match(/Could not find the '([^']+)' column/)?.[1] || null;
 };
 
-const unsupportedProfileColumns = new Set<string>();
-
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -47,11 +45,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     institutionCode: string | null;
     institutionId: string | null;
     phone: string | null;
-    department: string | null;
-    semester: string | null;
-    programme: string | null;
-    campusBlock: string | null;
-    designation: string | null;
   } | null>(null);
   const pendingOtpProfileRef = React.useRef<typeof pendingOtpProfile>(null);
 
@@ -63,17 +56,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     let query = supabase
       .from('institutions')
-      .select('id, name, campus, city, state, country, institution_code, logo_url');
+      .select('id, name, campus, city, state, country, institution_code');
 
-    query = profileData.institution_id
-      ? query.eq('id', profileData.institution_id)
-      : query.ilike('institution_code', profileData.institution_code || '');
+     query = profileData.institution_id
+       ? query.eq('id', profileData.institution_id)
+       : query.ilike('institution_code', profileData.institution_code || '');
 
-    const { data } = await query.maybeSingle();
-    if (!data) {
-      setInstitutionData(null);
-      return null;
-    }
+     const { data, error } = await query.maybeSingle();
+     if (error) {
+       console.error('[Auth] Institution load error:', error.message);
+       setInstitutionData(null);
+       return null;
+     }
+     if (!data) {
+       setInstitutionData(null);
+       return null;
+     }
 
     const institution = {
       institution_id: data.id,
@@ -91,15 +89,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
+       const { data, error } = await supabase
+         .from('profiles')
+         .select('user_id, email, full_name, phone, role, institution_id, institution_code, created_at, updated_at')
+         .eq('user_id', userId)
+         .maybeSingle();
 
-      if (error) {
-        return null;
-      }
+       if (error) {
+         console.error('[Auth] Profile fetch error:', error.message);
+         return null;
+       }
 
       if (data) {
         const fetchedProfile = data as Profile;
@@ -127,41 +126,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setPendingOtpProfile(value);
   }, []);
 
-  const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-    const safePayload = { ...payload };
-    const ignoredColumns = new Set<string>();
-    unsupportedProfileColumns.forEach((column) => {
-      if (column in safePayload) {
-        delete safePayload[column];
-        ignoredColumns.add(column);
-      }
-    });
+   const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
+     const safePayload = { ...payload };
 
-    for (let attempt = 0; attempt < Math.max(Object.keys(payload).length, 1) + 1; attempt++) {
-      const { error } = await supabase
-        .from('profiles')
-        .upsert(safePayload, { onConflict: 'user_id' });
+     const { error } = await supabase
+       .from('profiles')
+       .upsert(safePayload, { onConflict: 'user_id' });
 
-      if (!error) {
-        return { error: null as Error | null, ignoredColumns: Array.from(ignoredColumns) };
-      }
+     if (!error) {
+       return { error: null as Error | null };
+     }
 
-      const missingColumn = getMissingColumnName(error.message);
-      if (!missingColumn || !(missingColumn in safePayload)) {
-        const friendlyMessage = error.message.includes('duplicate key')
-          ? 'Your profile already exists. Please try logging in.'
-          : error.message.includes('violates row-level security')
-            ? 'Unable to create profile. Please contact support.'
-            : error.message;
-        return { error: new Error(friendlyMessage), ignoredColumns: Array.from(ignoredColumns) };
-      }
+     const missingColumn = getMissingColumnName(error.message);
+     if (missingColumn && missingColumn in safePayload) {
+       delete safePayload[missingColumn];
+       const retryResult = await supabase
+         .from('profiles')
+         .upsert(safePayload, { onConflict: 'user_id' });
 
-      delete safePayload[missingColumn];
-      ignoredColumns.add(missingColumn);
-      unsupportedProfileColumns.add(missingColumn);
-    }
-    return { error: new Error('Unable to complete profile setup. Please contact support.'), ignoredColumns: Array.from(ignoredColumns) };
-  }, []);
+       if (!retryResult.error) {
+         return { error: null as Error | null };
+       }
+
+       const friendlyMessage = retryResult.error.message.includes('duplicate key')
+         ? 'Your profile already exists. Please try logging in.'
+         : retryResult.error.message.includes('violates row-level security')
+           ? 'Unable to create profile. Please contact support.'
+           : retryResult.error.message;
+       return { error: new Error(friendlyMessage) };
+     }
+
+     const friendlyMessage = error.message.includes('duplicate key')
+       ? 'Your profile already exists. Please try logging in.'
+       : error.message.includes('violates row-level security')
+         ? 'Unable to create profile. Please contact support.'
+         : error.message;
+     return { error: new Error(friendlyMessage) };
+   }, []);
 
   // ── Session initialization — Supabase handles persistence natively ────────
   useEffect(() => {
@@ -221,11 +222,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       institutionCode: metadata?.institutionCode?.trim() || institutionData?.institution_code || null,
       institutionId: institutionData?.institution_id || null,
       phone: metadata?.phone?.trim() || null,
-      department: metadata?.department?.trim() || null,
-      semester: metadata?.semester?.trim() || null,
-      programme: metadata?.programme?.trim() || null,
-      campusBlock: metadata?.campusBlock?.trim() || null,
-      designation: metadata?.designation?.trim() || null,
     });
 
     const { error } = await supabase.auth.signUp({
@@ -255,164 +251,166 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!trimmed) {
       return { error: 'Institution Code is required.', data: null };
     }
-    try {
-      const { data, error } = await supabase
-        .from('institutions')
-        .select('*')
-        .ilike('institution_code', trimmed)
-        .eq('status', 'active')
-        .maybeSingle();
+   try {
+       const { data, error } = await supabase
+         .from('institutions')
+         .select('id, name, campus, city, state, country, institution_code')
+         .ilike('institution_code', trimmed)
+         .maybeSingle();
 
-      if (error) {
-        return { error: 'Unable to verify Institution Code. Please try again.', data: null };
-      }
-      if (!data) {
-        return { error: 'Invalid Institution Code. Please check and try again.', data: null };
-      }
+       if (error) {
+         console.error('[Auth] Institution code validation error:', error.message);
+         return { error: 'Unable to verify Institution Code. Please try again.', data: null };
+       }
+       if (!data) {
+         return { error: 'Invalid Institution Code. Please check and try again.', data: null };
+       }
 
-      return {
-        error: null,
-        data: {
-          institution_id: data.id,
-          institution_name: data.name,
-          campus: data.campus,
-          city: data.city,
-          state: data.state,
-          country: data.country,
-          institution_code: data.institution_code,
-        } as InstitutionData,
-      };
-    } catch (err: any) {
-      return { error: 'Unable to verify Institution Code. Please try again.', data: null };
-    }
+       return {
+         error: null,
+         data: {
+           institution_id: data.id,
+           institution_name: data.name || '',
+           campus: data.campus || '',
+           city: data.city || '',
+           state: data.state || '',
+           country: data.country || '',
+           institution_code: data.institution_code || '',
+         } as InstitutionData,
+       };
+     } catch (err: any) {
+       console.error('[Auth] Institution code validation exception:', err);
+       return { error: 'Unable to verify Institution Code. Please try again.', data: null };
+     }
   };
 
-  const verifyOtp = async (email: string, token: string) => {
-    // Use 'signup' type for new registrations — this is what Supabase requires
-    const { error, data: authData } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'signup',
-    });
+   const verifyOtp = async (email: string, token: string) => {
+     console.log('[Auth] Verifying OTP for:', email);
 
-    let fetchedProfile: Profile | null = null;
-    let fetchedInstitution: InstitutionData | null = null;
+     const { error, data: authData } = await supabase.auth.verifyOtp({
+       email,
+       token,
+       type: 'signup',
+     });
 
-    if (error) {
-      // If 'signup' fails, it may already be a returning user — try 'email' type
-      const { error: emailError } = await supabase.auth.verifyOtp({
-        email,
-        token,
-        type: 'email',
-      });
+     if (error) {
+       console.error('[Auth] OTP signup verification failed:', error.message);
 
-      if (emailError) {
-        return { error: new Error(error.message), profile: null, institution: null };
-      }
+       const { error: emailError } = await supabase.auth.verifyOtp({
+         email,
+         token,
+         type: 'email',
+       });
 
-      // Handle returning user
-      const { data: currentUserData } = await supabase.auth.getUser();
-      if (currentUserData?.user?.id) {
-        fetchedProfile = await fetchProfile(currentUserData.user.id);
-      }
-      return { error: null, profile: fetchedProfile, institution: fetchedInstitution };
-    }
+       if (emailError) {
+         console.error('[Auth] OTP email verification also failed:', emailError.message);
+         return { error: new Error(error.message), profile: null, institution: null };
+       }
 
-    const { data: currentUserData, error: userError } = await supabase.auth.getUser();
-    if (userError || !currentUserData.user?.id) {
-      return { error: new Error(userError?.message || 'Verification successful but unable to load user data. Please try logging in.'), profile: null, institution: null };
-    }
+       const { data: currentUserData } = await supabase.auth.getUser();
+       if (currentUserData?.user?.id) {
+         const profile = await fetchProfile(currentUserData.user.id);
+         return { error: null, profile, institution: null };
+       }
 
-    const authUser = currentUserData.user;
+       return { error: new Error('Verification successful but unable to load user data.'), profile: null, institution: null };
+     }
 
-    if (authUser.id) {
-      const userId = authUser.id;
+     console.log('[Auth] OTP signup verification succeeded');
 
-      const pendingProfile = pendingOtpProfileRef.current || pendingOtpProfile;
-      const userData = authUser.user_metadata || authData.user?.user_metadata || {};
-      const role = normalizeRole(pendingProfile?.role || userData.role);
+     const { data: currentUserData, error: userError } = await supabase.auth.getUser();
+     if (userError || !currentUserData.user?.id) {
+       console.error('[Auth] Unable to get user after OTP verification:', userError?.message);
+       return { error: new Error(userError?.message || 'Verification successful but unable to load user data.'), profile: null, institution: null };
+     }
 
-      if (!role) {
-        return { error: new Error('Unable to complete registration. Please restart the process.'), profile: null, institution: null };
-      }
+     const authUser = currentUserData.user;
+     const userId = authUser.id;
 
-      const fullName = pendingProfile?.fullName || userData.full_name || null;
-      const institutionCode = pendingProfile?.institutionCode || userData.institution_code || null;
-      const phone = pendingProfile?.phone || userData.phone || null;
-      const institutionId = pendingProfile?.institutionId || userData.institution_id || institutionData?.institution_id || null;
-      const department = pendingProfile?.department || userData.department || null;
-      const semester = pendingProfile?.semester || userData.semester || null;
-      const programme = pendingProfile?.programme || userData.programme || null;
-      const campusBlock = pendingProfile?.campusBlock || userData.campus_block || null;
-      const designation = pendingProfile?.designation || userData.designation || null;
+     const pendingProfile = pendingOtpProfileRef.current || pendingOtpProfile;
+     const userData = authUser.user_metadata || authData.user?.user_metadata || {};
+     const role = normalizeRole(pendingProfile?.role || userData.role);
 
-      const { error: upsertError } = await upsertProfileSafely({
-        user_id: userId,
-        email: authUser.email || email,
-        full_name: fullName,
-        phone,
-        role,
-        institution_id: institutionId,
-        institution_code: institutionCode,
-        department,
-        semester,
-        programme,
-        campus_block: campusBlock,
-        designation,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
+     if (!role) {
+       console.error('[Auth] No valid role found for new profile');
+       return { error: new Error('Unable to complete registration. Please restart the process.'), profile: null, institution: null };
+     }
 
-      if (upsertError) {
-        return { error: new Error(upsertError.message), profile: null, institution: null };
-      }
+     const fullName = pendingProfile?.fullName || userData.full_name || null;
+     const institutionCode = pendingProfile?.institutionCode || userData.institution_code || null;
+     const phone = pendingProfile?.phone || userData.phone || null;
+     const institutionId = pendingProfile?.institutionId || userData.institution_id || institutionData?.institution_id || null;
 
-      fetchedProfile = await fetchProfile(userId);
-      setPendingRegistrationProfile(null);
+     console.log('[Auth] Creating/upserting profile for user:', userId, 'role:', role);
 
-      if (institutionId) {
-        const { data: instData } = await supabase
-          .from('institutions')
-          .select('id, name, campus, city, state, country, institution_code')
-          .eq('id', institutionId)
-          .single();
+     const { error: upsertError } = await upsertProfileSafely({
+       user_id: userId,
+       email: authUser.email || email,
+       full_name: fullName,
+       phone,
+       role,
+       institution_id: institutionId,
+       institution_code: institutionCode,
+     });
 
-        if (instData) {
-          fetchedInstitution = {
-            institution_id: instData.id,
-            institution_name: instData.name,
-            campus: instData.campus || '',
-            city: instData.city || '',
-            state: instData.state || '',
-            country: instData.country || '',
-            institution_code: instData.institution_code,
-          };
-          setInstitutionData(fetchedInstitution);
-        }
-      } else if (institutionCode) {
-        const { data: instData } = await supabase
-          .from('institutions')
-          .select('id, name, campus, city, state, country, institution_code')
-          .ilike('institution_code', institutionCode)
-          .single();
+     if (upsertError) {
+       console.error('[Auth] Profile upsert error:', upsertError.message);
+       return { error: new Error(upsertError.message), profile: null, institution: null };
+     }
 
-        if (instData) {
-          fetchedInstitution = {
-            institution_id: instData.id,
-            institution_name: instData.name,
-            campus: instData.campus || '',
-            city: instData.city || '',
-            state: instData.state || '',
-            country: instData.country || '',
-            institution_code: instData.institution_code,
-          };
-          setInstitutionData(fetchedInstitution);
-        }
-      }
-    }
+     const fetchedProfile = await fetchProfile(userId);
+     setPendingRegistrationProfile(null);
 
-    return { error: null, profile: fetchedProfile, institution: fetchedInstitution };
-  };
+     let fetchedInstitution: InstitutionData | null = null;
+
+     if (institutionId) {
+       console.log('[Auth] Loading institution by id:', institutionId);
+       const { data: instData, error: instError } = await supabase
+         .from('institutions')
+         .select('id, name, campus, city, state, country, institution_code')
+         .eq('id', institutionId)
+         .maybeSingle();
+
+       if (instError) {
+         console.error('[Auth] Institution fetch by id error:', instError.message);
+       } else if (instData) {
+         fetchedInstitution = {
+           institution_id: instData.id,
+           institution_name: instData.name || '',
+           campus: instData.campus || '',
+           city: instData.city || '',
+           state: instData.state || '',
+           country: instData.country || '',
+           institution_code: instData.institution_code || '',
+         };
+         setInstitutionData(fetchedInstitution);
+       }
+     } else if (institutionCode) {
+       console.log('[Auth] Loading institution by code:', institutionCode);
+       const { data: instData, error: instError } = await supabase
+         .from('institutions')
+         .select('id, name, campus, city, state, country, institution_code')
+         .ilike('institution_code', institutionCode)
+         .maybeSingle();
+
+       if (instError) {
+         console.error('[Auth] Institution fetch by code error:', instError.message);
+       } else if (instData) {
+         fetchedInstitution = {
+           institution_id: instData.id,
+           institution_name: instData.name || '',
+           campus: instData.campus || '',
+           city: instData.city || '',
+           state: instData.state || '',
+           country: instData.country || '',
+           institution_code: instData.institution_code || '',
+         };
+         setInstitutionData(fetchedInstitution);
+       }
+     }
+
+     return { error: null, profile: fetchedProfile, institution: fetchedInstitution };
+   };
 
   const clearAllSessionData = () => {
     const keysToRemove: string[] = [];

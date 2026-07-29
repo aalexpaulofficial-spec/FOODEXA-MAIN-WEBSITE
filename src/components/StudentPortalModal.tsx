@@ -474,7 +474,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         const currentProfile = profile;
         const instId = currentProfile?.institution_id;
         const [menuResult, orderResult, notifResult] = await Promise.all([
-          supabase.from('menu_items').select('*').order('item_name', { ascending: true }),
+          supabase.from('menu_items').select('*').order('name', { ascending: true }),
           user?.id ? supabase.from('orders').select('*').eq('user_id', user.id).order('created_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
           supabase.from('notifications').select('*').order('created_at', { ascending: false }),
         ]);

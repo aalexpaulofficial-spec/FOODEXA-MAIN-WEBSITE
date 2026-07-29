@@ -102,7 +102,7 @@ export async function fetchMenuItems(params?: {
   if (params?.counter) query = query.eq('counter', params.counter);
   if (params?.category) query = query.eq('category', params.category);
   if (params?.availableOnly !== false) query = query.eq('is_published', true);
-  query = query.order('item_name', { ascending: true });
+  query = query.order('name', { ascending: true });
   const { data } = await query;
   return (data || []).map(mapMenuItem);
 }

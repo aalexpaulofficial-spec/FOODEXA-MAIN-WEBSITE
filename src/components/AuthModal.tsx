@@ -165,23 +165,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setValidatingCounter(false);
         return;
       }
-      const { data: profile } = await supabase.from('profiles').select('institution_id').eq('user_id', userId).single();
-      if (!profile?.institution_id) {
-        setCounterError('Profile missing institution. Contact support.');
-        setValidatingCounter(false);
-        return;
-      }
-      const { data: counterRows, error: counterError } = await supabase
-        .from('menu_items')
-        .select('counter')
-        .eq('institution_id', profile.institution_id)
-        .ilike('counter', trimmed);
-      if (counterError || !counterRows || counterRows.length === 0) {
-        setCounterError('Invalid Counter Code');
-      } else {
-        setCounterError(null);
-      }
-      setValidatingCounter(false);
+       const { data: profile } = await supabase.from('profiles').select('institution_id').eq('user_id', userId).maybeSingle();
+       if (!profile?.institution_id) {
+         setCounterError('Profile missing institution. Contact support.');
+         setValidatingCounter(false);
+         return;
+       }
+       const { data: counterRows, error: counterError } = await supabase
+         .from('menu_items')
+         .select('counter')
+         .eq('institution_id', profile.institution_id)
+         .ilike('counter', trimmed);
+       if (counterError || !counterRows || counterRows.length === 0) {
+         setCounterError('Invalid Counter Code');
+       } else {
+         setCounterError(null);
+       }
+       setValidatingCounter(false);
     }, 500);
   };
 
@@ -196,21 +196,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setValidatingCounter(false);
       return;
     }
-    supabase.from('profiles').select('institution_id').eq('user_id', userId).single().then(({ data: profile }) => {
-      if (!profile?.institution_id) {
-        setCounterError('Profile missing institution. Contact support.');
-        setValidatingCounter(false);
-        return;
-      }
-      supabase.from('menu_items').select('counter').eq('institution_id', profile.institution_id).ilike('counter', trimmed).then(({ data: counterRows, error: counterError }) => {
-        if (counterError || !counterRows || counterRows.length === 0) {
-          setCounterError('Invalid Counter Code');
-        } else {
-          setCounterError(null);
-        }
-        setValidatingCounter(false);
-      });
-    });
+     supabase.from('profiles').select('institution_id').eq('user_id', userId).maybeSingle().then(({ data: profile }) => {
+       if (!profile?.institution_id) {
+         setCounterError('Profile missing institution. Contact support.');
+         setValidatingCounter(false);
+         return;
+       }
+       supabase.from('menu_items').select('counter').eq('institution_id', profile.institution_id).ilike('counter', trimmed).then(({ data: counterRows, error: counterError }) => {
+         if (counterError || !counterRows || counterRows.length === 0) {
+           setCounterError('Invalid Counter Code');
+         } else {
+           setCounterError(null);
+         }
+         setValidatingCounter(false);
+       });
+     });
   };
 
   const handleInstitutionCodeChange = (code: string) => {
@@ -252,54 +252,53 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     });
   };
 
-  const handleLoginInstitutionVerify = async () => {
-    const code = institutionVerifyCode.trim() || validatedInstitution?.institution_code || institutionData?.institution_code || '';
-    if (!code) {
-      setInstitutionError('Please enter a valid Institution Code.');
-      return;
-    }
+   const handleLoginInstitutionVerify = async () => {
+     const code = institutionVerifyCode.trim() || validatedInstitution?.institution_code || institutionData?.institution_code || '';
+     if (!code) {
+       setInstitutionError('Please enter a valid Institution Code.');
+       return;
+     }
 
-    const { error: validateError, data: liveInstitution } = await validateInstitutionCode(code);
-    if (validateError || !liveInstitution) {
-      setInstitutionError(validateError || 'Invalid Institution Code. Please check and try again.');
-      setValidatedInstitution(null);
-      return;
-    }
+     const { error: validateError, data: liveInstitution } = await validateInstitutionCode(code);
+     if (validateError || !liveInstitution) {
+       setInstitutionError(validateError || 'Invalid Institution Code. Please check and try again.');
+       setValidatedInstitution(null);
+       return;
+     }
 
-    const userId = loginUserId || user?.id;
+     const userId = loginUserId || user?.id;
+     let freshProfile: Profile | null = authProfile;
 
-    let freshProfile: Profile | null = authProfile;
+     if (userId) {
+       const { error: upsertError } = await updateProfile({
+         institution_id: liveInstitution.institution_id,
+         institution_code: liveInstitution.institution_code,
+       });
 
-    if (userId) {
-      const { error: upsertError } = await updateProfile({
-        institution_id: liveInstitution.institution_id,
-        institution_code: liveInstitution.institution_code,
-      });
+       if (upsertError) {
+         setInstitutionError(upsertError.message || 'Failed to save institution. Please try again.');
+         return;
+       }
 
-      if (upsertError) {
-        setInstitutionError(upsertError.message || 'Failed to save institution. Please try again.');
-        return;
-      }
+       await refreshProfile();
+       setValidatedInstitution(liveInstitution);
+       setVerifiedInstitution(liveInstitution);
+       setInstitutionData(liveInstitution);
 
-      await refreshProfile();
-      setValidatedInstitution(liveInstitution);
-      setVerifiedInstitution(liveInstitution);
-      setInstitutionData(liveInstitution);
+       const { data: profileData } = await supabase
+         .from('profiles')
+         .select('*')
+         .eq('user_id', userId)
+         .maybeSingle();
+       if (profileData) freshProfile = profileData as Profile;
+     }
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      if (profileData) freshProfile = profileData as Profile;
-    }
+     setStep('success');
 
-    setStep('success');
-
-    if (onLoginSuccess && freshProfile) {
-      onLoginSuccess({ profile: freshProfile, institution: liveInstitution });
-    }
-  };
+     if (onLoginSuccess && freshProfile) {
+       onLoginSuccess({ profile: freshProfile, institution: liveInstitution });
+     }
+   };
 
   const handleCounterVerify = async () => {
     const code = counterCode.trim();
@@ -308,23 +307,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    const userId = loginUserId || user?.id;
-    if (!userId) {
-      setCounterError('Unable to verify. Please sign in again.');
-      return;
-    }
+     const userId = loginUserId || user?.id;
+     if (!userId) {
+       setCounterError('Unable to verify. Please sign in again.');
+       return;
+     }
 
-    const { data: profile } = await supabase.from('profiles').select('institution_id').eq('user_id', userId).single();
-    if (!profile?.institution_id) {
-      setCounterError('Profile missing institution. Contact support.');
-      return;
-    }
+     const { data: profile } = await supabase.from('profiles').select('institution_id').eq('user_id', userId).maybeSingle();
+     if (!profile?.institution_id) {
+       setCounterError('Profile missing institution. Contact support.');
+       return;
+     }
 
-    const { data: counterRows, error: counterError } = await supabase
-      .from('menu_items')
-      .select('counter')
-      .eq('institution_id', profile.institution_id)
-      .ilike('counter', code);
+     const { data: counterRows, error: counterError } = await supabase
+       .from('menu_items')
+       .select('counter')
+       .eq('institution_id', profile.institution_id)
+       .ilike('counter', code);
 
     if (counterError || !counterRows || counterRows.length === 0) {
       setCounterError('Invalid Counter Code');
@@ -391,11 +390,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     let institution: InstitutionData | null = null;
     if (liveProfile.institution_id) {
-      const { data: instData } = await supabase
-        .from('institutions')
-        .select('id, name, campus, city, state, country, institution_code')
-        .eq('id', liveProfile.institution_id)
-        .single();
+       const { data: instData } = await supabase
+         .from('institutions')
+         .select('id, name, campus, city, state, country, institution_code')
+         .eq('id', liveProfile.institution_id)
+         .maybeSingle();
 
       if (instData) {
         institution = {
@@ -414,38 +413,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     }
 
-    const role = liveProfile.role;
+     const role = liveProfile.role;
 
-    if (role === 'institution_admin') {
-      setStep('institution_verify');
-      return;
-    } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
-      setStep('counter_verify');
-      return;
-    } else if (role === 'student' || role === 'faculty' || role === 'guest') {
-      if (liveProfile.institution_code && institution) {
-        setInstitutionVerifyCode(liveProfile.institution_code);
-        setValidatedInstitution(institution);
-        setVerifiedInstitution(institution);
-        setInstitutionData(institution);
-        setStep('success');
-        if (onLoginSuccess) {
-          onLoginSuccess({ profile: liveProfile, institution });
-        }
-        return;
-      }
-      if (liveProfile.institution_code && !institutionVerifyCode) {
-        setInstitutionVerifyCode(liveProfile.institution_code);
-      }
-      setStep('institution_verify');
-      return;
-    }
+     if (role === 'institution_admin') {
+       setStep('institution_verify');
+       return;
+     } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
+       setStep('counter_verify');
+       return;
+     } else if (role === 'student' || role === 'faculty' || role === 'guest') {
+       if (liveProfile.institution_code && institution) {
+         setInstitutionVerifyCode(liveProfile.institution_code);
+         setValidatedInstitution(institution);
+         setVerifiedInstitution(institution);
+         setInstitutionData(institution);
+         setStep('success');
+         if (onLoginSuccess) {
+           onLoginSuccess({ profile: liveProfile, institution });
+         }
+         return;
+       }
+       setStep('institution_verify');
+       return;
+     }
 
-    setStep('success');
-    if (onLoginSuccess) {
-      onLoginSuccess({ profile: liveProfile, institution });
-    }
-  };
+     setStep('success');
+     if (onLoginSuccess) {
+       onLoginSuccess({ profile: liveProfile, institution });
+     }
+   };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -531,35 +527,42 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (otpCode.length < 8) {
-      setOtpError('Please enter a valid 8-digit OTP code');
-      return;
-    }
+   const handleVerifyOtp = async (e: React.FormEvent) => {
+     e.preventDefault();
+     if (otpCode.length < 8) {
+       setOtpError('Please enter a valid 8-digit OTP code');
+       return;
+     }
 
-    const { error, profile, institution } = await verifyOtp(currentEmail, otpCode);
+     const { error, profile: liveProfile, institution } = await verifyOtp(currentEmail, otpCode);
 
-    if (error) {
-      setOtpError(error.message || 'OTP verification failed. Please check your code and try again.');
-      return;
-    }
+     if (error) {
+       setOtpError(error.message || 'OTP verification failed. Please check your code and try again.');
+       return;
+     }
 
-    if (!profile) {
-      setOtpError('Unable to set up your profile. Please contact support.');
-      return;
-    }
+     if (!liveProfile) {
+       setOtpError('Unable to set up your profile. Please contact support.');
+       return;
+     }
 
-    setVerifiedInstitution(institution);
-    if (institution?.institution_code) {
-      setInstitutionVerifyCode(institution.institution_code);
-    }
-    setStep('success');
+     setRegistrationPhase('idle');
 
-    if (onLoginSuccess) {
-      onLoginSuccess({ profile, institution });
-    }
-  };
+     const hasInstitution = liveProfile.institution_id || liveProfile.institution_code || institution;
+
+     if (hasInstitution) {
+       setVerifiedInstitution(institution || null);
+       if (institution?.institution_code) {
+         setInstitutionVerifyCode(institution.institution_code);
+       }
+       setStep('success');
+       if (onLoginSuccess) {
+         onLoginSuccess({ profile: liveProfile, institution: institution || null });
+       }
+     } else {
+       setStep('institution_verify');
+     }
+   };
 
   const handleReset = () => {
     setStep('form');

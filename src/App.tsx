@@ -68,27 +68,42 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const closeDashboards = () => {
-    setIsStudentPortalOpen(false);
-    setIsInstitutionDashboardOpen(false);
-    setIsKitchenDashboardOpen(false);
-    setIsSuperAdminDashboardOpen(false);
-  };
+   const closeDashboards = () => {
+     setIsStudentPortalOpen(false);
+     setIsInstitutionDashboardOpen(false);
+     setIsKitchenDashboardOpen(false);
+     setIsSuperAdminDashboardOpen(false);
+   };
 
-  const openDashboardForProfile = (liveProfile: Profile) => {
-    closeDashboards();
-    const role = liveProfile.role;
-    setCurrentUserRole(role);
-    if (role === 'institution_admin') {
-      setIsInstitutionDashboardOpen(true);
-    } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
-      setIsKitchenDashboardOpen(true);
-    } else if (role === 'super_admin') {
-      setIsSuperAdminDashboardOpen(true);
-    } else {
-      setIsStudentPortalOpen(true);
-    }
-  };
+   const openDashboardForProfile = (liveProfile: Profile) => {
+     closeDashboards();
+     const role = liveProfile.role;
+     setCurrentUserRole(role);
+     if (role === 'institution_admin') {
+       setIsInstitutionDashboardOpen(true);
+     } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
+       setIsKitchenDashboardOpen(true);
+     } else if (role === 'super_admin') {
+       setIsSuperAdminDashboardOpen(true);
+     } else {
+       setIsStudentPortalOpen(true);
+     }
+   };
+
+   // Redirect authenticated users away from public pages
+   useEffect(() => {
+     if (authLoading) return;
+     if (!user || !profile) return;
+
+     const path = location.pathname;
+     const dashboardRoute = getDashboardRoute(profile.role);
+
+     if (path === '/' || path === '/login' || path === '/create-account' || path.endsWith('/register')) {
+       if (dashboardRoute) {
+         navigate(dashboardRoute, { replace: true });
+       }
+     }
+   }, [authLoading, user, profile, location.pathname, navigate]);
 
   const getDashboardRoute = (role: UserRole | null): string | null => {
     if (role === 'student') return '/student/dashboard';
@@ -100,40 +115,30 @@ export default function App() {
     return null;
   };
 
-  // Route-based initialization: handle URL on mount
-  useEffect(() => {
-    if (authLoading) return;
-    const path = location.pathname;
+   // Route-based initialization: handle URL on mount
+   useEffect(() => {
+     if (authLoading) return;
+     const path = location.pathname;
 
-    if (path === '/create-account') {
-      setIsRoleSelectionOpen(true);
-    } else if (path === '/student/register') {
-      setSelectedRole('student');
-      setAuthInitialMode('create');
-      setIsAuthOpen(true);
-    } else if (path === '/faculty/register') {
-      setSelectedRole('faculty');
-      setAuthInitialMode('create');
-      setIsAuthOpen(true);
-    } else if (path === '/guest/register') {
-      setSelectedRole('guest');
-      setAuthInitialMode('create');
-      setIsAuthOpen(true);
-    } else if (path === '/login') {
-      setAuthInitialMode('login');
-      setIsAuthOpen(true);
-    }
-
-    // Redirect authenticated users from auth routes to dashboard
-    if (user && profile) {
-      if (path === '/login' || path === '/create-account' || path.endsWith('/register')) {
-        const dashboardRoute = getDashboardRoute(profile.role);
-        if (dashboardRoute) {
-          navigate(dashboardRoute, { replace: true });
-        }
-      }
-    }
-  }, [authLoading, user, profile, location.pathname, navigate]);
+     if (path === '/create-account') {
+       setIsRoleSelectionOpen(true);
+     } else if (path === '/student/register') {
+       setSelectedRole('student');
+       setAuthInitialMode('create');
+       setIsAuthOpen(true);
+     } else if (path === '/faculty/register') {
+       setSelectedRole('faculty');
+       setAuthInitialMode('create');
+       setIsAuthOpen(true);
+     } else if (path === '/guest/register') {
+       setSelectedRole('guest');
+       setAuthInitialMode('create');
+       setIsAuthOpen(true);
+     } else if (path === '/login') {
+       setAuthInitialMode('login');
+       setIsAuthOpen(true);
+     }
+   }, [authLoading, location.pathname, navigate]);
 
   useEffect(() => {
     if (authLoading) return;

@@ -9,7 +9,7 @@ interface InstitutionDashboardModalProps {
 }
 
 export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps> = ({ isOpen, onClose }) => {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, institutionData } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ orders: 0, menuItems: 0, counters: 0 });
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
@@ -53,7 +53,7 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-500 text-sm font-black text-slate-950 shadow-lg shadow-emerald-950">FX</div>
               <div className="min-w-0">
                 <h2 className="truncate text-base font-black tracking-tight text-white sm:text-lg">Institution Dashboard</h2>
-                <p className="truncate text-[11px] text-slate-400">{profile?.institution_code ? `Code: ${profile.institution_code}` : 'Institution sync pending'}</p>
+                <p className="truncate text-[11px] text-slate-400">{institutionData?.institution_code ? `Code: ${institutionData.institution_code}` : 'Institution sync pending'}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">

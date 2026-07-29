@@ -12,7 +12,7 @@ interface KitchenDashboardModalProps {
 const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready'];
 
 export const KitchenDashboardModal: React.FC<KitchenDashboardModalProps> = ({ isOpen, onClose }) => {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, institutionData } = useAuth();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
 
@@ -52,7 +52,7 @@ export const KitchenDashboardModal: React.FC<KitchenDashboardModalProps> = ({ is
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-500 text-sm font-black text-slate-950 shadow-lg shadow-emerald-950">FX</div>
               <div className="min-w-0">
                 <h2 className="truncate text-base font-black tracking-tight text-white sm:text-lg">Kitchen Dashboard</h2>
-                <p className="truncate text-[11px] text-slate-400">{profile?.institution_code ? `Institution: ${profile.institution_code}` : 'Institution sync pending'}</p>
+                <p className="truncate text-[11px] text-slate-400">{institutionData?.institution_code ? `Institution: ${institutionData.institution_code}` : 'Institution sync pending'}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">

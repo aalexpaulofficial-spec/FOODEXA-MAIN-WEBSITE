@@ -272,10 +272,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
      let freshProfile: Profile | null = authProfile;
 
      if (userId) {
-       const { error: upsertError } = await updateProfile({
-         institution_id: liveInstitution.institution_id,
-         institution_code: liveInstitution.institution_code,
-       });
+      const { error: upsertError } = await updateProfile({
+          institution_id: liveInstitution.institution_id,
+        });
 
        if (upsertError) {
          setInstitutionError(upsertError.message || 'Failed to save institution. Please try again.');
@@ -424,8 +423,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
        setStep('counter_verify');
        return;
      } else if (role === 'student' || role === 'faculty' || role === 'guest') {
-       if (liveProfile.institution_code && institution) {
-         setInstitutionVerifyCode(liveProfile.institution_code);
+        if (institution) {
+          setInstitutionVerifyCode(institution.institution_code);
          setValidatedInstitution(institution);
          setVerifiedInstitution(institution);
          setInstitutionData(institution);
@@ -550,7 +549,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
      setRegistrationPhase('idle');
 
-     const hasInstitution = liveProfile.institution_id || liveProfile.institution_code || institution;
+      const hasInstitution = liveProfile.institution_id || institution;
 
      if (hasInstitution) {
        setVerifiedInstitution(institution || null);

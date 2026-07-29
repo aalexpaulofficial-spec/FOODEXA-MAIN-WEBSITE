@@ -514,12 +514,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             setInstitutionName(`${inst.name}${inst.campus ? ` · ${inst.campus}` : ''}`);
             setInstitutionCode(inst.institution_code || '');
           }
-        } else if (profile?.institution_code) {
-          const { data: inst } = await supabase.from('institutions').select('name, campus, institution_code').ilike('institution_code', profile.institution_code).maybeSingle();
-          if (inst) {
-            setInstitutionName(`${inst.name}${inst.campus ? ` · ${inst.campus}` : ''}`);
-            setInstitutionCode(inst.institution_code || '');
-          }
         }
       } catch (err: any) {
         setError(err?.message || 'Failed to load portal data.');
@@ -551,7 +545,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     });
 
     return () => { unsubOrders(); unsubMenu(); unsubNotif(); };
-  }, [isOpen, profile?.institution_id, profile?.institution_code, refreshProfile, user?.id, handleOrderUpdate]);
+  }, [isOpen, profile?.institution_id, refreshProfile, user?.id, handleOrderUpdate]);
 
   // Derived data
   const allCategories = useMemo(() => {
@@ -641,7 +635,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             if (!verifyResult.success) { setError(verifyResult.error || 'Payment verification failed.'); setSubmittingOrder(false); return; }
             const orderResult = await placeOrder({
               user_id: user.id, email: profile.email, role: liveRole, institution_id: profile.institution_id,
-              institution_code: profile.institution_code, counter: firstItemCounter,
+               institution_code: institutionCode, counter: firstItemCounter,
               items: cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price })),
               total_amount: cartTotal, razorpay_order_id, razorpay_payment_id, razorpay_signature,
             });

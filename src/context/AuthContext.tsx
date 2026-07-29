@@ -42,36 +42,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     email: string;
     fullName: string;
     role: UserRole;
-    institutionCode: string | null;
     institutionId: string | null;
     phone: string | null;
   } | null>(null);
   const pendingOtpProfileRef = React.useRef<typeof pendingOtpProfile>(null);
 
   const loadInstitutionForProfile = useCallback(async (profileData: Profile | null): Promise<InstitutionData | null> => {
-    if (!profileData?.institution_id && !profileData?.institution_code) {
+    if (!profileData?.institution_id) {
       setInstitutionData(null);
       return null;
     }
 
-    let query = supabase
+    const { data, error } = await supabase
       .from('institutions')
-      .select('id, name, campus, city, state, country, institution_code');
+      .select('id, name, campus, city, state, country, institution_code')
+      .eq('id', profileData.institution_id)
+      .maybeSingle();
 
-query = profileData.institution_id
-        ? query.eq('id', profileData.institution_id)
-        : query.ilike('institution_code', profileData.institution_code || '');
-
-      const { data, error } = await query.maybeSingle();
-      if (error) {
-        console.error('[Auth] Institution load error:', error.message);
-        setInstitutionData(null);
-        return null;
-      }
-      if (!data) {
-        setInstitutionData(null);
-        return null;
-      }
+    if (error) {
+      console.error('[Auth] Institution load error:', error.message);
+      setInstitutionData(null);
+      return null;
+    }
+    if (!data) {
+      setInstitutionData(null);
+      return null;
+    }
 
     const institution = {
       institution_id: data.id,
@@ -90,7 +86,7 @@ query = profileData.institution_id
     try {
        const { data, error } = await supabase
          .from('profiles')
-         .select('user_id, email, full_name, phone, role, institution_id, institution_code, created_at, updated_at')
+         .select('user_id, email, full_name, phone, role, institution_id, created_at, updated_at')
          .eq('user_id', userId)
          .maybeSingle();
 
@@ -218,7 +214,6 @@ query = profileData.institution_id
       email: trimmedEmail,
       fullName: fullName.trim(),
       role,
-      institutionCode: metadata?.institutionCode?.trim() || institutionData?.institution_code || null,
       institutionId: institutionData?.institution_id || null,
       phone: metadata?.phone?.trim() || null,
     });
@@ -230,7 +225,6 @@ query = profileData.institution_id
         data: {
           full_name: fullName.trim(),
           role,
-          institution_code: metadata?.institutionCode?.trim() || institutionData?.institution_code,
           institution_id: institutionData?.institution_id,
           phone: metadata?.phone?.trim() || null,
           department: metadata?.department?.trim() || null,
@@ -335,81 +329,57 @@ query = profileData.institution_id
        return { error: new Error('Unable to complete registration. Please restart the process.'), profile: null, institution: null };
      }
 
-     const fullName = pendingProfile?.fullName || userData.full_name || null;
-     const institutionCode = pendingProfile?.institutionCode || userData.institution_code || null;
-     const phone = pendingProfile?.phone || userData.phone || null;
-     const institutionId = pendingProfile?.institutionId || userData.institution_id || institutionData?.institution_id || null;
+      const fullName = pendingProfile?.fullName || userData.full_name || null;
+      const phone = pendingProfile?.phone || userData.phone || null;
+      const institutionId = pendingProfile?.institutionId || userData.institution_id || institutionData?.institution_id || null;
 
-     console.log('[Auth] Creating/upserting profile for user:', userId, 'role:', role);
+      console.log('[Auth] Creating/upserting profile for user:', userId, 'role:', role);
 
-     const { error: upsertError } = await upsertProfileSafely({
-       user_id: userId,
-       email: authUser.email || email,
-       full_name: fullName,
-       phone,
-       role,
-       institution_id: institutionId,
-       institution_code: institutionCode,
-     });
+      const { error: upsertError } = await upsertProfileSafely({
+        user_id: userId,
+        email: authUser.email || email,
+        full_name: fullName,
+        phone,
+        role,
+        institution_id: institutionId,
+      });
 
-     if (upsertError) {
-       console.error('[Auth] Profile upsert error:', upsertError.message);
-       return { error: new Error(upsertError.message), profile: null, institution: null };
-     }
+      if (upsertError) {
+        console.error('[Auth] Profile upsert error:', upsertError.message);
+        return { error: new Error(upsertError.message), profile: null, institution: null };
+      }
 
-     const fetchedProfile = await fetchProfile(userId);
-     setPendingRegistrationProfile(null);
+      const fetchedProfile = await fetchProfile(userId);
+      setPendingRegistrationProfile(null);
 
-     let fetchedInstitution: InstitutionData | null = null;
+      let fetchedInstitution: InstitutionData | null = null;
 
-     if (institutionId) {
-       console.log('[Auth] Loading institution by id:', institutionId);
-       const { data: instData, error: instError } = await supabase
-         .from('institutions')
-         .select('id, name, campus, city, state, country, institution_code')
-         .eq('id', institutionId)
-         .maybeSingle();
+      if (institutionId) {
+        console.log('[Auth] Loading institution by id:', institutionId);
+        const { data: instData, error: instError } = await supabase
+          .from('institutions')
+          .select('id, name, campus, city, state, country, institution_code')
+          .eq('id', institutionId)
+          .maybeSingle();
 
-       if (instError) {
-         console.error('[Auth] Institution fetch by id error:', instError.message);
-       } else if (instData) {
-         fetchedInstitution = {
-           institution_id: instData.id,
-           institution_name: instData.name || '',
-           campus: instData.campus || '',
-           city: instData.city || '',
-           state: instData.state || '',
-           country: instData.country || '',
-           institution_code: instData.institution_code || '',
-         };
-         setInstitutionData(fetchedInstitution);
-       }
-     } else if (institutionCode) {
-       console.log('[Auth] Loading institution by code:', institutionCode);
-       const { data: instData, error: instError } = await supabase
-         .from('institutions')
-         .select('id, name, campus, city, state, country, institution_code')
-         .ilike('institution_code', institutionCode)
-         .maybeSingle();
+        if (instError) {
+          console.error('[Auth] Institution fetch by id error:', instError.message);
+        } else if (instData) {
+          fetchedInstitution = {
+            institution_id: instData.id,
+            institution_name: instData.name || '',
+            campus: instData.campus || '',
+            city: instData.city || '',
+            state: instData.state || '',
+            country: instData.country || '',
+            institution_code: instData.institution_code || '',
+          };
+          setInstitutionData(fetchedInstitution);
+        }
+      }
 
-       if (instError) {
-         console.error('[Auth] Institution fetch by code error:', instError.message);
-       } else if (instData) {
-         fetchedInstitution = {
-           institution_id: instData.id,
-           institution_name: instData.name || '',
-           campus: instData.campus || '',
-           city: instData.city || '',
-           state: instData.state || '',
-           country: instData.country || '',
-           institution_code: instData.institution_code || '',
-         };
-         setInstitutionData(fetchedInstitution);
-       }
-     }
-
-     return { error: null, profile: fetchedProfile, institution: fetchedInstitution };
-   };
+      return { error: null, profile: fetchedProfile, institution: fetchedInstitution };
+    };
 
   const clearAllSessionData = () => {
     const keysToRemove: string[] = [];
@@ -439,7 +409,6 @@ query = profileData.institution_id
     const { error } = await upsertProfileSafely({
       user_id: activeUser.id,
       institution_id: null,
-      institution_code: null,
       updated_at: new Date().toISOString(),
     });
 

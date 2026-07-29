@@ -226,9 +226,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       },
     });
 
-    if (data?.session) {
-      await supabase.auth.signOut();
-    }
+    // Do NOT sign out here — Supabase requires the unconfirmed session to verify the OTP.
+    // The session will remain unverified until email OTP is confirmed.
 
     return { error: error ? new Error(error.message) : null };
   };

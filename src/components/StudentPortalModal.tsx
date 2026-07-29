@@ -486,44 +486,68 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         await refreshProfile();
         const currentProfile = profile;
         const instId = currentProfile?.institution_id;
-        const [menuResult, orderResult, notifResult] = await Promise.all([
-          supabase.from('menu_items').select('*').order('item_name', { ascending: true }),
-          user?.id ? supabase.from('orders').select('*').eq('user_id', user.id).order('created_at', { ascending: false }) : Promise.resolve({ data: [], error: null }),
-          supabase.from('notifications').select('*').order('created_at', { ascending: false }),
-        ]);
-        if (menuResult.error) throw menuResult.error;
-        if (orderResult.error) throw orderResult.error;
-        if (notifResult.error) throw notifResult.error;
 
-        setMenuItems((menuResult.data || []).map(mapMenuItem));
-        setOrders((orderResult.data || []).map((r: any) => ({
-          id: String(r.id), user_id: String(r.user_id || ''), email: String(r.email || ''),
-          role: ['student', 'faculty', 'guest', 'institution_admin', 'kitchen_staff', 'canteen_manager', 'super_admin'].includes(r.role) ? r.role : null,
-          institution_id: r.institution_id || null, institution_code: r.institution_code || null,
-          counter_id: null, category_id: null,
-          order_id: String(r.order_id || r.id), counter: String(r.counter || ''),
-          items: Array.isArray(r.items) ? r.items.map((i: any) => ({ name: String(i.item_name || i.name || 'Item'), quantity: Number(i.quantity || 1), price: Number(i.price || 0) })) : [],
-          total_amount: Number(r.total_amount || r.total || 0),
-          status: (r.status || 'pending').toLowerCase() as OrderStatus,
-          payment_status: r.payment_status || 'pending', pickup_code: r.pickup_code || r.qr_code || null,
-          qr_code: r.qr_code || null, qr_code_data: r.qr_code_data || null,
-          locker_number: r.locker_number || null, created_at: r.created_at || '',
-          accepted_at: r.accepted_at || null, preparing_at: r.preparing_at || null,
-          ready_at: r.ready_at || null, completed_at: r.completed_at || null, updated_at: r.updated_at || '',
-        })));
+        // Fetch menu items — silently ignore if table not accessible (RLS)
+        const menuResult = await supabase
+          .from('menu_items')
+          .select('*')
+          .order('item_name', { ascending: true });
+        if (!menuResult.error) {
+          setMenuItems((menuResult.data || []).map(mapMenuItem));
+        }
 
-        const notifs = (notifResult.data || []).map((r: any) => ({
-          id: String(r.id), title: String(r.title || r.heading || r.subject || 'Update'),
-          message: String(r.message || r.body || r.content || ''),
-          created_at: r.created_at || '', type: String(r.type || 'announcement'), read: Boolean(r.read || r.is_read),
-        }));
-        setNotifications(notifs);
-        setUnreadNotif(notifs.filter(n => !n.read).length);
+        // Fetch orders only for this user
+        if (user?.id) {
+          const orderResult = await supabase
+            .from('orders')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+          if (!orderResult.error) {
+            setOrders((orderResult.data || []).map((r: any) => ({
+              id: String(r.id), user_id: String(r.user_id || ''), email: String(r.email || ''),
+              role: ['student', 'faculty', 'guest', 'institution_admin', 'kitchen_staff', 'canteen_manager', 'super_admin'].includes(r.role) ? r.role : null,
+              institution_id: r.institution_id || null, institution_code: r.institution_code || null,
+              counter_id: null, category_id: null,
+              order_id: String(r.order_id || r.id), counter: String(r.counter || ''),
+              items: Array.isArray(r.items) ? r.items.map((i: any) => ({ name: String(i.item_name || i.name || 'Item'), quantity: Number(i.quantity || 1), price: Number(i.price || 0) })) : [],
+              total_amount: Number(r.total_amount || r.total || 0),
+              status: (r.status || 'pending').toLowerCase() as OrderStatus,
+              payment_status: r.payment_status || 'pending', pickup_code: r.pickup_code || r.qr_code || null,
+              qr_code: r.qr_code || null, qr_code_data: r.qr_code_data || null,
+              locker_number: r.locker_number || null, created_at: r.created_at || '',
+              accepted_at: r.accepted_at || null, preparing_at: r.preparing_at || null,
+              ready_at: r.ready_at || null, completed_at: r.completed_at || null, updated_at: r.updated_at || '',
+            })));
+          }
+        }
 
+        // Fetch notifications — silently ignore RLS errors
+        const notifResult = await supabase
+          .from('notifications')
+          .select('id, title, message, created_at, type, read')
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (!notifResult.error) {
+          const notifs = (notifResult.data || []).map((r: any) => ({
+            id: String(r.id), title: String(r.title || r.heading || r.subject || 'Update'),
+            message: String(r.message || r.body || r.content || ''),
+            created_at: r.created_at || '', type: String(r.type || 'announcement'), read: Boolean(r.read || r.is_read),
+          }));
+          setNotifications(notifs);
+          setUnreadNotif(notifs.filter(n => !n.read).length);
+        }
+
+        // Fetch institution name from the institutions table
         if (instId) {
-          const { data: inst } = await supabase.from('institutions').select('name, campus, institution_code').eq('id', instId).maybeSingle();
+          const { data: inst } = await supabase
+            .from('institutions')
+            .select('institution_name, name, campus, institution_code')
+            .eq('id', instId)
+            .maybeSingle();
           if (inst) {
-            setInstitutionName(`${inst.name}${inst.campus ? ` · ${inst.campus}` : ''}`);
+            const nameField = inst.institution_name || inst.name || '';
+            setInstitutionName(`${nameField}${inst.campus ? ` · ${inst.campus}` : ''}`);
             setInstitutionCode(inst.institution_code || '');
           }
         }

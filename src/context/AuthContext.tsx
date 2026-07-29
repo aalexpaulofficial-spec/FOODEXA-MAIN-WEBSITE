@@ -95,7 +95,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return institution;
   }, []);
 
-  const PROFILE_COLUMNS = 'user_id, email, full_name, phone, role, institution_id, department, semester, programme, campus_block, designation';
+  const PROFILE_COLUMNS = 'user_id, email, full_name, phone, role, institution_id, department, semester, programme, campus_block';
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
@@ -137,7 +137,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
    const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-      const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation'];
+      const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block'];
       const safePayload: Record<string, any> = {};
       for (const key of KNOWN_PROFILE_COLUMNS) {
         if (key in payload) {
@@ -250,15 +250,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { error: new Error(error.message) };
     }
 
-    // OTP verification is mandatory for this flow. If Supabase returns a session
-    // immediately, email confirmations are disabled and no signup OTP was issued.
+    // OTP verification is mandatory for this flow. If signUp returns a session,
+    // request an email OTP explicitly and keep the user out of the dashboard.
     if (data?.session) {
       await supabase.auth.signOut();
       setSession(null);
       setUser(null);
       setIsEmailVerified(false);
-      setIsPendingOtpVerification(false);
-      return { error: new Error('OTP verification is required. Enable Supabase Email Confirmations so an 8-digit signup OTP is sent, then try creating the account again.') };
+
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: trimmedEmail,
+        options: {
+          shouldCreateUser: false,
+          data: {
+            full_name: fullName.trim(),
+            role,
+            institution_id: institutionData?.institution_id,
+          },
+        },
+      });
+
+      if (otpError) {
+        setIsPendingOtpVerification(false);
+        return { error: new Error(otpError.message) };
+      }
+
+      return { error: null };
     }
 
     // No session yet — user must verify via OTP email. isPendingOtpVerification stays true.
@@ -314,16 +331,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    const verifyOtp = async (email: string, token: string) => {
      console.log('[Auth] Verifying OTP for:', email);
 
-     const { error, data: authData } = await supabase.auth.verifyOtp({
+     let authData = null as Awaited<ReturnType<typeof supabase.auth.verifyOtp>>['data'] | null;
+     const { error: signupError, data: signupData } = await supabase.auth.verifyOtp({
        email,
        token,
        type: 'signup',
      });
 
-     if (error) {
-       console.error('[Auth] OTP signup verification failed:', error.message);
-       // Keep isPendingOtpVerification true so user can retry OTP
-       return { error: new Error(error.message), profile: null, institution: null };
+     if (signupError) {
+       const { error: emailError, data: emailData } = await supabase.auth.verifyOtp({
+         email,
+         token,
+         type: 'email',
+       });
+
+       if (emailError) {
+         console.error('[Auth] OTP verification failed:', signupError.message, emailError.message);
+         // Keep isPendingOtpVerification true so user can retry OTP
+         return { error: new Error(emailError.message || signupError.message), profile: null, institution: null };
+       }
+
+       authData = emailData;
+     } else {
+       authData = signupData;
      }
 
       console.log('[Auth] OTP signup verification succeeded');
@@ -367,7 +397,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         semester: userData.semester || null,
         programme: userData.programme || null,
         campus_block: userData.campus_block || null,
-        designation: userData.designation || null,
       });
 
       if (upsertError) {

@@ -2,7 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 
 // Trim any accidental newlines/whitespace that may be injected from env vars
 const rawUrl = (import.meta.env.VITE_SUPABASE_URL as string || '').trim();
-const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string || '').trim();
+const rawKey = (
+  (import.meta.env.VITE_SUPABASE_ANON_KEY as string || '') ||
+  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string || '')
+).trim();
 
 const envMissing = !rawUrl || !rawKey;
 

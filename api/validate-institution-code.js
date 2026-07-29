@@ -22,9 +22,11 @@ export default async function handler(req, res) {
 
   const trimmed = code.trim();
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const supabaseServerKey = supabaseServiceKey || supabaseAnonKey;
 
-  if (!supabaseUrl || !supabaseServiceKey) {
+  if (!supabaseUrl || !supabaseServerKey) {
     console.error('[validate-institution-code] Missing Supabase env vars');
     return res.status(503).json({
       error: 'Institution verification is not configured yet. Please contact Foodexa support.',
@@ -36,8 +38,8 @@ export default async function handler(req, res) {
     const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/institutions?institution_code=ilike.${encodeURIComponent(trimmed)}&select=id,name,institution_name,campus,city,state,country,institution_code&limit=1`;
     const resp = await fetch(url, {
       headers: {
-        'apikey': supabaseServiceKey,
-        'Authorization': `Bearer ${supabaseServiceKey}`,
+        'apikey': supabaseServerKey,
+        'Authorization': `Bearer ${supabaseServerKey}`,
         'Accept': 'application/json',
       },
     });
@@ -50,6 +52,13 @@ export default async function handler(req, res) {
         return res.status(503).json({
           error: 'Institution verification is being set up. Please try again after the Foodexa database is updated.',
           code: 'INSTITUTIONS_TABLE_MISSING',
+        });
+      }
+
+      if (!supabaseServiceKey && (resp.status === 401 || resp.status === 403)) {
+        return res.status(503).json({
+          error: 'Institution verification needs the server Supabase service key in Vercel.',
+          code: 'SUPABASE_SERVICE_KEY_REQUIRED',
         });
       }
 

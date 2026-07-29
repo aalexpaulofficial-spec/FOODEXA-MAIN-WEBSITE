@@ -226,7 +226,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     institutionCodeTimerRef.current = setTimeout(async () => {
       const { error, data } = await validateInstitutionCode(trimmed);
       if (error || !data) {
-        setInstitutionError('Institution Code not found.');
+        setInstitutionError(error || 'Institution Code not found.');
         setValidatedInstitution(null);
       } else {
         setValidatedInstitution(data);
@@ -244,7 +244,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setValidatingCode(true);
     validateInstitutionCode(trimmed).then(({ error, data }) => {
       if (error || !data) {
-        setInstitutionError('Institution Code not found.');
+        setInstitutionError(error || 'Institution Code not found.');
         setValidatedInstitution(null);
       } else {
         setValidatedInstitution(data);
@@ -470,7 +470,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const { error: validateError, data: validatedInst } = await validateInstitutionCode(currentForm.institutionCode);
 
     if (validateError || !validatedInst) {
-      setInstitutionError('Institution Code not found.');
+      setInstitutionError(validateError || 'Institution Code not found.');
       setValidatingCode(false);
       setRegistrationPhase('idle');
       return;
@@ -756,7 +756,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       )}
                     </div>
                     {institutionError && !validatingCode && (
-                      <p className="text-[10px] text-red-400 mt-1">✗ Institution Code not found.</p>
+                      <p className="text-[10px] text-red-400 mt-1">✗ {institutionError}</p>
                     )}
                     {!institutionError && validatedInstitution && !validatingCode && (
                       <div className="text-[10px] text-emerald-400 mt-1 space-y-0.5">

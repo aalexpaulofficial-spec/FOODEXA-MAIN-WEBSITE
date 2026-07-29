@@ -13,10 +13,14 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import {
   formatINR, formatDateTime, subscribeOrders, subscribeMenuItems, subscribeAnnouncements,
+  subscribeBanners, subscribeMenuCategories, subscribeHomepageSections, subscribeCounters,
   placeOrder, createRazorpayOrder, verifyRazorpayPayment, mapMenuItem,
-  fetchUserCart, saveUserCart
+  fetchUserCart, saveUserCart, fetchBanners, fetchHomepageSections, fetchCounters,
+  fetchMenuItems as fetchMenuItemsService, searchMenuItems, filterMenuItems,
+  calculateCartTotals, GST_RATE, validateCoupon, applyCouponUsage,
+  fetchUserFavorites, toggleFavorite, fetchAIRecommendations, getOrderProgress, getEstimatedTimeRemaining, generateReceipt
 } from '../lib/supabase-service';
-import type { MenuItem, Order, OrderStatus, NotificationItem, UserRole } from '../types';
+import type { MenuItem, Order, OrderStatus, NotificationItem, UserRole, CartItem, FoodFilters, CheckoutData } from '../types';
 
 declare global { interface Window { Razorpay: any } }
 
@@ -231,6 +235,43 @@ const EmptyState = ({ icon: Icon, title, message, action }: {
   </div>
 );
 
+const BannerCarousel = ({ banners }: { banners: any[] }) => {
+  const [current, setCurrent] = useState(0);
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const timer = setInterval(() => setCurrent((c) => (c + 1) % banners.length), 5000);
+    return () => clearInterval(timer);
+  }, [banners.length]);
+
+  if (!banners.length) return null;
+  const banner = banners[current];
+
+  return (
+    <section className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 h-40 sm:h-52">
+      {banner.image_url && (
+        <img src={banner.image_url} alt={banner.title} className="absolute inset-0 w-full h-full object-cover" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/60 to-transparent" />
+      <div className="relative z-10 flex flex-col justify-center h-full p-6 sm:p-8 max-w-lg">
+        {banner.title && <h3 className="text-lg sm:text-2xl font-black text-white leading-tight">{banner.title}</h3>}
+        {banner.subtitle && <p className="mt-1 text-xs sm:text-sm text-slate-300 line-clamp-2">{banner.subtitle}</p>}
+        {banner.cta_label && (
+          <button className="mt-3 inline-flex items-center gap-2 w-fit rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 text-xs font-black text-slate-950 shadow-lg shadow-emerald-950/30 hover:from-emerald-400 hover:to-teal-400 transition-all">
+            {banner.cta_label} <ArrowRight className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+      {banners.length > 1 && (
+        <div className="absolute bottom-3 right-4 flex gap-1.5">
+          {banners.map((_, i) => (
+            <button key={i} onClick={() => setCurrent(i)} className={`h-1.5 rounded-full transition-all ${i === current ? 'w-6 bg-emerald-400' : 'w-1.5 bg-slate-600'}`} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+};
+
 const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
   key?: React.Key;
   item: MenuItem;
@@ -239,6 +280,9 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
   isFavorited?: boolean;
 }) => {
   const [adding, setAdding] = useState(false);
+  const [imgErr, setImgErr] = useState(false);
+  const isVeg = item.is_veg !== false;
+  const aiScore = item.ai_popularity_score || item.rating || 0;
 
   const handleAdd = () => {
     setAdding(true);
@@ -247,15 +291,16 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
   };
 
   return (
-    <article className="group relative overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900 transition-all duration-300 hover:-translate-y-1 hover:border-slate-700 hover:shadow-xl hover:shadow-slate-950/40">
+    <article className="group relative overflow-hidden rounded-3xl border border-slate-800/80 bg-slate-900 transition-all duration-300 hover:-translate-y-1 hover:border-slate-700 hover:shadow-xl hover:shadow-slate-950/40">
       {/* Image */}
       <div className="relative h-44 bg-slate-800 overflow-hidden">
-        {item.image_url ? (
+        {item.image_url && !imgErr ? (
           <img
             src={item.image_url}
             alt={item.name}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
             loading="lazy"
+            onError={() => setImgErr(true)}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 via-slate-900 to-emerald-950/30">
@@ -266,7 +311,7 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
         {/* Overlay gradient */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-        {/* Badges */}
+        {/* Badges - Top Left */}
         <div className="absolute left-3 top-3 flex flex-col gap-1.5">
           {item.popular && (
             <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/50 bg-slate-950/90 px-2 py-0.5 text-[9px] font-black text-emerald-300 backdrop-blur-sm">
@@ -278,6 +323,13 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
               {item.offer_label}
             </span>
           )}
+          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black backdrop-blur-sm ${
+            isVeg
+              ? 'border-emerald-500/50 bg-emerald-950/90 text-emerald-300'
+              : 'border-red-500/50 bg-red-950/90 text-red-300'
+          }`}>
+            {isVeg ? '🟢 Veg' : '🔴 Non-Veg'}
+          </span>
         </div>
 
         {/* Favorite */}
@@ -291,9 +343,9 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
         )}
 
         {/* Rating */}
-        {item.rating > 0 && (
+        {aiScore > 0 && (
           <div className="absolute bottom-2.5 right-3 flex items-center gap-1 rounded-full bg-slate-950/80 px-2 py-0.5 text-[9px] font-bold text-amber-300 backdrop-blur-sm">
-            <Star className="w-2.5 h-2.5 fill-amber-300" />{item.rating.toFixed(1)}
+            <Star className="w-2.5 h-2.5 fill-amber-300" />{aiScore.toFixed(1)}
           </div>
         )}
       </div>
@@ -319,6 +371,22 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
           )}
         </div>
 
+        {/* Nutrition row */}
+        {(item.calories || item.protein) && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {item.calories && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-semibold text-slate-400">
+                🔥 {item.calories} kcal
+              </span>
+            )}
+            {item.protein && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-semibold text-slate-400">
+                💪 {item.protein}g
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Tags */}
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-semibold text-slate-400">
@@ -329,9 +397,14 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
               {item.category}
             </span>
           )}
-          {item.prep_time && (
+          {(item.prep_time || item.prep_time_minutes) && (
             <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-semibold text-slate-400">
-              <Clock className="w-2 h-2" />{item.prep_time}
+              <Clock className="w-2 h-2" />{item.prep_time || `~${item.prep_time_minutes}m`}
+            </span>
+          )}
+          {item.stock_quantity !== undefined && item.stock_quantity <= 5 && item.stock_quantity > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-950/50 px-2 py-0.5 text-[9px] font-bold text-amber-300">
+              <Package className="w-2 h-2" /> {item.stock_quantity} left
             </span>
           )}
         </div>
@@ -339,17 +412,17 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
         {/* Add button */}
         <button
           onClick={handleAdd}
-          disabled={!item.is_available}
+          disabled={!item.is_available || (item.stock_quantity !== undefined && item.stock_quantity <= 0)}
           className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-extrabold shadow-sm transition-all active:scale-[0.97] ${
-            !item.is_available
+            !item.is_available || (item.stock_quantity !== undefined && item.stock_quantity <= 0)
               ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
               : adding
                 ? 'bg-emerald-500 text-slate-950 scale-[0.98]'
                 : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 hover:from-emerald-400 hover:to-teal-400 hover:shadow-emerald-950/40 hover:shadow-md'
           }`}
         >
-          {!item.is_available ? (
-            'Unavailable'
+          {!item.is_available || (item.stock_quantity !== undefined && item.stock_quantity <= 0) ? (
+            'Sold Out'
           ) : adding ? (
             <><Check className="w-4 h-4" /> Added!</>
           ) : (
@@ -419,12 +492,21 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [banners, setBanners] = useState<any[]>([]);
+  const [homepageSections, setHomepageSections] = useState<any[]>([]);
+  const [countersList, setCountersList] = useState<any[]>([]);
   const [institutionName, setInstitutionName] = useState('');
   const [institutionCode, setInstitutionCode] = useState('');
   const [cart, setCart] = useState<{ item: MenuItem; quantity: number }[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCounter, setSelectedCounter] = useState('ALL');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [selectedVeg, setSelectedVeg] = useState<'ALL' | 'veg' | 'nonVeg'>('ALL');
+  const [selectedPriceRange, setSelectedPriceRange] = useState('ALL');
+  const [selectedPrepTime, setSelectedPrepTime] = useState('ALL');
+  const [sortBy, setSortBy] = useState<'popular' | 'newest' | 'price_asc' | 'price_desc' | 'prep_time' | 'rating'>('popular');
+  const [showVegFilter, setShowVegFilter] = useState(false);
+  const [showNonVeg, setShowNonVeg] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -437,6 +519,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadNotif, setUnreadNotif] = useState(0);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponDiscount, setCouponDiscount] = useState(0);
+  const [couponMessage, setCouponMessage] = useState<string | null>(null);
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const [showLeaveInstitution, setShowLeaveInstitution] = useState(false);
   const [leavingInstitution, setLeavingInstitution] = useState(false);
@@ -445,8 +531,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   // Checkout States
   const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'wallet' | 'cash'>('razorpay');
   const [kitchenNotes, setKitchenNotes] = useState('');
-  const [couponCode, setCouponCode] = useState('');
-  const [discount, setDiscount] = useState(0);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -495,14 +579,34 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         const currentProfile = profile;
         const instId = currentProfile?.institution_id;
 
-        // Fetch menu items — silently ignore if table not accessible (RLS)
-        const menuResult = await supabase
-          .from('menu_items')
-          .select('*')
-          .order('item_name', { ascending: true });
-        if (!menuResult.error) {
-          setMenuItems((menuResult.data || []).map(mapMenuItem));
-        }
+          // Fetch banners
+          const { data: bData } = await supabase.from('banners').select('*').eq('is_active', true).order('order', { ascending: true });
+          setBanners((bData || []) as any[]);
+
+          // Fetch homepage sections
+          const { data: hsData } = await supabase.from('homepage_sections').select('*').eq('is_active', true).order('display_order', { ascending: true });
+          setHomepageSections((hsData || []) as any[]);
+
+          // Fetch counters
+          const { data: cData } = await supabase.from('counters').select('*').eq('is_active', true).order('order', { ascending: true });
+          setCountersList((cData || []) as any[]);
+
+          // Fetch user favorites
+          if (user?.id) {
+            const favIds = await fetchUserFavorites(user.id);
+            setFavorites(new Set(favIds));
+          }
+
+          // Fetch menu items with enhanced params
+          const menuResult = await supabase
+            .from('menu_items')
+            .select('*')
+            .eq('is_published', true)
+            .order('item_name', { ascending: true });
+
+          if (!menuResult.error) {
+            setMenuItems((menuResult.data || []).map(mapMenuItem));
+          }
 
         // Fetch orders only for this user
         if (user?.id) {
@@ -595,8 +699,26 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         setUnreadNotif(c => c + 1);
       }
     });
+    const unsubBanners = subscribeBanners((payload: any) => {
+      if (payload.eventType === 'INSERT' && payload.new?.is_active) {
+        setBanners((prev) => [...prev, payload.new]);
+      } else if (payload.eventType === 'UPDATE') {
+        setBanners((prev) => prev.map((b) => b.id === payload.new.id ? payload.new : b).filter((b) => b.is_active));
+      } else if (payload.eventType === 'DELETE') {
+        setBanners((prev) => prev.filter((b) => b.id !== payload.old.id));
+      }
+    });
+    const unsubCounters = subscribeCounters((payload: any) => {
+      if (payload.eventType === 'INSERT' && payload.new?.is_active) {
+        setCountersList((prev) => [...prev, payload.new]);
+      } else if (payload.eventType === 'UPDATE') {
+        setCountersList((prev) => prev.map((c) => c.id === payload.new.id ? payload.new : c).filter((c) => c.is_active));
+      } else if (payload.eventType === 'DELETE') {
+        setCountersList((prev) => prev.filter((c) => c.id !== payload.old.id));
+      }
+    });
 
-    return () => { unsubOrders(); unsubMenu(); unsubNotif(); };
+    return () => { unsubOrders(); unsubMenu(); unsubNotif(); unsubBanners(); unsubCounters(); };
   }, [isOpen, profile?.institution_id, refreshProfile, user?.id, handleOrderUpdate]);
 
   // Sync cart to Supabase when it changes
@@ -638,15 +760,87 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const todaySpecials = menuItems.filter((i) => i.popular).slice(0, 6);
   const favoriteItems = menuItems.filter(i => favorites.has(i.id)).slice(0, 8);
 
-  const filteredItems = useMemo(() => menuItems.filter((i) => {
+  // Enhanced filtered items with all filters
+  const filteredItems = useMemo(() => {
+    let result = [...menuItems];
     const q = searchQuery.trim().toLowerCase();
-    const cm = selectedCounter === 'ALL' || i.counter_name === selectedCounter;
-    const catM = selectedCategory === 'ALL' || i.category === selectedCategory;
-    const qm = !q || i.name.toLowerCase().includes(q) || i.category.toLowerCase().includes(q) || i.counter_name.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q);
-    return cm && catM && qm;
-  }), [menuItems, searchQuery, selectedCounter, selectedCategory]);
 
-  const cartTotal = cart.reduce((s, e) => s + (e.item.offer_price || e.item.price) * e.quantity, 0);
+    // Search filter
+    if (q) {
+      result = result.filter((i) =>
+        i.name.toLowerCase().includes(q) ||
+        i.category.toLowerCase().includes(q) ||
+        i.counter_name.toLowerCase().includes(q) ||
+        i.description?.toLowerCase().includes(q)
+      );
+    }
+
+    // Counter filter
+    if (selectedCounter !== 'ALL') {
+      result = result.filter((i) => i.counter_name === selectedCounter);
+    }
+
+    // Category filter
+    if (selectedCategory !== 'ALL') {
+      result = result.filter((i) => i.category === selectedCategory);
+    }
+
+    // Veg filter
+    if (showVegFilter) {
+      result = result.filter((i) => i.is_veg === true);
+    }
+    if (showNonVeg) {
+      result = result.filter((i) => i.is_veg === false);
+    }
+
+    // Price range filter
+    if (selectedPriceRange !== 'ALL') {
+      const [min, max] = selectedPriceRange.split('-').map(Number);
+      if (max) {
+        result = result.filter((i) => (i.offer_price || i.price) >= min && (i.offer_price || i.price) <= max);
+      } else {
+        result = result.filter((i) => (i.offer_price || i.price) >= min);
+      }
+    }
+
+    // Prep time filter
+    if (selectedPrepTime !== 'ALL') {
+      const maxMinutes = Number(selectedPrepTime);
+      result = result.filter((i) => i.prep_time_minutes !== undefined && i.prep_time_minutes <= maxMinutes);
+    }
+
+    // Sort
+    switch (sortBy) {
+      case 'popular':
+        result.sort((a, b) => Number(b.popular) - Number(a.popular) || b.rating - a.rating);
+        break;
+      case 'newest':
+        result.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
+        break;
+      case 'price_asc':
+        result.sort((a, b) => (a.offer_price || a.price) - (b.offer_price || b.price));
+        break;
+      case 'price_desc':
+        result.sort((a, b) => (b.offer_price || b.price) - (a.offer_price || a.price));
+        break;
+      case 'prep_time':
+        result.sort((a, b) => (a.prep_time_minutes || Infinity) - (b.prep_time_minutes || Infinity));
+        break;
+      case 'rating':
+        result.sort((a, b) => b.rating - a.rating);
+        break;
+      default:
+        result.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    return result;
+  }, [menuItems, searchQuery, selectedCounter, selectedCategory, showVegFilter, showNonVeg, selectedPriceRange, selectedPrepTime, sortBy]);
+
+  const { subtotal: cartSubtotal, gst: cartGST, discount: cartDiscount, grandTotal: cartGrandTotal } = useMemo(() => {
+    return calculateCartTotals(cart, couponDiscount);
+  }, [cart, couponDiscount]);
+
+  const cartTotal = cartSubtotal;
   const cartCount = cart.reduce((s, e) => s + e.quantity, 0);
 
   // Cart actions
@@ -664,6 +858,28 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     next.has(item.id) ? next.delete(item.id) : next.add(item.id);
     return next;
   });
+
+  const handleValidateCoupon = async () => {
+    if (!couponCode.trim()) { setCouponDiscount(0); setCouponMessage(null); return; }
+    setApplyingCoupon(true);
+    setCouponMessage(null);
+    try {
+      const result = await validateCoupon(couponCode, profile?.institution_id || undefined, user?.id);
+      if (result.valid) {
+        setCouponDiscount(result.discount);
+        setCouponMessage(result.type === 'percentage' ? `${result.discount}% discount applied` : `${formatINR(result.discount)} discount applied`);
+        if (user?.id) {
+          await applyCouponUsage(couponCode, user.id, '');
+        }
+      } else {
+        setCouponDiscount(0);
+        setCouponMessage(result.error || 'Invalid coupon');
+      }
+    } catch {
+      setCouponMessage('Coupon validation failed');
+    }
+    setApplyingCoupon(false);
+  };
 
   // Order placement
   const handlePlaceOrder = async () => {
@@ -699,7 +915,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               user_id: user.id, email: profile.email, role: liveRole, institution_id: profile.institution_id,
                institution_code: institutionCode, counter: firstItemCounter,
               items: cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price })),
-              total_amount: cartTotal, razorpay_order_id, razorpay_payment_id, razorpay_signature,
+              total_amount: cartGrandTotal, razorpay_order_id, razorpay_payment_id, razorpay_signature,
             });
             if (orderResult.error) { setError(`Order failed: ${orderResult.error}`); setActiveTab('payment_failed'); setSubmittingOrder(false); return; }
             if (orderResult.data) setOrders((prev) => [orderResult.data!, ...prev]);
@@ -796,7 +1012,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       <QRModal isOpen={!!qrOrder} onClose={() => setQrOrder(null)} order={qrOrder} />
 
       {/* ── HEADER ─────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-30 shrink-0 border-b border-slate-800/70 bg-slate-950/95 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 shrink-0 border-b border-slate-800/70 glass-strong">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
           {/* Logo + Institution */}
           <div className="flex items-center gap-3 min-w-0">
@@ -878,7 +1094,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* Desktop Sidebar Nav */}
-        <aside className="hidden lg:flex flex-col border-r border-slate-800 bg-slate-950 w-56 shrink-0 p-4 gap-1">
+        <aside className="hidden lg:flex flex-col border-r border-slate-800 glass-strong w-56 shrink-0 p-4 gap-1">
           <div className="mb-4 px-3">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Navigation</p>
           </div>
@@ -971,6 +1187,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 {/* ═══════════════════ HOME TAB ═══════════════════ */}
                 {activeTab === 'home' && (
                   <div className="space-y-8">
+                    {/* Banner Carousel - Dynamic from Supabase */}
+                    {banners.length > 0 && (
+                      <BannerCarousel banners={banners} />
+                    )}
+
                     {/* Hero Greeting */}
                     <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/60 border border-slate-800 p-6 sm:p-8">
                       <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
@@ -1209,6 +1430,56 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                       </section>
                     )}
 
+                    {/* Fast Pickup */}
+                    {menuItems.filter((i) => i.prep_time_minutes !== undefined && i.prep_time_minutes <= 10 && i.is_available).length > 0 && (
+                      <section className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-base font-black text-white flex items-center gap-2">
+                            <Zap className="w-4 h-4 text-cyan-400" /> Fast Pickup
+                          </h3>
+                          <button onClick={() => { setActiveTab('menu'); setSortBy('prep_time'); }} className="text-[10px] font-bold text-emerald-400">See all →</button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                          {menuItems.filter((i) => i.prep_time_minutes !== undefined && i.prep_time_minutes <= 10 && i.is_available).slice(0, 4).map((item) => (
+                            <FoodCard key={item.id} item={item} onAdd={addToCart} onFavorite={toggleFavorite} isFavorited={favorites.has(item.id)} />
+                          ))}
+                        </div>
+                      </section>
+                    )}
+
+                    {/* Healthy Meals */}
+                    {menuItems.filter((i) => i.is_healthy || (i.calories !== undefined && i.calories < 300)).length > 0 && (
+                      <section className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-base font-black text-white flex items-center gap-2">
+                            <Salad className="w-4 h-4 text-emerald-400" /> Healthy Meals
+                          </h3>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                          {menuItems.filter((i) => i.is_healthy || (i.calories !== undefined && i.calories < 300)).slice(0, 4).map((item) => (
+                            <FoodCard key={item.id} item={item} onAdd={addToCart} onFavorite={toggleFavorite} isFavorited={favorites.has(item.id)} />
+                          ))}
+                        </div>
+                      </section>
+                    )}
+
+                    {/* Recently Added */}
+                    {[...menuItems].sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()).slice(0, 4).length > 0 && (
+                      <section className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-base font-black text-white flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-pink-400" /> Recently Added
+                          </h3>
+                          <button onClick={() => { setActiveTab('menu'); setSortBy('newest'); }} className="text-[10px] font-bold text-emerald-400">See all →</button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                          {[...menuItems].sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()).slice(0, 4).map((item) => (
+                            <FoodCard key={item.id} item={item} onAdd={addToCart} onFavorite={toggleFavorite} isFavorited={favorites.has(item.id)} />
+                          ))}
+                        </div>
+                      </section>
+                    )}
+
                     {/* Announcements */}
                     {notifications.length > 0 && (
                       <section className="rounded-3xl border border-slate-800 bg-slate-900/60 overflow-hidden">
@@ -1293,6 +1564,65 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           ))}
                         </div>
                       )}
+
+                      {/* Veg / Non-Veg Toggle */}
+                      <div className="flex gap-2 items-center">
+                        <button
+                          onClick={() => { setShowVegFilter(!showVegFilter); setShowNonVeg(false); }}
+                          className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
+                            showVegFilter
+                              ? 'bg-emerald-500 text-slate-950'
+                              : 'border border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'
+                          }`}
+                        >
+                          🥗 Veg Only
+                        </button>
+                        <button
+                          onClick={() => { setShowNonVeg(!showNonVeg); setShowVegFilter(false); }}
+                          className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
+                            showNonVeg
+                              ? 'bg-red-500 text-white'
+                              : 'border border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'
+                          }`}
+                        >
+                          🍗 Non-Veg
+                        </button>
+                        <select
+                          value={selectedPriceRange}
+                          onChange={(e) => setSelectedPriceRange(e.target.value)}
+                          className="shrink-0 rounded-full px-3 py-1.5 text-xs font-bold border border-slate-700 bg-slate-900 text-slate-400 outline-none"
+                        >
+                          <option value="ALL">Any Price</option>
+                          <option value="0-50">Under ₹50</option>
+                          <option value="50-100">₹50 – ₹100</option>
+                          <option value="100-200">₹100 – ₹200</option>
+                          <option value="200-99999">₹200+</option>
+                        </select>
+                        <select
+                          value={selectedPrepTime}
+                          onChange={(e) => setSelectedPrepTime(e.target.value)}
+                          className="shrink-0 rounded-full px-3 py-1.5 text-xs font-bold border border-slate-700 bg-slate-900 text-slate-400 outline-none"
+                        >
+                          <option value="ALL">Any Prep Time</option>
+                          <option value="5">≤5 min</option>
+                          <option value="10">≤10 min</option>
+                          <option value="15">≤15 min</option>
+                          <option value="20">≤20 min</option>
+                        </select>
+                        <select
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value as any)}
+                          className="shrink-0 rounded-full px-3 py-1.5 text-xs font-bold border border-slate-700 bg-slate-900 text-slate-400 outline-none"
+                        >
+                          <option value="popular">Popular</option>
+                          <option value="newest">Newest</option>
+                          <option value="price_asc">Price Low→High</option>
+                          <option value="price_desc">Price High→Low</option>
+                          <option value="prep_time">Fastest Prep</option>
+                          <option value="rating">Top Rated</option>
+                        </select>
+                      </div>
+
                       {/* Results count */}
                       <p className="text-[10px] font-semibold text-slate-500">
                         {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
@@ -1317,7 +1647,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                         icon={Search}
                         title="No items found"
                         message={searchQuery ? `No results for "${searchQuery}". Try different keywords.` : 'No menu items available with selected filters.'}
-                        action={{ label: 'Clear filters', onClick: () => { setSearchQuery(''); setSelectedCategory('ALL'); setSelectedCounter('ALL'); } }}
+                        action={{ label: 'Clear filters', onClick: () => { setSearchQuery(''); setSelectedCategory('ALL'); setSelectedCounter('ALL'); setShowVegFilter(false); setShowNonVeg(false); setSelectedPriceRange('ALL'); setSelectedPrepTime('ALL'); setSortBy('popular'); } }}
                       />
                     )}
                   </div>
@@ -1588,26 +1918,26 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                             ))}
                           </div>
                           
-                          <div className="pt-4 border-t border-slate-800 space-y-2">
-                            <div className="flex justify-between text-xs text-slate-400">
-                              <span>Subtotal</span>
-                              <span>{formatINR(cartTotal)}</span>
-                            </div>
-                            <div className="flex justify-between text-xs text-slate-400">
-                              <span>Taxes (5% GST)</span>
-                              <span>{formatINR(cartTotal * 0.05)}</span>
-                            </div>
-                            {discount > 0 && (
-                              <div className="flex justify-between text-xs text-emerald-400">
-                                <span>Discount</span>
-                                <span>-{formatINR(discount)}</span>
-                              </div>
-                            )}
-                            <div className="pt-2 flex justify-between text-lg font-black text-white">
-                              <span>Grand Total</span>
-                              <span className="text-emerald-400">{formatINR(cartTotal + (cartTotal * 0.05) - discount)}</span>
-                            </div>
-                          </div>
+                           <div className="pt-4 border-t border-slate-800 space-y-2">
+                             <div className="flex justify-between text-xs text-slate-400">
+                               <span>Subtotal</span>
+                               <span>{formatINR(cartSubtotal)}</span>
+                             </div>
+                             {cartDiscount > 0 && (
+                               <div className="flex justify-between text-xs text-emerald-400">
+                                 <span>Discount</span>
+                                 <span>-{formatINR(cartDiscount)}</span>
+                               </div>
+                             )}
+                             <div className="flex justify-between text-xs text-slate-400">
+                               <span>Taxes (5% GST)</span>
+                               <span>{formatINR(cartGST)}</span>
+                             </div>
+                             <div className="pt-2 flex justify-between text-lg font-black text-white">
+                               <span>Grand Total</span>
+                               <span className="text-emerald-400">{formatINR(cartGrandTotal)}</span>
+                             </div>
+                           </div>
                         </div>
 
                         {/* Additional */}
@@ -1680,7 +2010,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-4 text-base font-black text-slate-950 shadow-lg shadow-emerald-500/20 disabled:opacity-50 hover:scale-[1.02] hover:shadow-emerald-500/40 transition-all"
                         >
                           {submittingOrder ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
-                          {submittingOrder ? 'Processing...' : `Pay ${formatINR(cartTotal + (cartTotal * 0.05) - discount)}`}
+                          {submittingOrder ? 'Processing...' : `Pay ${formatINR(cartGrandTotal)}`}
                         </button>
                         <p className="text-center text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
                           <Lock className="w-3 h-3" /> Secure Payment via Razorpay

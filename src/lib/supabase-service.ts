@@ -23,6 +23,39 @@ import { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supab
 
 const ORDER_STATUS_FLOW: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready', 'completed'];
 
+export interface CartItem {
+  item: MenuItem;
+  quantity: number;
+}
+
+export interface FoodFilters {
+  search?: string;
+  veg?: boolean;
+  nonVeg?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+  maxPrepTime?: number;
+  category?: string;
+  counter?: string;
+  sortBy?: 'popular' | 'newest' | 'price_asc' | 'price_desc' | 'prep_time';
+}
+
+export interface CheckoutData {
+  institutionId: string;
+  institutionCode: string;
+  counter: string;
+  pickupTime: string;
+  estimatedTime: string;
+  items: CartItem[];
+  subtotal: number;
+  gst: number;
+  discount: number;
+  couponCode: string;
+  grandTotal: number;
+  paymentMethod: 'razorpay' | 'wallet' | 'cash';
+  notes: string;
+}
+
 export function canTransitionTo(from: OrderStatus, to: OrderStatus): boolean {
   const fromIdx = ORDER_STATUS_FLOW.indexOf(from);
   const toIdx = ORDER_STATUS_FLOW.indexOf(to);
@@ -96,38 +129,98 @@ export async function fetchMenuItems(params?: {
   counter?: string;
   category?: string;
   availableOnly?: boolean;
+  veg?: boolean;
+  nonVeg?: boolean;
+  popularOnly?: boolean;
+  search?: string;
+  sortBy?: 'name' | 'popular' | 'newest' | 'price_asc' | 'price_desc' | 'prep_time' | 'rating';
+  limit?: number;
 }): Promise<MenuItem[]> {
   let query = supabase.from('menu_items').select('*');
   if (params?.institution_id) query = query.eq('institution_id', params.institution_id);
   if (params?.counter) query = query.eq('counter', params.counter);
-  if (params?.category) query = query.eq('category', params.category);
+  if (params?.category && params.category !== 'ALL') query = query.eq('category', params.category);
+  if (params?.veg === true) query = query.eq('is_veg', true);
+  if (params?.nonVeg === true) query = query.eq('is_veg', false);
   if (params?.availableOnly !== false) query = query.eq('is_published', true);
-  query = query.order('item_name', { ascending: true });
+  if (params?.popularOnly) query = query.eq('popular', true);
+  if (params?.search) {
+    const s = `%${params.search.toLowerCase()}%`;
+    query = query.or(`item_name.ilike.${s},counter.ilike.${s},category.ilike.${s},description.ilike.${s}`);
+  }
+  
+  switch (params?.sortBy) {
+    case 'popular': query = query.order('popular', { ascending: false }).order('rating', { ascending: false }); break;
+    case 'newest': query = query.order('created_at', { ascending: false }); break;
+    case 'price_asc': query = query.order('price', { ascending: true }); break;
+    case 'price_desc': query = query.order('price', { ascending: false }); break;
+    case 'prep_time': query = query.order('prep_time_minutes', { ascending: true }); break;
+    case 'rating': query = query.order('rating', { ascending: false }); break;
+    default: query = query.order('item_name', { ascending: true });
+  }
+  
+  if (params?.limit) query = query.limit(params.limit);
+  
   const { data } = await query;
   return (data || []).map(mapMenuItem);
 }
 
 export function mapMenuItem(row: any): MenuItem {
+  const nutritionStr = row.nutrition || row.nutrition_data || null;
+  let calories: number | undefined;
+  let protein: number | undefined;
+  let carbs: number | undefined;
+  let fat: number | undefined;
+  if (nutritionStr) {
+    try {
+      const parsed = typeof nutritionStr === 'string' ? JSON.parse(nutritionStr) : nutritionStr;
+      calories = parsed.calories || parsed.cal || undefined;
+      protein = parsed.protein || parsed.prots || undefined;
+      carbs = parsed.carbs || parsed.carbo || undefined;
+      fat = parsed.fat || parsed.fat_total || undefined;
+    } catch { /* ignore parse errors */ }
+  }
+
+  let prepTimeMinutes: number | undefined;
+  if (row.prep_time_minutes !== undefined && row.prep_time_minutes !== null) {
+    prepTimeMinutes = Number(row.prep_time_minutes);
+  } else if (row.prep_time) {
+    const match = String(row.prep_time).match(/(\d+)/);
+    if (match) prepTimeMinutes = Number(match[1]);
+  }
+
   return {
     id: String(row.id),
-    name: String(row.item_name || 'Unnamed'),
+    name: String(row.item_name || row.name || 'Unnamed'),
     counter: String(row.counter || row.counter_name || 'Counter'),
     counter_name: String(row.counter_name || row.counter || 'Counter'),
     counter_id: row.counter_id || null,
     price: Number(row.price || row.amount || 0),
     offer_price: row.offer_price || null,
     offer_label: row.offer_label || row.discount_label || null,
-    prep_time: row.prep_time || row.prepTime || null,
+    prep_time: row.prep_time || null,
     rating: Number(row.rating || row.avg_rating || 0),
     category: String(row.category || 'Menu'),
     category_id: row.category_id || null,
-    image_url: row.image_url || row.image || null,
+    image_url: row.image_url || row.image_url || row.image || null,
     description: String(row.description || ''),
     is_available: row.is_available !== false,
     is_published: row.is_published !== false,
     popular: Boolean(row.popular || row.is_popular || row.trending),
     nutrition: row.nutrition || row.calories || null,
     institution_id: row.institution_id || null,
+    is_veg: row.is_veg !== undefined ? row.is_veg : null,
+    prep_time_minutes: prepTimeMinutes,
+    calories: calories,
+    protein: protein,
+    carbs: carbs,
+    fat: fat,
+    is_healthy: row.is_healthy || false,
+    trending: row.trending || row.is_trending || false,
+    today_orders: row.today_orders || 0,
+    stock_quantity: row.stock_quantity !== undefined ? Number(row.stock_quantity) : undefined,
+    ai_popularity_score: row.ai_popularity_score !== undefined ? Number(row.ai_popularity_score) : row.rating || 0,
+    tags: Array.isArray(row.tags) ? row.tags : (typeof row.tags === 'string' ? JSON.parse(row.tags) : []),
   };
 }
 
@@ -509,4 +602,336 @@ export function subscribeBanners(callback: RealtimeCallback<any>) {
 
 export function subscribeMenuCategories(callback: RealtimeCallback<any>) {
   return subscribeToRealtime('menu-categories-realtime', [{ table: 'menu_categories', callback }]);
+}
+
+export function subscribeHomepageSections(callback: RealtimeCallback<any>) {
+  return subscribeToRealtime('homepage-sections-realtime', [{ table: 'homepage_sections', callback }]);
+}
+
+export function subscribeCounters(callback: RealtimeCallback<any>) {
+  return subscribeToRealtime('counters-realtime', [{ table: 'counters', callback }]);
+}
+
+// ==================== HOMEPAGE SECTIONS ====================
+export async function fetchHomepageSections(institutionId?: string): Promise<any[]> {
+  let query = supabase.from('homepage_sections').select('*').eq('is_active', true).order('order', { ascending: true });
+  if (institutionId) query = query.eq('institution_id', institutionId);
+  const { data } = await query;
+  return data || [];
+}
+
+// ==================== COUNTERS ====================
+export async function fetchCounters(institutionId?: string): Promise<any[]> {
+  let query = supabase.from('counters').select('*').eq('is_active', true).order('order', { ascending: true });
+  if (institutionId) query = query.eq('institution_id', institutionId);
+  const { data } = await query;
+  return data || [];
+}
+
+// ==================== SEARCH & FILTER ====================
+export async function searchMenuItems(query: string, institutionId?: string): Promise<MenuItem[]> {
+  let q = supabase.from('menu_items').select('*').eq('is_published', true);
+  if (institutionId) q = q.eq('institution_id', institutionId);
+  
+  // Search in name, counter, category, description
+  const searchTerm = `%${query.toLowerCase()}%`;
+  q = q.or(`item_name.ilike.${searchTerm},counter.ilike.${searchTerm},category.ilike.${searchTerm},description.ilike.${searchTerm}`);
+  
+  const { data } = await q.order('item_name', { ascending: true }).limit(50);
+  return (data || []).map(mapMenuItem);
+}
+
+export async function filterMenuItems(filters: FoodFilters, institutionId?: string): Promise<MenuItem[]> {
+  let query = supabase.from('menu_items').select('*').eq('is_published', true);
+  if (institutionId) query = query.eq('institution_id', institutionId);
+  
+  if (filters.search) {
+    const searchTerm = `%${filters.search.toLowerCase()}%`;
+    query = query.or(`item_name.ilike.${searchTerm},counter.ilike.${searchTerm},category.ilike.${searchTerm},description.ilike.${searchTerm}`);
+  }
+  if (filters.veg !== undefined) {
+    query = query.eq('is_veg', filters.veg);
+  }
+  if (filters.nonVeg !== undefined) {
+    query = query.eq('is_veg', !filters.nonVeg);
+  }
+  if (filters.minPrice !== undefined) {
+    query = query.gte('price', filters.minPrice);
+  }
+  if (filters.maxPrice !== undefined) {
+    query = query.lte('price', filters.maxPrice);
+  }
+  if (filters.maxPrepTime !== undefined) {
+    query = query.lte('prep_time_minutes', filters.maxPrepTime);
+  }
+  if (filters.category && filters.category !== 'ALL') {
+    query = query.eq('category', filters.category);
+  }
+  if (filters.counter && filters.counter !== 'ALL') {
+    query = query.eq('counter', filters.counter);
+  }
+  
+  // Apply sorting
+  switch (filters.sortBy) {
+    case 'popular':
+      query = query.order('popular', { ascending: false }).order('rating', { ascending: false });
+      break;
+    case 'newest':
+      query = query.order('created_at', { ascending: false });
+      break;
+    case 'price_asc':
+      query = query.order('price', { ascending: true });
+      break;
+    case 'price_desc':
+      query = query.order('price', { ascending: false });
+      break;
+    case 'prep_time':
+      query = query.order('prep_time_minutes', { ascending: true });
+      break;
+    default:
+      query = query.order('item_name', { ascending: true });
+  }
+  
+  const { data } = await query.limit(100);
+  return (data || []).map(mapMenuItem);
+}
+
+// ==================== CART CALCULATIONS ====================
+export const GST_RATE = 0.05; // 5% GST for food
+
+export function calculateCartTotals(items: CartItem[], couponDiscount: number = 0): {
+  subtotal: number;
+  gst: number;
+  discount: number;
+  grandTotal: number;
+} {
+  const subtotal = items.reduce((sum, item) => sum + (item.item.offer_price || item.item.price) * item.quantity, 0);
+  const discount = Math.min(couponDiscount, subtotal);
+  const taxableAmount = subtotal - discount;
+  const gst = Math.round(taxableAmount * GST_RATE * 100) / 100;
+  const grandTotal = Math.round((taxableAmount + gst) * 100) / 100;
+  return { subtotal, gst, discount, grandTotal };
+}
+
+// ==================== COUPONS ====================
+export async function validateCoupon(code: string, institutionId?: string, userId?: string): Promise<{ valid: boolean; discount: number; type: 'percentage' | 'fixed'; error?: string }> {
+  try {
+    let queryBuilder = supabase.from('coupons').select('*').eq('code', code.toUpperCase()).eq('is_active', true);
+    if (institutionId) queryBuilder = queryBuilder.eq('institution_id', institutionId);
+    const { data, error } = await queryBuilder.maybeSingle();
+    if (error || !data) {
+      return { valid: false, discount: 0, type: 'fixed', error: 'Invalid or expired coupon code' };
+    }
+    
+    const now = new Date();
+    const validFrom = data.valid_from ? new Date(data.valid_from) : null;
+    const validUntil = data.valid_until ? new Date(data.valid_until) : null;
+    
+    if (validFrom && now < validFrom) {
+      return { valid: false, discount: 0, type: 'fixed', error: 'Coupon not yet valid' };
+    }
+    if (validUntil && now > validUntil) {
+      return { valid: false, discount: 0, type: 'fixed', error: 'Coupon has expired' };
+    }
+    
+    if (data.min_order_amount && data.min_order_amount > 0) {
+      // Note: actual cart amount check should be done by caller
+    }
+    
+    if (data.max_uses && data.used_count >= data.max_uses) {
+      return { valid: false, discount: 0, type: 'fixed', error: 'Coupon usage limit reached' };
+    }
+    
+    if (userId && data.user_limit && data.user_limit > 0) {
+      const { count } = await supabase.from('coupon_usage').select('*', { count: 'exact', head: true })
+        .eq('coupon_id', data.id).eq('user_id', userId);
+      if (count && count >= data.user_limit) {
+        return { valid: false, discount: 0, type: 'fixed', error: 'You have already used this coupon' };
+      }
+    }
+    
+    return {
+      valid: true,
+      discount: data.discount_type === 'percentage' ? data.discount_value : data.discount_value,
+      type: data.discount_type,
+    };
+  } catch (err: any) {
+    return { valid: false, discount: 0, type: 'fixed', error: err?.message || 'Coupon validation failed' };
+  }
+}
+
+export async function applyCouponUsage(couponCode: string, userId: string, orderId: string): Promise<void> {
+  try {
+    const { data: coupon } = await supabase.from('coupons').select('id').eq('code', couponCode.toUpperCase()).single();
+    if (coupon) {
+      await supabase.from('coupon_usage').insert({
+        coupon_id: coupon.id,
+        user_id: userId,
+        order_id: orderId,
+        used_at: new Date().toISOString(),
+      });
+      await supabase.rpc('increment_coupon_usage', { coupon_id: coupon.id });
+    }
+  } catch (err) {
+    console.error('Failed to record coupon usage:', err);
+  }
+}
+
+// ==================== FAVORITES ====================
+export async function fetchUserFavorites(userId: string): Promise<string[]> {
+  try {
+    const { data } = await supabase.from('user_favorites').select('menu_item_id').eq('user_id', userId);
+    return (data || []).map((d: any) => String(d.menu_item_id));
+  } catch {
+    return [];
+  }
+}
+
+export async function toggleFavorite(userId: string, menuItemId: string): Promise<boolean> {
+  try {
+    const { data: existing } = await supabase.from('user_favorites').select('id').eq('user_id', userId).eq('menu_item_id', menuItemId).maybeSingle();
+    if (existing) {
+      await supabase.from('user_favorites').delete().eq('id', existing.id);
+      return false; // removed
+    } else {
+      await supabase.from('user_favorites').insert({ user_id: userId, menu_item_id: menuItemId });
+      return true; // added
+    }
+  } catch (err) {
+    console.error('Toggle favorite failed:', err);
+    return false;
+  }
+}
+
+// ==================== NUTRITION & AI ====================
+export async function fetchNutritionInfo(menuItemId: string): Promise<any> {
+  try {
+    const { data } = await supabase.from('menu_item_nutrition').select('*').eq('menu_item_id', menuItemId).maybeSingle();
+    return data || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchAIRecommendations(userId: string, institutionId: string, type: 'healthy' | 'trending' | 'personalized' | 'popular_today' | 'fast_pickup' | 'offers'): Promise<MenuItem[]> {
+  try {
+    // This would call an edge function or AI service
+    // For now, return filtered menu items based on type
+    let query = supabase.from('menu_items').select('*').eq('institution_id', institutionId).eq('is_published', true).eq('is_available', true);
+    
+    switch (type) {
+      case 'healthy':
+        query = query.eq('is_healthy', true).order('calories', { ascending: true });
+        break;
+      case 'trending':
+        query = query.eq('trending', true).order('rating', { ascending: false });
+        break;
+      case 'popular_today':
+        query = query.order('today_orders', { ascending: false });
+        break;
+      case 'fast_pickup':
+        query = query.lte('prep_time_minutes', 10).order('prep_time_minutes', { ascending: true });
+        break;
+      case 'offers':
+        query = query.not('offer_price', 'is', null).order('offer_price', { ascending: true });
+        break;
+      case 'personalized':
+      default:
+        // Would use user's order history to recommend
+        query = query.order('rating', { ascending: false });
+        break;
+    }
+    
+    const { data } = await query.limit(10);
+    return (data || []).map(mapMenuItem);
+  } catch {
+    return [];
+  }
+}
+
+// ==================== WALLET ====================
+export async function fetchWalletBalance(userId: string): Promise<number> {
+  try {
+    const { data } = await supabase.from('wallets').select('balance').eq('user_id', userId).maybeSingle();
+    return Number(data?.balance || 0);
+  } catch {
+    return 0;
+  }
+}
+
+export async function deductWalletBalance(userId: string, amount: number, orderId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: wallet } = await supabase.from('wallets').select('balance').eq('user_id', userId).single();
+    if (!wallet || Number(wallet.balance) < amount) {
+      return { success: false, error: 'Insufficient wallet balance' };
+    }
+    
+    await supabase.from('wallets').update({ balance: Number(wallet.balance) - amount }).eq('user_id', userId);
+    await supabase.from('wallet_transactions').insert({
+      user_id: userId,
+      amount: -amount,
+      type: 'debit',
+      reference_id: orderId,
+      description: `Order ${orderId}`,
+    });
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Wallet deduction failed' };
+  }
+}
+
+// ==================== ORDER TRACKING ====================
+export function getOrderProgress(status: OrderStatus): { step: number; total: number; label: string; completed: boolean }[] {
+  const steps = [
+    { key: 'pending', label: 'Order Placed' },
+    { key: 'accepted', label: 'Accepted' },
+    { key: 'preparing', label: 'Preparing' },
+    { key: 'ready', label: 'Ready for Pickup' },
+    { key: 'completed', label: 'Completed' },
+  ];
+  
+  const currentIndex = steps.findIndex(s => s.key === status);
+  return steps.map((step, index) => ({
+    step: index + 1,
+    total: steps.length,
+    label: step.label,
+    completed: index <= currentIndex && status !== 'cancelled',
+  }));
+}
+
+export function getEstimatedTimeRemaining(order: Order): number {
+  if (order.status === 'completed' || order.status === 'cancelled') return 0;
+  if (!order.ready_at) return 0;
+  
+  const readyTime = new Date(order.ready_at).getTime();
+  const now = Date.now();
+  return Math.max(0, Math.round((readyTime - now) / 1000 / 60)); // minutes
+}
+
+// ==================== RECEIPT / INVOICE ====================
+export async function generateReceipt(order: Order): Promise<string> {
+  const lines = [
+    'FOODEXA CAMPUS FOOD ORDER',
+    '========================',
+    `Order ID: ${order.order_id}`,
+    `Date: ${formatDateTime(order.created_at)}`,
+    `Status: ${order.status.toUpperCase()}`,
+    `Payment: ${order.payment_status.toUpperCase()}`,
+    '',
+    'ITEMS:',
+    '------',
+  ];
+  
+  order.items.forEach((item, idx) => {
+    lines.push(`${idx + 1}. ${item.name} x${item.quantity} - ${formatINR(item.price * item.quantity)}`);
+  });
+  
+  lines.push('', `Total: ${formatINR(order.total_amount)}`, '');
+  
+  if (order.pickup_code) lines.push(`Pickup Code: ${order.pickup_code}`);
+  if (order.counter) lines.push(`Counter: ${order.counter}`);
+  if (order.locker_number) lines.push(`Locker: ${order.locker_number}`);
+  
+  lines.push('', 'Thank you for ordering with FOODEXA!');
+  return lines.join('\n');
 }

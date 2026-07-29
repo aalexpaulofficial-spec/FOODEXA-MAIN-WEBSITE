@@ -1,3 +1,5 @@
+export type UserRole = 'student' | 'faculty' | 'guest' | 'institution_admin' | 'kitchen_staff' | 'canteen_manager' | 'super_admin';
+
 export interface LXChatMessage {
   id: string;
   sender: 'user' | 'lx';
@@ -45,8 +47,6 @@ export interface InstitutionRequestInsert {
   status: 'pending';
 }
 
-export type UserRole = 'student' | 'faculty' | 'guest' | 'institution_admin' | 'kitchen_staff' | 'canteen_manager' | 'super_admin';
-
 export interface Profile {
   user_id: string;
   email: string;
@@ -61,6 +61,10 @@ export interface Profile {
   programme: string | null;
   campus_block: string | null;
   designation: string | null;
+  avatar_url?: string | null;
+  wallet_balance?: number;
+  total_orders?: number;
+  favorite_counters?: string[];
 }
 
 export interface InstitutionData {
@@ -84,6 +88,32 @@ export interface Banner {
   cta_link: string;
   is_active: boolean;
   order: number;
+}
+
+export interface HomepageSection {
+  id: string;
+  institution_id: string | null;
+  section_type: 'banner' | 'categories' | 'counters' | 'featured' | 'trending' | 'recently_added' | 'recommended' | 'ai_suggestions' | 'popular_today' | 'fast_pickup' | 'healthy_meals' | 'offers';
+  title: string;
+  subtitle?: string;
+  display_order: number;
+  is_active: boolean;
+  config?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Counter {
+  id: string;
+  institution_id: string | null;
+  name: string;
+  description?: string;
+  image_url?: string | null;
+  is_active: boolean;
+  order: number;
+  avg_prep_time?: number;
+  location?: string;
+  floor?: string;
 }
 
 export interface Announcement {
@@ -172,6 +202,18 @@ export interface MenuItem {
   popular: boolean;
   nutrition: string | null;
   institution_id: string | null;
+  is_veg?: boolean;
+  prep_time_minutes?: number;
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  is_healthy?: boolean;
+  trending?: boolean;
+  today_orders?: number;
+  stock_quantity?: number;
+  ai_popularity_score?: number;
+  tags?: string[];
 }
 
 export interface MenuCategory {
@@ -180,6 +222,8 @@ export interface MenuCategory {
   institution_id: string | null;
   is_active: boolean;
   order: number;
+  image_url?: string | null;
+  description?: string;
 }
 
 export type OrderStatus = 'pending' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'cancelled';
@@ -191,6 +235,8 @@ export interface OrderItem {
   name: string;
   quantity: number;
   price: number;
+  image_url?: string | null;
+  is_veg?: boolean;
 }
 
 export interface Order {
@@ -218,6 +264,9 @@ export interface Order {
   ready_at: string | null;
   completed_at: string | null;
   updated_at: string;
+  estimated_prep_time?: number;
+  kitchen_status?: string;
+  token_number?: string;
 }
 
 export interface NotificationItem {
@@ -251,4 +300,37 @@ export interface ImpactStat {
   stat_value: string;
   is_active: boolean;
   order: number;
+}
+
+export interface CartItem {
+  item: MenuItem;
+  quantity: number;
+}
+
+export interface FoodFilters {
+  search?: string;
+  veg?: boolean;
+  nonVeg?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+  maxPrepTime?: number;
+  category?: string;
+  counter?: string;
+  sortBy?: 'popular' | 'newest' | 'price_asc' | 'price_desc' | 'prep_time';
+}
+
+export interface CheckoutData {
+  institutionId: string;
+  institutionCode: string;
+  counter: string;
+  pickupTime: string;
+  estimatedTime: string;
+  items: CartItem[];
+  subtotal: number;
+  gst: number;
+  discount: number;
+  couponCode: string;
+  grandTotal: number;
+  paymentMethod: 'razorpay' | 'wallet' | 'cash';
+  notes: string;
 }

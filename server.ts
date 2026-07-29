@@ -94,6 +94,52 @@ Important rules:
 4. When students ask for food suggestions, provide concise meals with estimated price ($), prep wait time (mins), vendor location on campus, protein/calories if asked, and direct advice on avoiding rush hours.
 5. Emphasize FOODEXA features like Express Queue Jump, Group Cart Splitting, Smart Lockers, and Allergen Safeguards when relevant.`;
 
+  // ==================== INSTITUTION CODE VALIDATION (bypasses RLS) ====================
+  app.post("/api/validate-institution-code", async (req, res) => {
+    try {
+      const { code } = req.body;
+      if (!code || typeof code !== 'string' || !code.trim()) {
+        return res.status(400).json({ error: 'Institution code is required.' });
+      }
+
+      const trimmed = code.trim();
+
+      // Use the service role key so RLS is bypassed for this public lookup
+      const url = `${supabaseUrl}/rest/v1/institutions?institution_code=ilike.${encodeURIComponent(trimmed)}&select=id,name,campus,city,state,country,institution_code&limit=1`;
+      const resp = await fetch(url, {
+        headers: {
+          'apikey': supabaseServiceKey,
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+        },
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error('[Institutions] Query failed:', errText);
+        return res.status(500).json({ error: 'Unable to verify Institution Code. Please try again.' });
+      }
+
+      const rows = await resp.json();
+      if (!rows || rows.length === 0) {
+        return res.status(404).json({ error: 'Institution Code not found.' });
+      }
+
+      const inst = rows[0];
+      return res.json({
+        institution_id: inst.id,
+        institution_name: inst.name || '',
+        campus: inst.campus || '',
+        city: inst.city || '',
+        state: inst.state || '',
+        country: inst.country || '',
+        institution_code: inst.institution_code || '',
+      });
+    } catch (err: any) {
+      console.error('[Institutions] Validate error:', err);
+      return res.status(500).json({ error: 'Server error during institution code validation.' });
+    }
+  });
+
   // API Route for LX AI Assistant queries
   app.post("/api/ask-lx", async (req, res) => {
     try {

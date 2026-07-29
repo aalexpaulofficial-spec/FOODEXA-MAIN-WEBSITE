@@ -254,38 +254,39 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!trimmed) {
       return { error: 'Institution Code is required.', data: null };
     }
-   try {
-       const { data, error } = await supabase
-         .from('institutions')
-         .select('id, name, campus, city, state, country, institution_code')
-         .ilike('institution_code', trimmed)
-         .maybeSingle();
+    try {
+      // Call the server-side endpoint so the service role key bypasses RLS.
+      // Anonymous browser requests are blocked by RLS on the institutions table.
+      const resp = await fetch('/api/validate-institution-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: trimmed }),
+      });
 
-       if (error) {
-         console.error('[Auth] Institution code validation error:', error.message);
-         return { error: 'Unable to verify Institution Code. Please try again.', data: null };
-       }
-       if (!data) {
-         return { error: 'Invalid Institution Code. Please check and try again.', data: null };
-       }
+      const json = await resp.json();
 
-       return {
-         error: null,
-         data: {
-           institution_id: data.id,
-           institution_name: data.name || '',
-           campus: data.campus || '',
-           city: data.city || '',
-           state: data.state || '',
-           country: data.country || '',
-           institution_code: data.institution_code || '',
-         } as InstitutionData,
-       };
-     } catch (err: any) {
-       console.error('[Auth] Institution code validation exception:', err);
-       return { error: 'Unable to verify Institution Code. Please try again.', data: null };
-     }
+      if (!resp.ok || json.error) {
+        return { error: json.error || 'Invalid Institution Code. Please check and try again.', data: null };
+      }
+
+      return {
+        error: null,
+        data: {
+          institution_id: json.institution_id,
+          institution_name: json.institution_name || '',
+          campus: json.campus || '',
+          city: json.city || '',
+          state: json.state || '',
+          country: json.country || '',
+          institution_code: json.institution_code || '',
+        } as InstitutionData,
+      };
+    } catch (err: any) {
+      console.error('[Auth] Institution code validation exception:', err);
+      return { error: 'Unable to verify Institution Code. Please try again.', data: null };
+    }
   };
+
 
    const verifyOtp = async (email: string, token: string) => {
      console.log('[Auth] Verifying OTP for:', email);

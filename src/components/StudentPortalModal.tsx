@@ -467,6 +467,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
   useEffect(() => {
     if (!isOpen) return;
+    if (!user || !profile) return;
     const load = async () => {
       setLoading(true); setError(null);
       try {

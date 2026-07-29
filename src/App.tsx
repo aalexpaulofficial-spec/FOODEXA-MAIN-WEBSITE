@@ -132,9 +132,12 @@ export default function App() {
      const role = roleFromQuery;
 
      if (path === '/create-account') {
-       if (role && ['student', 'faculty', 'guest'].includes(role)) {
+       const savedRole = sessionStorage.getItem('foodexa_role');
+       const roleToUse = roleFromQuery || savedRole;
+
+       if (roleToUse && ['student', 'faculty', 'guest'].includes(roleToUse)) {
          setIsRoleSelectionOpen(false);
-         setSelectedRole(role);
+         setSelectedRole(roleToUse as any);
          setAuthInitialMode('create');
          setIsAuthOpen(true);
        } else {
@@ -183,7 +186,7 @@ export default function App() {
     if (!user) {
       restoredDashboardRef.current = false;
       setCurrentUserRole(null);
-      setIsAuthOpen(false);
+      // Removed setIsAuthOpen(false) here to allow the registration modal to stay open
       closeDashboards();
       return;
     }
@@ -221,13 +224,14 @@ export default function App() {
   };
 
   const handleRoleSelected = (role: 'student' | 'faculty' | 'guest') => {
+    sessionStorage.setItem('foodexa_role', role);
     setIsRoleSelectionOpen(false);
     setAuthInitialMode('create');
     setIsAuthOpen(true);
     setSelectedRole(role);
     const registerRoute = `/create-account?role=${role}`;
     if (location.pathname + location.search !== registerRoute) {
-      navigate(registerRoute, { replace: false });
+      navigate(registerRoute, { replace: true });
     }
   };
 

@@ -14,7 +14,7 @@ interface AuthContextType {
   setInstitutionData: (data: InstitutionData | null) => void;
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
-  signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; facultyId?: string; }) => Promise<{ error: Error | null; profile?: Profile | null; institution?: InstitutionData | null; verified?: boolean }>;
+  signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
   signOut: () => Promise<void>;
   clearAllSessionData: () => void;
@@ -95,7 +95,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return institution;
   }, []);
 
-  const PROFILE_COLUMNS = 'user_id, email, full_name, role, institution_id';
+  const PROFILE_COLUMNS = 'user_id, email, full_name, phone, role, institution_id, department, semester, programme, campus_block, designation';
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
@@ -111,7 +111,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        }
 
       if (data) {
-        const fetchedProfile = { ...data, phone: null, created_at: '', updated_at: '' } as Profile;
+        const fetchedProfile = { ...data, created_at: '', updated_at: '' } as Profile;
         setProfile(fetchedProfile);
         await loadInstitutionForProfile(fetchedProfile);
         return fetchedProfile;
@@ -137,7 +137,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
    const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-      const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'role', 'institution_id'];
+      const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation'];
       const safePayload: Record<string, any> = {};
       for (const key of KNOWN_PROFILE_COLUMNS) {
         if (key in payload) {
@@ -250,46 +250,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { error: new Error(error.message) };
     }
 
-    // If Supabase returned a session, email confirmations are off or auto-confirmed.
-    // Finish profile setup immediately instead of sending the user to the OTP step.
+    // OTP verification is mandatory for this flow. If Supabase returns a session
+    // immediately, email confirmations are disabled and no signup OTP was issued.
     if (data?.session) {
-      const authUser = data.user;
-      if (!authUser?.id) {
-        setIsPendingOtpVerification(false);
-        return { error: new Error('Registration succeeded but user data could not be loaded.') };
-      }
-
-      const { error: upsertError } = await upsertProfileSafely({
-        user_id: authUser.id,
-        email: authUser.email || trimmedEmail,
-        full_name: fullName.trim(),
-        role,
-        institution_id: institutionData?.institution_id || null,
-      });
-
-      if (upsertError) {
-        setIsPendingOtpVerification(false);
-        return { error: new Error(upsertError.message) };
-      }
-
-      setIsEmailVerified(true);
-      setSession(data.session);
-      setUser(authUser);
+      await supabase.auth.signOut();
+      setSession(null);
+      setUser(null);
+      setIsEmailVerified(false);
       setIsPendingOtpVerification(false);
-      setPendingRegistrationProfile(null);
-
-      const liveProfile = await fetchProfile(authUser.id);
-      const liveInstitution = await loadInstitutionForProfile(liveProfile);
-      return {
-        error: null,
-        profile: liveProfile,
-        institution: liveInstitution,
-        verified: true,
-      };
+      return { error: new Error('OTP verification is required. Enable Supabase Email Confirmations so an 8-digit signup OTP is sent, then try creating the account again.') };
     }
 
     // No session yet — user must verify via OTP email. isPendingOtpVerification stays true.
-    return { error: null, verified: false };
+    return { error: null };
   };
 
   const validateInstitutionCode = async (code: string) => {
@@ -387,8 +360,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         user_id: userId,
         email: authUser.email || email,
         full_name: fullName,
+        phone,
         role,
         institution_id: institutionId,
+        department: userData.department || null,
+        semester: userData.semester || null,
+        programme: userData.programme || null,
+        campus_block: userData.campus_block || null,
+        designation: userData.designation || null,
       });
 
       if (upsertError) {

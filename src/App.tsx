@@ -31,6 +31,10 @@ import { Sparkles, Mic } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 import type { Profile, UserRole } from './types';
 
+type AccountRole = 'student' | 'faculty' | 'guest';
+const accountRoles: AccountRole[] = ['student', 'faculty', 'guest'];
+const isAccountRole = (role: string | null): role is AccountRole => !!role && accountRoles.includes(role as AccountRole);
+
 export default function App() {
   const { user, profile, session, isEmailVerified, isPendingOtpVerification, loading: authLoading } = useAuth();
   const location = useLocation();
@@ -55,7 +59,8 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const roleFromQuery = queryParams.get('role') as 'student' | 'faculty' | 'guest' | null;
+  const requestedRole = queryParams.get('role');
+  const roleFromQuery = isAccountRole(requestedRole) ? requestedRole : null;
 
   const addToast = (title: string, description: string, type: 'success' | 'warning' | 'info' | 'ai' = 'info') => {
     const newToast: ToastMessage = {
@@ -119,9 +124,9 @@ export default function App() {
       const savedRole = sessionStorage.getItem('foodexa_role');
       const roleToUse = roleFromQuery || savedRole;
 
-      if (roleToUse && ['student', 'faculty', 'guest'].includes(roleToUse)) {
+      if (isAccountRole(roleToUse)) {
         setIsRoleSelectionOpen(false);
-        setSelectedRole(roleToUse as 'student' | 'faculty' | 'guest');
+        setSelectedRole(roleToUse);
         setAuthInitialMode('create');
         setIsAuthOpen(true);
       } else {
@@ -216,11 +221,16 @@ export default function App() {
     }
   };
 
-  const handleOpenCreateAccount = (role: 'student' | 'faculty' | 'guest') => {
+  const handleOpenCreateAccount = (role: AccountRole) => {
+    sessionStorage.setItem('foodexa_role', role);
     setSelectedRole(role);
     setAuthInitialMode('create');
     setIsAuthOpen(true);
     setIsPortalAccessOpen(false);
+    const registerRoute = `/create-account?role=${role}`;
+    if (location.pathname + location.search !== registerRoute) {
+      navigate(registerRoute, { replace: false });
+    }
   };
 
   const handleOpenStudentRegister = () => {
@@ -232,7 +242,7 @@ export default function App() {
     }
   };
 
-  const handleRoleSelected = (role: 'student' | 'faculty' | 'guest') => {
+  const handleRoleSelected = (role: AccountRole) => {
     sessionStorage.setItem('foodexa_role', role);
     setIsRoleSelectionOpen(false);
     setAuthInitialMode('create');

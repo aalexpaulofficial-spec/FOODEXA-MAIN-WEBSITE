@@ -23,6 +23,9 @@ interface AuthModalProps {
   onBack?: () => void;
 }
 
+type AccountRole = 'student' | 'faculty' | 'guest';
+const ACCOUNT_ROLES: AccountRole[] = ['student', 'faculty', 'guest'];
+
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
@@ -35,6 +38,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [mode, setMode] = useState<'login' | 'create'>(initialMode);
   const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success'>('form');
   const [loginUserId, setLoginUserId] = useState<string | null>(null);
+  const selectedAccountRole: AccountRole = ACCOUNT_ROLES.includes(selectedRole as AccountRole) ? (selectedRole as AccountRole) : 'student';
 
   // Login state
   const [loginEmail, setLoginEmail] = useState('');
@@ -102,7 +106,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   });
 
   const getCurrentForm = () => {
-    switch (selectedRole) {
+    switch (selectedAccountRole) {
       case 'student':
         return studentForm;
       case 'faculty':
@@ -483,7 +487,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setValidatingCode(false);
 
     setRegistrationPhase('sending');
-    const { error, profile: liveProfile, institution, verified } = await signUpWithPassword(currentForm.universityEmail, currentForm.password, currentForm.fullName, selectedRole, {
+    const { error } = await signUpWithPassword(currentForm.universityEmail, currentForm.password, currentForm.fullName, selectedAccountRole, {
       institutionCode: currentForm.institutionCode,
       phone: currentForm.phone,
       department: (currentForm as any).department,
@@ -497,16 +501,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     if (error) {
       setInstitutionError(error.message || 'Registration failed');
       setRegistrationPhase('idle');
-      return;
-    }
-
-    if (verified && liveProfile) {
-      setRegistrationPhase('idle');
-      setVerifiedInstitution(institution || validatedInst);
-      setStep('success');
-      if (onLoginSuccess) {
-        onLoginSuccess({ profile: liveProfile, institution: institution || validatedInst });
-      }
       return;
     }
 
@@ -727,14 +721,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 text-emerald-400 border border-emerald-500/30 text-[11px] font-mono">
                     <User className="w-3.5 h-3.5" />
                     <span>
-                      {selectedRole === 'student' ? 'Student Pass Registration' : selectedRole === 'faculty' ? 'Faculty Registration' : 'Guest Registration'}
+                      {selectedAccountRole === 'student' ? 'Student Pass Registration' : selectedAccountRole === 'faculty' ? 'Faculty Registration' : 'Guest Registration'}
                     </span>
                   </div>
                   <h3 className="text-2xl font-extrabold text-white">
-                    Register as {selectedRole === 'student' ? 'Student' : selectedRole === 'faculty' ? 'Faculty' : 'Guest'}
+                    Register as {selectedAccountRole === 'student' ? 'Student' : selectedAccountRole === 'faculty' ? 'Faculty' : 'Guest'}
                   </h3>
                   <p className="text-xs text-slate-300">
-                    {selectedRole === 'student' ? 'Sign up for instant queue skipping, express pickup, and LX AI dining recommendations.' : 'Sign up to access campus dining services.'}
+                    {selectedAccountRole === 'student' ? 'Sign up for instant queue skipping, express pickup, and LX AI dining recommendations.' : 'Sign up to access campus dining services.'}
                   </p>
                 </div>
 
@@ -748,14 +742,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={getCurrentForm().institutionCode}
                         onChange={(e) => {
-                          if (selectedRole === 'student') setStudentForm({ ...studentForm, institutionCode: e.target.value });
-                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, institutionCode: e.target.value });
+                          if (selectedAccountRole === 'student') setStudentForm({ ...studentForm, institutionCode: e.target.value });
+                          else if (selectedAccountRole === 'faculty') setFacultyForm({ ...facultyForm, institutionCode: e.target.value });
                           else setGuestForm({ ...guestForm, institutionCode: e.target.value });
                           handleInstitutionCodeChange(e.target.value);
                         }}
                         onBlur={() => {
-                          if (selectedRole === 'student') handleInstitutionCodeBlur(studentForm.institutionCode);
-                          else if (selectedRole === 'faculty') handleInstitutionCodeBlur(facultyForm.institutionCode);
+                          if (selectedAccountRole === 'student') handleInstitutionCodeBlur(studentForm.institutionCode);
+                          else if (selectedAccountRole === 'faculty') handleInstitutionCodeBlur(facultyForm.institutionCode);
                           else handleInstitutionCodeBlur(guestForm.institutionCode);
                         }}
                         placeholder="e.g. YAWEHH264881"
@@ -783,8 +777,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       required
                       value={getCurrentForm().fullName}
                       onChange={(e) => {
-                        if (selectedRole === 'student') setStudentForm({ ...studentForm, fullName: e.target.value });
-                        else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, fullName: e.target.value });
+                        if (selectedAccountRole === 'student') setStudentForm({ ...studentForm, fullName: e.target.value });
+                        else if (selectedAccountRole === 'faculty') setFacultyForm({ ...facultyForm, fullName: e.target.value });
                         else setGuestForm({ ...guestForm, fullName: e.target.value });
                       }}
                       placeholder="e.g. Alex Paul"
@@ -800,8 +794,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={getCurrentForm().universityEmail}
                         onChange={(e) => {
-                          if (selectedRole === 'student') setStudentForm({ ...studentForm, universityEmail: e.target.value });
-                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, universityEmail: e.target.value });
+                          if (selectedAccountRole === 'student') setStudentForm({ ...studentForm, universityEmail: e.target.value });
+                          else if (selectedAccountRole === 'faculty') setFacultyForm({ ...facultyForm, universityEmail: e.target.value });
                           else setGuestForm({ ...guestForm, universityEmail: e.target.value });
                         }}
                         placeholder="e.g. alex@university.in"
@@ -815,8 +809,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         required
                         value={getCurrentForm().phone}
                         onChange={(e) => {
-                          if (selectedRole === 'student') setStudentForm({ ...studentForm, phone: e.target.value });
-                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, phone: e.target.value });
+                          if (selectedAccountRole === 'student') setStudentForm({ ...studentForm, phone: e.target.value });
+                          else if (selectedAccountRole === 'faculty') setFacultyForm({ ...facultyForm, phone: e.target.value });
                           else setGuestForm({ ...guestForm, phone: e.target.value });
                         }}
                         placeholder="+91 9876543210"
@@ -834,8 +828,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         minLength={8}
                         value={getCurrentForm().password}
                         onChange={(e) => {
-                          if (selectedRole === 'student') setStudentForm({ ...studentForm, password: e.target.value });
-                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, password: e.target.value });
+                          if (selectedAccountRole === 'student') setStudentForm({ ...studentForm, password: e.target.value });
+                          else if (selectedAccountRole === 'faculty') setFacultyForm({ ...facultyForm, password: e.target.value });
                           else setGuestForm({ ...guestForm, password: e.target.value });
                         }}
                         placeholder="Minimum 8 characters"
@@ -850,8 +844,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         minLength={8}
                         value={getCurrentForm().confirmPassword}
                         onChange={(e) => {
-                          if (selectedRole === 'student') setStudentForm({ ...studentForm, confirmPassword: e.target.value });
-                          else if (selectedRole === 'faculty') setFacultyForm({ ...facultyForm, confirmPassword: e.target.value });
+                          if (selectedAccountRole === 'student') setStudentForm({ ...studentForm, confirmPassword: e.target.value });
+                          else if (selectedAccountRole === 'faculty') setFacultyForm({ ...facultyForm, confirmPassword: e.target.value });
                           else setGuestForm({ ...guestForm, confirmPassword: e.target.value });
                         }}
                         placeholder="Repeat password"
@@ -860,7 +854,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </div>
                   </div>
 
-                  {selectedRole === 'student' && (
+                  {selectedAccountRole === 'student' && (
                     <>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -914,7 +908,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </>
                   )}
 
-                  {selectedRole === 'faculty' && (
+                  {selectedAccountRole === 'faculty' && (
                     <>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -955,7 +949,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </>
                   )}
 
-                  {selectedRole === 'guest' && (
+                  {selectedAccountRole === 'guest' && (
                     <></>
                   )}
 

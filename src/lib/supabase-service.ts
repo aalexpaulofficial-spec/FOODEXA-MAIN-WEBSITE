@@ -308,6 +308,25 @@ export async function verifyRazorpayPayment(params: {
   }
 }
 
+// ==================== USER CARTS ====================
+export async function fetchUserCart(user_id: string): Promise<{ item: MenuItem; quantity: number }[]> {
+  try {
+    const { data, error } = await supabase.from('user_carts').select('cart_data').eq('user_id', user_id).single();
+    if (error) return [];
+    return data?.cart_data ? (typeof data.cart_data === 'string' ? JSON.parse(data.cart_data) : data.cart_data) : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+export async function saveUserCart(user_id: string, cart_data: any[]): Promise<void> {
+  try {
+    await supabase.from('user_carts').upsert({ user_id, cart_data, updated_at: new Date().toISOString() });
+  } catch (err) {
+    // Ignore error, cart save is best effort
+  }
+}
+
 // ==================== NOTIFICATIONS ====================
 export async function fetchNotifications(): Promise<NotificationItem[]> {
   const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false });

@@ -7,19 +7,21 @@ import {
   Phone, Mail, Hash, Shield, ChevronRight, Flame, Package, RefreshCw, Filter, Wifi,
   WifiOff, Coffee, Pizza, Sandwich, Salad, ChevronLeft, Check, ShoppingCart, Plus, Minus,
   Gift, Bell as BellIcon, RotateCcw, ArrowUpRight, Activity, Calendar, Timer, Info,
+  CheckCircle, XCircle, Lock
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import {
   formatINR, formatDateTime, subscribeOrders, subscribeMenuItems, subscribeAnnouncements,
   placeOrder, createRazorpayOrder, verifyRazorpayPayment, mapMenuItem,
+  fetchUserCart, saveUserCart
 } from '../lib/supabase-service';
 import type { MenuItem, Order, OrderStatus, NotificationItem, UserRole } from '../types';
 
 declare global { interface Window { Razorpay: any } }
 
 interface StudentPortalModalProps { isOpen: boolean; onClose: () => void; role?: UserRole }
-type PortalTab = 'home' | 'menu' | 'orders' | 'profile';
+type PortalTab = 'home' | 'menu' | 'orders' | 'profile' | 'checkout' | 'payment_success' | 'payment_failed';
 
 const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready'];
 
@@ -439,6 +441,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [showLeaveInstitution, setShowLeaveInstitution] = useState(false);
   const [leavingInstitution, setLeavingInstitution] = useState(false);
   const [leaveInstitutionMessage, setLeaveInstitutionMessage] = useState<string | null>(null);
+  
+  // Checkout States
+  const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'wallet' | 'cash'>('razorpay');
+  const [kitchenNotes, setKitchenNotes] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [discount, setDiscount] = useState(0);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -551,6 +559,14 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             setInstitutionCode(inst.institution_code || '');
           }
         }
+
+        // Fetch user cart
+        if (user?.id) {
+          const loadedCart = await fetchUserCart(user.id);
+          if (loadedCart.length > 0) {
+            setCart(loadedCart);
+          }
+        }
       } catch (err: any) {
         setError(err?.message || 'Failed to load portal data.');
       } finally {
@@ -582,6 +598,16 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
     return () => { unsubOrders(); unsubMenu(); unsubNotif(); };
   }, [isOpen, profile?.institution_id, refreshProfile, user?.id, handleOrderUpdate]);
+
+  // Sync cart to Supabase when it changes
+  useEffect(() => {
+    if (user?.id && !loading) {
+      const timer = setTimeout(() => {
+        saveUserCart(user.id, cart);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cart, user?.id, loading]);
 
   // Derived data
   const allCategories = useMemo(() => {
@@ -675,11 +701,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               items: cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price })),
               total_amount: cartTotal, razorpay_order_id, razorpay_payment_id, razorpay_signature,
             });
-            if (orderResult.error) { setError(`Order failed: ${orderResult.error}`); setSubmittingOrder(false); return; }
+            if (orderResult.error) { setError(`Order failed: ${orderResult.error}`); setActiveTab('payment_failed'); setSubmittingOrder(false); return; }
             if (orderResult.data) setOrders((prev) => [orderResult.data!, ...prev]);
-            setCart([]); setShowCart(false); setActiveTab('orders'); setSubmittingOrder(false);
+            setCart([]); setShowCart(false); setActiveTab('payment_success'); setSubmittingOrder(false);
           } catch (verifyErr: any) {
-            setError('Payment completed but verification failed. Contact support.'); setSubmittingOrder(false);
+            setError('Payment completed but verification failed. Contact support.'); setActiveTab('payment_failed'); setSubmittingOrder(false);
           }
         },
         prefill: { name: profile.full_name || '', email: profile.email || '', contact: profile.phone || '' },
@@ -690,11 +716,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
       const razorpay = new window.Razorpay(options);
       razorpay.on('payment.failed', function (response: any) {
-        setError(`Payment failed: ${response?.error?.description || 'Please try again.'}`); setSubmittingOrder(false);
+        setError(`Payment failed: ${response?.error?.description || 'Please try again.'}`); setActiveTab('payment_failed'); setSubmittingOrder(false);
       });
       razorpay.open();
     } catch (err: any) {
-      setError(err?.message || 'Failed to initiate payment.'); setSubmittingOrder(false);
+      setError(err?.message || 'Failed to initiate payment.'); setActiveTab('payment_failed'); setSubmittingOrder(false);
     }
   };
 
@@ -1522,6 +1548,215 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     <p className="text-center text-[9px] text-slate-700">FOODEXA v3.0 · Powered by Supabase · {new Date().getFullYear()}</p>
                   </div>
                 )}
+                {/* ═══════════════════ CHECKOUT TAB ═══════════════════ */}
+                {activeTab === 'checkout' && (
+                  <div className="max-w-3xl mx-auto space-y-6">
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => setActiveTab('menu')} className="p-2 -ml-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors">
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <h2 className="text-2xl font-black text-white">Checkout</h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-6">
+                        {/* Order Details */}
+                        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+                          <h3 className="text-sm font-black text-white flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-emerald-400" /> Pickup Details
+                          </h3>
+                          <div className="rounded-2xl bg-slate-950 p-4 border border-slate-800">
+                            <p className="text-xs font-bold text-slate-300">{institutionName}</p>
+                            <p className="text-[10px] text-slate-500 mt-1">Counter: <span className="font-bold text-white">{firstItemCounter}</span></p>
+                            <div className="mt-3 flex items-center gap-2 text-[10px] text-amber-400 font-semibold bg-amber-950/30 w-max px-3 py-1.5 rounded-full border border-amber-500/20">
+                              <Clock className="w-3 h-3" /> Ready in ~15 mins
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Order Summary */}
+                        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+                          <h3 className="text-sm font-black text-white flex items-center gap-2">
+                            <Receipt className="w-4 h-4 text-emerald-400" /> Order Summary
+                          </h3>
+                          <div className="space-y-3">
+                            {cart.map((entry) => (
+                              <div key={entry.item.id} className="flex justify-between text-xs">
+                                <span className="text-slate-300 font-semibold">{entry.quantity}x {entry.item.name}</span>
+                                <span className="text-white font-black">{formatINR((entry.item.offer_price || entry.item.price) * entry.quantity)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          
+                          <div className="pt-4 border-t border-slate-800 space-y-2">
+                            <div className="flex justify-between text-xs text-slate-400">
+                              <span>Subtotal</span>
+                              <span>{formatINR(cartTotal)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-slate-400">
+                              <span>Taxes (5% GST)</span>
+                              <span>{formatINR(cartTotal * 0.05)}</span>
+                            </div>
+                            {discount > 0 && (
+                              <div className="flex justify-between text-xs text-emerald-400">
+                                <span>Discount</span>
+                                <span>-{formatINR(discount)}</span>
+                              </div>
+                            )}
+                            <div className="pt-2 flex justify-between text-lg font-black text-white">
+                              <span>Grand Total</span>
+                              <span className="text-emerald-400">{formatINR(cartTotal + (cartTotal * 0.05) - discount)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Additional */}
+                        <div className="space-y-3">
+                          <input
+                            type="text"
+                            placeholder="Coupon Code"
+                            value={couponCode}
+                            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                            className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-xs text-white placeholder-slate-500 focus:border-emerald-500/50 outline-none"
+                          />
+                          <textarea
+                            placeholder="Notes for Kitchen (Optional)"
+                            value={kitchenNotes}
+                            onChange={(e) => setKitchenNotes(e.target.value)}
+                            rows={2}
+                            className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-xs text-white placeholder-slate-500 focus:border-emerald-500/50 outline-none resize-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Payment Methods */}
+                      <div className="space-y-6">
+                        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+                          <h3 className="text-sm font-black text-white flex items-center gap-2">
+                            <CreditCard className="w-4 h-4 text-emerald-400" /> Payment Method
+                          </h3>
+                          <div className="space-y-3">
+                            <button
+                              onClick={() => setPaymentMethod('razorpay')}
+                              className={`w-full flex items-center justify-between p-4 rounded-2xl border ${paymentMethod === 'razorpay' ? 'border-emerald-500 bg-emerald-950/20' : 'border-slate-800 bg-slate-950 hover:bg-slate-900'} transition-all`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'razorpay' ? 'border-emerald-500' : 'border-slate-600'}`}>
+                                  {paymentMethod === 'razorpay' && <div className="w-2 h-2 rounded-full bg-emerald-500" />}
+                                </div>
+                                <span className="text-sm font-bold text-white">Razorpay (UPI, Cards)</span>
+                              </div>
+                            </button>
+                            
+                            <button
+                              onClick={() => setPaymentMethod('wallet')}
+                              disabled
+                              className={`w-full flex items-center justify-between p-4 rounded-2xl border border-slate-800 bg-slate-950 opacity-50 cursor-not-allowed`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-4 h-4 rounded-full border-2 border-slate-700" />
+                                <span className="text-sm font-bold text-slate-400">Campus Wallet (Coming Soon)</span>
+                              </div>
+                            </button>
+
+                            <button
+                              onClick={() => setPaymentMethod('cash')}
+                              className={`w-full flex items-center justify-between p-4 rounded-2xl border ${paymentMethod === 'cash' ? 'border-emerald-500 bg-emerald-950/20' : 'border-slate-800 bg-slate-950 hover:bg-slate-900'} transition-all`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'cash' ? 'border-emerald-500' : 'border-slate-600'}`}>
+                                  {paymentMethod === 'cash' && <div className="w-2 h-2 rounded-full bg-emerald-500" />}
+                                </div>
+                                <span className="text-sm font-bold text-white">Pay at Counter (Cash)</span>
+                              </div>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Pay Button */}
+                        <button
+                          onClick={handlePlaceOrder}
+                          disabled={submittingOrder}
+                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-4 text-base font-black text-slate-950 shadow-lg shadow-emerald-500/20 disabled:opacity-50 hover:scale-[1.02] hover:shadow-emerald-500/40 transition-all"
+                        >
+                          {submittingOrder ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
+                          {submittingOrder ? 'Processing...' : `Pay ${formatINR(cartTotal + (cartTotal * 0.05) - discount)}`}
+                        </button>
+                        <p className="text-center text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
+                          <Lock className="w-3 h-3" /> Secure Payment via Razorpay
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ═══════════════════ PAYMENT SUCCESS TAB ═══════════════════ */}
+                {activeTab === 'payment_success' && (
+                  <div className="max-w-md mx-auto space-y-6 text-center py-10">
+                    <div className="w-24 h-24 mx-auto bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/30 animate-[bounce_1s_ease-in-out]">
+                      <CheckCircle className="w-12 h-12 text-slate-950" />
+                    </div>
+                    <div className="space-y-2">
+                      <h2 className="text-3xl font-black text-white">Payment Successful!</h2>
+                      <p className="text-sm text-emerald-400 font-semibold">Your order has been sent to the kitchen.</p>
+                    </div>
+
+                    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4 text-left">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 font-bold">Order ID</span>
+                        <span className="text-white font-mono">{orders[0]?.order_id || 'PENDING'}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 font-bold">Counter</span>
+                        <span className="text-white font-bold">{orders[0]?.counter || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 font-bold">Est. Wait Time</span>
+                        <span className="text-amber-400 font-bold">~15 mins</span>
+                      </div>
+                      <div className="pt-4 border-t border-slate-800">
+                        <button onClick={() => setQrOrder(orders[0])} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-800 py-3 text-xs font-bold text-white hover:bg-slate-700 transition-colors">
+                          <QrCode className="w-4 h-4" /> View Pickup QR Code
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setActiveTab('orders')}
+                      className="w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-4 text-sm font-black text-slate-950 shadow-lg hover:from-emerald-400 hover:to-teal-400 transition-all"
+                    >
+                      Track Order Live
+                    </button>
+                  </div>
+                )}
+
+                {/* ═══════════════════ PAYMENT FAILED TAB ═══════════════════ */}
+                {activeTab === 'payment_failed' && (
+                  <div className="max-w-md mx-auto space-y-6 text-center py-10">
+                    <div className="w-24 h-24 mx-auto bg-gradient-to-br from-red-500 to-rose-600 rounded-full flex items-center justify-center shadow-2xl shadow-red-500/30">
+                      <XCircle className="w-12 h-12 text-slate-950" />
+                    </div>
+                    <div className="space-y-2">
+                      <h2 className="text-3xl font-black text-white">Payment Failed</h2>
+                      <p className="text-sm text-red-400 font-semibold">{error || 'Something went wrong during payment.'}</p>
+                    </div>
+
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => { setError(null); setActiveTab('checkout'); }}
+                        className="flex-1 rounded-2xl border border-slate-700 bg-slate-800 py-4 text-sm font-black text-white hover:bg-slate-700 transition-all"
+                      >
+                        Try Again
+                      </button>
+                      <button
+                        onClick={() => { setError(null); setActiveTab('home'); }}
+                        className="flex-1 rounded-2xl border border-slate-800 bg-transparent py-4 text-sm font-black text-slate-400 hover:bg-slate-900 hover:text-white transition-all"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1583,12 +1818,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               </div>
               <p className="text-[9px] text-slate-500 text-center">Items from: {firstItemCounter}</p>
               <button
-                onClick={handlePlaceOrder}
-                disabled={submittingOrder}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 text-sm font-black text-slate-950 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed hover:from-emerald-400 hover:to-teal-400 transition-all"
+                onClick={() => { setShowCart(false); setActiveTab('checkout'); }}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 text-sm font-black text-slate-950 shadow-lg hover:from-emerald-400 hover:to-teal-400 transition-all"
               >
-                {submittingOrder ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
-                {submittingOrder ? 'Processing...' : 'Proceed to Pay'}
+                Proceed to Checkout
               </button>
             </div>
           )}

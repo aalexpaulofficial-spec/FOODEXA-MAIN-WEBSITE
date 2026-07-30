@@ -1,38 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Search, Mic, Sparkles, QrCode, X, Camera, Check,
+  Search, Mic, Sparkles, QrCode, X,
   Utensils, Coffee, Sun, Moon, Cookie, GlassWater, IceCream, HeartPulse, Package, Flame, Star, Heart,
-  TrendingUp, ChevronRight, Salad
+  ChevronRight, Gift, Zap, ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { MenuItem, Order } from '../../types';
 import { ActiveLiveOrder } from './ActiveLiveOrder';
 import { FoodCard } from './FoodCard';
 
-const DEFAULT_BANNERS = [
+const BANNERS = [
   {
-    id: 'specials',
-    gradient: 'from-emerald-600 to-teal-700',
-    badge: '✨ Daily Specials',
-    title: "TODAY'S\nCHEF SPECIAL",
-    subtitle: 'Exclusive campus meals curated just for you.',
-    emoji: '👨‍🍳',
+    id: 'b1',
+    title: 'Skip Long Canteen Queues 🍕',
+    subtitle: 'Pre-order on FOODEXA and collect instantly at counter with QR.',
+    gradient: 'from-blue-600 via-indigo-600 to-blue-700',
+    icon: <QrCode className="w-6 h-6 text-blue-200" />,
+    badge: 'Express Pickup',
+    actionText: 'Order Now',
   },
   {
-    id: 'mealpass',
-    gradient: 'from-blue-600 to-indigo-700',
-    badge: '🎫 Meal Pass Offer',
-    title: '50% OFF\nMEAL PASS',
-    subtitle: 'Unlock unlimited daily meals at half the price.',
-    emoji: '🎫',
+    id: 'b2',
+    title: 'Healthy Meal AI Recommendations 🥗',
+    subtitle: 'Personalized high-protein macro targets curated by LX AI.',
+    gradient: 'from-emerald-600 via-teal-600 to-emerald-700',
+    icon: <Sparkles className="w-6 h-6 text-emerald-200" />,
+    badge: 'Powered by LX AI',
+    actionText: 'View Recommendations',
   },
   {
-    id: 'dietary',
-    gradient: 'from-orange-500 to-red-600',
-    badge: '💪 Health & Diet',
-    title: 'HIGH\nPROTEIN',
-    subtitle: 'Fuel your day with our new fitness menu.',
-    emoji: '💪',
+    id: 'b3',
+    title: 'CHRIST Festival Offers 🎉',
+    subtitle: 'Flat 20% discount across campus food courts with code CHRISTSTUDENT20.',
+    gradient: 'from-purple-600 via-indigo-600 to-purple-700',
+    icon: <Gift className="w-6 h-6 text-purple-200" />,
+    badge: 'Student Deals',
+    actionText: 'Claim Discount',
+  },
+  {
+    id: 'b4',
+    title: 'Ready in 5 Minutes ⚡',
+    subtitle: 'South Canteen Dosa & Sky Cafe Coffee express priority counters active.',
+    gradient: 'from-amber-500 via-orange-600 to-amber-600',
+    icon: <Zap className="w-6 h-6 text-amber-100" />,
+    badge: 'Fast Track',
+    actionText: 'Express Menu',
   },
 ];
 
@@ -84,17 +96,14 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
   const [dietaryFilter, setDietaryFilter] = useState<'all' | 'veg' | 'non-veg'>('all');
   const [currentBanner, setCurrentBanner] = useState(0);
 
-  const banners = DEFAULT_BANNERS;
-
   useEffect(() => {
-    if (banners.length <= 1) return;
     const timer = setInterval(() => {
-      setCurrentBanner(c => (c + 1) % banners.length);
+      setCurrentBanner(c => (c + 1) % BANNERS.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, [banners.length]);
+  }, []);
 
-  const b = banners[currentBanner];
+  const currentBannerData = BANNERS[currentBanner];
 
   const trendingItems = [...menuItems]
     .sort((a, b) => Number(b.popular) - Number(a.popular) || b.rating - a.rating)
@@ -164,28 +173,29 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
         <div className="relative w-full overflow-hidden rounded-3xl my-5 shadow-lg shadow-slate-200/50">
           <AnimatePresence mode="wait">
             <motion.div
-              key={b.id}
+              key={currentBannerData.id}
               initial={{ opacity: 0, x: 50 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -50 }}
               transition={{ duration: 0.4, ease: 'easeOut' }}
-              className={`p-6 sm:p-8 bg-gradient-to-r ${b.gradient} text-white relative overflow-hidden flex flex-col justify-between min-h-[160px] sm:min-h-[180px]`}
+              className={`p-6 sm:p-8 bg-gradient-to-r ${currentBannerData.gradient} text-white relative overflow-hidden flex flex-col justify-between min-h-[160px] sm:min-h-[180px]`}
             >
+              {/* Subtle Background Glow Circles */}
               <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
               <div className="absolute right-1/3 -top-12 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
 
               <div className="relative z-10">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-white/20 backdrop-blur-md text-white border border-white/20 uppercase tracking-wider">
-                    {b.badge}
+                    {currentBannerData.badge}
                   </span>
                 </div>
 
-                <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white max-w-xl whitespace-pre-line leading-tight">
-                  {b.title}
+                <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white max-w-xl">
+                  {currentBannerData.title}
                 </h2>
                 <p className="text-xs sm:text-sm text-white/80 mt-1 max-w-lg leading-relaxed">
-                  {b.subtitle}
+                  {currentBannerData.subtitle}
                 </p>
               </div>
 
@@ -193,12 +203,12 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
 
               <div className="relative z-10 flex items-center justify-between mt-4">
                 <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs sm:text-sm shadow-md hover:bg-slate-100 transition-all hover:scale-105 active:scale-95">
-                  Explore Now
-                  <ChevronRight className="w-4 h-4 text-slate-700" />
+                  {currentBannerData.actionText}
+                  <ArrowRight className="w-4 h-4 text-slate-700" />
                 </button>
 
                 <div className="flex items-center gap-1.5">
-                  {banners.map((_, idx) => (
+                  {BANNERS.map((_, idx) => (
                     <button
                       key={idx}
                       onClick={() => setCurrentBanner(idx)}

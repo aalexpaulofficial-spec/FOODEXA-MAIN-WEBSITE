@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Sparkles, Building2, Clock, Calendar } from 'lucide-react';
+import { Bell, Sparkles, Building2, Clock, Calendar, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { UserRole } from '../../types';
 
@@ -127,6 +127,23 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
               <Sparkles className="w-3.5 h-3.5 animate-pulse text-cyan-200" />
               <span className="hidden sm:inline">Ask LX AI</span>
             </motion.button>
+
+            {/* Wallet Balance Pill */}
+            {walletBalance !== undefined && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-2xl glass-pill text-slate-900 shadow-sm hover:bg-white/90 transition-all"
+              >
+                <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center border border-emerald-500/20">
+                  <Wallet className="w-3.5 h-3.5" />
+                </div>
+                <div className="text-left">
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold leading-tight">Wallet</p>
+                  <p className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">₹{Math.round(walletBalance)}</p>
+                </div>
+              </motion.button>
+            )}
 
             {/* Notifications Bell */}
             <button

@@ -154,8 +154,7 @@ export function getItemAvailability(item: MenuItem): {
     item.available === true &&
     item.availability === true &&
     item.is_available === true &&
-    item.is_archived === false &&
-    stock > 0;
+    item.is_archived === false;
   return {
     isSoldOut: !canAddToCart,
     canAddToCart

@@ -13,9 +13,9 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import {
   formatINR, formatDateTime, subscribeOrders, subscribeMenuItems, subscribeAnnouncements,
-  subscribeBanners, subscribeMenuCategories, subscribeHomepageSections, subscribeCounters,
+  subscribeBanners, subscribeMenuCategories, subscribeCounters,
   placeOrder, createRazorpayOrder, verifyRazorpayPayment, updateOrderAfterPayment, updateOrderPaymentStatus, mapMenuItem,
-  fetchUserCart, saveUserCart, fetchBanners, fetchHomepageSections, fetchCounters,
+  fetchUserCart, saveUserCart, fetchBanners, fetchCounters,
   fetchMenuItems as fetchMenuItemsService, searchMenuItems, filterMenuItems,
   calculateCartTotals, validateCoupon, applyCouponUsage,
   fetchUserFavorites, toggleFavorite, fetchAIRecommendations, getOrderProgress, getEstimatedTimeRemaining, generateReceipt,
@@ -510,7 +510,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [orders, setOrders] = useState<Order[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
-  const [homepageSections, setHomepageSections] = useState<any[]>([]);
+
   const [countersList, setCountersList] = useState<any[]>([]);
   const [institutionName, setInstitutionName] = useState('');
   const [institutionCode, setInstitutionCode] = useState('');
@@ -598,10 +598,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           // Fetch banners
           const { data: bData } = await supabase.from('banners').select('*').eq('is_active', true).order('display_order', { ascending: true });
           setBanners((bData || []) as any[]);
-
-          // Fetch homepage sections
-          const { data: hsData } = await supabase.from('homepage_sections').select('*').eq('is_active', true).order('display_order', { ascending: true });
-          setHomepageSections((hsData || []) as any[]);
 
           // Fetch counters for this institution
           let countersQuery = supabase.from('counters').select('*').eq('status', 'open');

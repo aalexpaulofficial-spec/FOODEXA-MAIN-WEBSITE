@@ -249,12 +249,13 @@ export function mapMenuItem(row: any): MenuItem {
     protein: row.protein !== undefined ? Number(row.protein) : undefined,
     carbs: row.carbs !== undefined ? Number(row.carbs) : (row.carbohydrates !== undefined ? Number(row.carbohydrates) : undefined),
     fat: row.fat !== undefined ? Number(row.fat) : undefined,
-    is_healthy: false,
+    is_healthy: row.is_healthy !== undefined ? Boolean(row.is_healthy) : (row.calories !== undefined && Number(row.calories) < 300),
     trending: row.is_featured || false,
     today_orders: 0,
     stock_quantity: stockQuantity,
     ai_popularity_score: row.ai_popularity_score !== undefined ? Number(row.ai_popularity_score) : row.rating || 0,
     tags: [],
+    created_at: row.created_at || '',
   };
 }
 

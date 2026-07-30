@@ -214,6 +214,7 @@ export interface MenuItem {
   stock_quantity?: number;
   ai_popularity_score?: number;
   tags?: string[];
+  created_at?: string;
 }
 
 export interface MenuCategory {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Sparkles, Building2, Clock, Calendar, Wallet } from 'lucide-react';
+import { Bell, Sparkles, Building2, Clock, Calendar } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { UserRole } from '../../types';
 
@@ -29,7 +29,6 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
   avatarUrl,
   userName,
   unreadNotif,
-  walletBalance,
   onOpenNotifications,
   onOpenLxAI,
   onGoProfile,
@@ -48,25 +47,25 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
       const now = new Date();
       setCurrentTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       setCurrentDate(now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }));
-      
       const hour = now.getHours();
       if (hour < 12) setGreeting('Good Morning');
       else if (hour < 17) setGreeting('Good Afternoon');
       else setGreeting('Good Evening');
     };
-
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <header className="relative z-10 glass-header px-4 sm:px-8 py-3.5 transition-all">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        
-        {/* Left Greeting & Institution Info */}
-        <div className="flex items-center gap-3.5">
-          <button 
+    <header className="relative z-10 glass-header px-4 sm:px-8 py-4 transition-all">
+      {/* Single row: avatar + info on left, actions on right */}
+      <div className="flex items-center justify-between gap-3">
+
+        {/* LEFT: Avatar + Greeting + Info */}
+        <div className="flex items-center gap-3 min-w-0">
+          {/* Avatar */}
+          <button
             onClick={onGoProfile}
             className="relative group focus:outline-none shrink-0"
           >
@@ -75,79 +74,72 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
                 src={avatarUrl}
                 alt={name}
                 referrerPolicy="no-referrer"
-                className="w-12 h-12 sm:w-13 sm:h-13 rounded-2xl object-cover ring-2 ring-blue-600/30 group-hover:ring-blue-600 transition-all shadow-md"
+                className="w-14 h-14 rounded-2xl object-cover ring-2 ring-blue-600/30 group-hover:ring-blue-600 transition-all shadow-md"
               />
             ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-sm font-black text-white shadow-md ring-2 ring-blue-600/30 group-hover:ring-blue-600 transition-all">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-base font-black text-white shadow-md ring-2 ring-blue-600/30 group-hover:ring-blue-600 transition-all">
                 {initials}
               </div>
             )}
             <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white shadow-sm"></span>
           </button>
 
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900 font-sans">
+          {/* Text block */}
+          <div className="min-w-0">
+            {/* Row 1: Greeting + Institution pill */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg sm:text-2xl font-semibold tracking-tight text-slate-900 whitespace-nowrap">
                 {greeting}, {name} <span className="inline-block animate-wave">👋</span>
               </h1>
-              <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold bg-white border border-slate-100 shadow-sm text-blue-700">
-                <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                {institutionName || 'Campus Portal'}
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-white border border-slate-100 shadow-sm text-blue-700 whitespace-nowrap">
+                <Building2 className="w-3 h-3 text-blue-600 shrink-0" />
+                {institutionName || institutionCode || 'Campus Portal'}
               </span>
             </div>
 
-            <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-500 mt-0.5">
+            {/* Row 2: Campus, City • Time • Date */}
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5 flex-wrap">
               {(institutionCampus || institutionCity) && (
                 <span className="font-medium text-slate-600">
                   {[institutionCampus, institutionCity].filter(Boolean).join(', ')}
                 </span>
               )}
               {(institutionCampus || institutionCity) && <span className="text-slate-300">•</span>}
-              <span className="flex items-center gap-1 text-slate-500">
-                <Clock className="w-3.5 h-3.5 text-blue-600" />
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3 text-blue-600" />
                 {currentTime || '12:21 PM'}
               </span>
-              <span className="hidden md:inline text-slate-300">•</span>
-              <span className="hidden md:flex items-center gap-1 text-slate-500">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-slate-300">•</span>
+              <span className="flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-slate-400" />
                 {currentDate}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Right Action Bar (Bell, LX AI, Institution Badge) */}
-        <div className="flex items-center justify-between sm:justify-end gap-2.5 mt-1 sm:mt-0">
-          
-          {/* Institution Pill (Mobile) */}
-          <div className="sm:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold bg-white border border-slate-100 shadow-sm text-blue-700">
-            <Building2 className="w-3.5 h-3.5 text-blue-600" />
-            {institutionCode || institutionName}
-          </div>
+        {/* RIGHT: LX AI + Bell */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* LX AI */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onOpenLxAI}
+            className="flex items-center justify-center w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-400 shadow-md shadow-blue-500/25"
+          >
+            <Sparkles className="w-4 h-4 text-white" />
+          </motion.button>
 
-          <div className="flex items-center gap-2">
-            {/* LX AI Quick Trigger */}
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={onOpenLxAI}
-              className="flex items-center justify-center w-9 h-9 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-400 shadow-md shadow-blue-500/20"
-            >
-              <Sparkles className="w-4 h-4 text-white" />
-            </motion.button>
-
-            {/* Notifications Bell */}
-            <button
-              onClick={onOpenNotifications}
-              className="relative w-9 h-9 flex items-center justify-center rounded-2xl bg-white border border-slate-100 text-slate-700 shadow-sm hover:text-slate-900 transition-all focus:outline-none"
-            >
-              <Bell className="w-4 h-4" />
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-sm">
-                {unreadNotif > 0 ? unreadNotif : '0'}
-              </span>
-            </button>
-          </div>
-
+          {/* Notifications Bell */}
+          <button
+            onClick={onOpenNotifications}
+            className="relative w-10 h-10 flex items-center justify-center rounded-2xl bg-white border border-slate-100 text-slate-700 shadow-sm hover:text-slate-900 transition-all focus:outline-none"
+          >
+            <Bell className="w-4 h-4" />
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-blue-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-sm">
+              {unreadNotif > 0 ? unreadNotif : '0'}
+            </span>
+          </button>
         </div>
 
       </div>

@@ -797,8 +797,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const orderItemNames = useMemo(() => new Set(orders.flatMap((o) => o.items.map((i) => i.name))), [orders]);
   const orderedCategories = useMemo(() => new Set(menuItems.filter((i) => orderItemNames.has(i.name)).map((i) => i.category)), [menuItems, orderItemNames]);
 
-  const activeOrders: Order[] = []; // orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
-  const pastOrders: Order[] = []; // orders.filter((o) => !ACTIVE_STATUSES.includes(o.status));
+  const activeOrders = orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
+  const pastOrders = orders.filter((o) => !ACTIVE_STATUSES.includes(o.status));
   const offerItems = menuItems.filter((i) => i.offer_label).slice(0, 8);
   const trendingItems = [...menuItems].sort((a, b) => Number(b.popular) - Number(a.popular) || b.rating - a.rating).slice(0, 10);
   const quickReorderItems = menuItems.filter((i) => orderItemNames.has(i.name)).slice(0, 8);
@@ -1280,7 +1280,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     menuItems={menuItems}
                     filteredItems={filteredItems}
                     activeOrders={activeOrders}
-                    onAddCart={(item) => setCart([...cart, { ...item, cart_id: Math.random().toString(36).substr(2, 9) }])}
+                    onAddCart={(item) => setCart((prev) => { const idx = prev.findIndex(e => e.item.id === item.id); return idx >= 0 ? prev.map((e, i) => i === idx ? { ...e, quantity: e.quantity + 1 } : e) : [...prev, { item, quantity: 1 }]; })}
                     onTrackOrder={() => {}} // Not implemented yet
                     onQrOpen={() => {}} // Not implemented yet
                     onFavorite={(item) => { toggleFavorite(item); triggerToast && triggerToast('Favorited', `${item.name} saved!`, 'success') }}
@@ -1303,7 +1303,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 {activeTab === 'offers' && (
                   <OffersTab 
                     offerItems={offerItems}
-                    onAddCart={(item) => setCart([...cart, { ...item, cart_id: Math.random().toString(36).substr(2, 9) }])}
+                    onAddCart={(item) => setCart((prev) => { const idx = prev.findIndex(e => e.item.id === item.id); return idx >= 0 ? prev.map((e, i) => i === idx ? { ...e, quantity: e.quantity + 1 } : e) : [...prev, { item, quantity: 1 }]; })}
                     onFavorite={(item) => { toggleFavorite(item); triggerToast && triggerToast('Favorited', `${item.name} saved!`, 'success') }}
                     favoritedIds={favorites}
                     onGoExplore={() => setActiveTab('explore')}
@@ -1577,7 +1577,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     {/* Action buttons */}
                     <div className="space-y-3">
                       <button
-                        onClick={() => setActiveTab('history')}
+                        onClick={() => setActiveTab('payment_success')}
                         className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 text-sm font-black text-slate-950 shadow-lg hover:from-emerald-400 hover:to-teal-400 transition-all"
                       >
                         <Activity className="w-4 h-4" /> Track Order Live

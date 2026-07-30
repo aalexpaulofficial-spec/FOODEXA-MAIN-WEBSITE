@@ -25,6 +25,7 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
   avatarUrl,
   userName,
   unreadNotif,
+  walletBalance,
   onOpenNotifications,
   onOpenLxAI,
   onGoProfile,

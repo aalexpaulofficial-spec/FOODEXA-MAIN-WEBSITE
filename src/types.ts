@@ -280,6 +280,7 @@ export interface Order {
   accepted_at: string | null;
   preparing_at: string | null;
   ready_at: string | null;
+  estimated_ready_at?: string | null;
   completed_at: string | null;
   paid_at?: string | null;
   updated_at: string;

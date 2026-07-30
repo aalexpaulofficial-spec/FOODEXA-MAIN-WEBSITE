@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   formatINR, formatDateTime, subscribeOrders, subscribeMenuItems, subscribeAnnouncements,
   subscribeBanners, subscribeMenuCategories, subscribeCounters,
-  placeOrder, createRazorpayOrder, verifyRazorpayPayment, updateOrderAfterPayment, updateOrderPaymentStatus, getItemAvailability, mapMenuItem,
+  placeOrder, createRazorpayOrder, verifyRazorpayPayment, updateOrderAfterPayment, updateOrderPaymentStatus, getItemAvailability, mapMenuItem, cancelOrder,
   fetchMenuItems as fetchMenuItemsService, searchMenuItems, filterMenuItems,
   calculateCartTotals, validateCoupon, applyCouponUsage,
   fetchUserFavorites, toggleFavorite, fetchAIRecommendations, getOrderProgress, getEstimatedTimeRemaining, generateReceipt,
@@ -548,6 +548,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'wallet' | 'cash'>('razorpay');
   const [kitchenNotes, setKitchenNotes] = useState('');
 
+  // Live Time for countdowns
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     if (!isOpen) return;
     const guard = async () => {
@@ -564,6 +571,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const displayName = profile?.full_name || profile?.email || user?.email || 'User';
   const firstLetters = displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
   const firstItemCounter = cart.length > 0 ? cart[0].item.counter_name : '';
+  const estimatedPrepTime = cart.length > 0 ? Math.max(...cart.map(c => c.item.prep_time_minutes || 15)) : 15;
 
   const handleOrderUpdate = useCallback((payload: any) => {
     const newStatus = payload.new?.status;
@@ -949,6 +957,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         itemsFull: itemsFull,
         total_amount: cartGrandTotal,
         notes: kitchenNotes || null,
+        estimated_prep_time_minutes: estimatedPrepTime,
       });
 
       if (orderResult.error || !orderResult.data) {
@@ -1774,6 +1783,35 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                             {/* Progress */}
                             <OrderProgressBar status={order.status} />
 
+                            {/* 30-second cancellation window */}
+                            {(() => {
+                              const cancelSecondsLeft = Math.max(0, 30 - Math.floor((currentTime - new Date(order.created_at).getTime()) / 1000));
+                              if (cancelSecondsLeft > 0 && order.status !== 'cancelled') {
+                                return (
+                                  <div className="border border-red-500/20 bg-red-950/20 rounded-2xl p-4 text-center mt-4 space-y-3">
+                                    <p className="text-[10px] text-red-300">You can cancel your order within {cancelSecondsLeft}s</p>
+                                    <button
+                                      onClick={async () => {
+                                        setSubmittingOrder(true);
+                                        const res = await cancelOrder(order.id);
+                                        if (res.success) {
+                                          triggerToast && triggerToast('Order Cancelled', 'Your order was cancelled successfully.', 'success');
+                                        } else {
+                                          triggerToast && triggerToast('Failed', 'Could not cancel order.', 'error');
+                                        }
+                                        setSubmittingOrder(false);
+                                      }}
+                                      disabled={submittingOrder}
+                                      className="w-full py-2 bg-red-500/20 hover:bg-red-500/40 text-red-400 text-xs font-bold rounded-xl transition-colors disabled:opacity-50"
+                                    >
+                                      {submittingOrder ? 'Cancelling...' : `Cancel Order (${cancelSecondsLeft}s)`}
+                                    </button>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+
                             {/* Items */}
                             <div className="space-y-1.5 border-t border-slate-800 pt-3">
                               {order.items.map((item, i) => (
@@ -1984,7 +2022,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                             <p className="text-xs font-bold text-slate-300">{institutionName}</p>
                             <p className="text-[10px] text-slate-500 mt-1">Counter: <span className="font-bold text-white">{firstItemCounter}</span></p>
                             <div className="mt-3 flex items-center gap-2 text-[10px] text-amber-400 font-semibold bg-amber-950/30 w-max px-3 py-1.5 rounded-full border border-amber-500/20">
-                              <Clock className="w-3 h-3" /> Ready in ~15 mins
+                              <Clock className="w-3 h-3" /> Ready in ~{estimatedPrepTime} mins
                             </div>
                           </div>
                         </div>
@@ -2143,8 +2181,40 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                         </div>
                         <div className="flex flex-wrap items-center justify-between text-xs gap-2">
                           <span className="text-slate-500 font-bold">Est. Wait Time</span>
-                          <span className="text-amber-400 font-bold">~15 mins</span>
+                          <span className="text-amber-400 font-bold">
+                            ~{o.estimated_ready_at ? Math.max(1, Math.ceil((new Date(o.estimated_ready_at).getTime() - Date.now()) / 60000)) : 15} mins
+                          </span>
                         </div>
+
+                        {/* 30-second cancellation window */}
+                        {(() => {
+                          const cancelSecondsLeft = Math.max(0, 30 - Math.floor((currentTime - new Date(o.created_at).getTime()) / 1000));
+                          if (cancelSecondsLeft > 0 && o.status !== 'cancelled') {
+                            return (
+                              <div className="border border-red-500/20 bg-red-950/20 rounded-2xl p-4 text-center mt-4 space-y-3">
+                                <p className="text-[10px] text-red-300">You can cancel your order within {cancelSecondsLeft}s</p>
+                                <button
+                                  onClick={async () => {
+                                    setSubmittingOrder(true);
+                                    const res = await cancelOrder(o.id);
+                                    if (res.success) {
+                                      triggerToast && triggerToast('Order Cancelled', 'Your order was cancelled successfully.', 'success');
+                                      setActiveTab('orders');
+                                    } else {
+                                      triggerToast && triggerToast('Failed', 'Could not cancel order.', 'error');
+                                    }
+                                    setSubmittingOrder(false);
+                                  }}
+                                  disabled={submittingOrder}
+                                  className="w-full py-2 bg-red-500/20 hover:bg-red-500/40 text-red-400 text-xs font-bold rounded-xl transition-colors disabled:opacity-50"
+                                >
+                                  {submittingOrder ? 'Cancelling...' : `Cancel Order (${cancelSecondsLeft}s)`}
+                                </button>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
 
                         {/* Bill breakdown */}
                         {o.items?.length > 0 && (

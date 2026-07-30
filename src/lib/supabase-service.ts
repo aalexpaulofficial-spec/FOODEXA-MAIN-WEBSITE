@@ -300,6 +300,7 @@ export function mapOrder(row: any): Order {
     accepted_at: row.accepted_at || null,
     preparing_at: row.preparing_at || null,
     ready_at: row.ready_at || null,
+    estimated_ready_at: row.estimated_ready_at || null,
     completed_at: row.completed_at || null,
     paid_at: row.paid_at || null,
     updated_at: row.updated_at || row.created_at || '',
@@ -352,6 +353,7 @@ export async function placeOrder(params: {
   razorpay_payment_id?: string;
   razorpay_signature?: string;
   payment_method?: string;
+  estimated_prep_time_minutes?: number;
 }): Promise<{ data: Order | null; error: string | null }> {
   const now = new Date();
   const nowISO = now.toISOString();
@@ -365,6 +367,7 @@ export async function placeOrder(params: {
   const isPaid = Boolean(params.razorpay_payment_id && params.razorpay_signature);
   const customerName = params.customer_name || params.email?.split('@')[0] || 'Customer';
   const phone = params.phone || '0000000000';
+  const prepTimeMinutes = params.estimated_prep_time_minutes || 15;
 
   // CRITICAL FIX: Fetch institution_id and canteen_id directly from the first menu item to guarantee they are never NULL
   let actualInstitutionId = params.institution_id;
@@ -408,7 +411,7 @@ export async function placeOrder(params: {
     notes: params.notes || null,
     kitchen_status: 'Pending',
     counter_status: 'Incoming',
-    estimated_ready_at: new Date(now.getTime() + 15 * 60000).toISOString(),
+    estimated_ready_at: new Date(now.getTime() + prepTimeMinutes * 60000).toISOString(),
     created_at: nowISO,
     updated_at: nowISO,
   };
@@ -470,6 +473,25 @@ export async function updateOrderAfterPayment(params: {
     counter_status: 'Incoming',
     estimated_ready_at: new Date(Date.now() + 15 * 60000).toISOString(),
   }).eq('id', params.order_id);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
+export async function cancelOrder(orderId: string): Promise<{ success: boolean; error?: string }> {
+  const now = new Date().toISOString();
+  
+  // Update order to cancelled state
+  const { error } = await supabase.from('orders').update({
+    status: 'cancelled',
+    order_status: 'Cancelled',
+    payment_status: 'refund_pending', // Assume manual refund if already paid
+    kitchen_status: 'Cancelled',
+    counter_status: 'Cancelled',
+    updated_at: now
+  }).eq('id', orderId);
 
   if (error) {
     return { success: false, error: error.message };

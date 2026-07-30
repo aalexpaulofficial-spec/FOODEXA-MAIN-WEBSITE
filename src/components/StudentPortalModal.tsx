@@ -1276,47 +1276,61 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 {/* ═══════════════════ PREMIUM TABS ═══════════════════ */}
                 {activeTab === 'explore' && (
                   <ExploreTab
-                    user={user}
-                    profile={profile}
-                    liveRole={liveRole}
-                    institutionName={institutionName}
-                    institutionCode={institutionCode}
+                    menuItems={menuItems}
+                    filteredItems={filteredItems}
+                    activeOrders={activeOrders}
+                    onAddCart={(item) => setCart([...cart, { ...item, cart_id: Math.random().toString(36).substr(2, 9) }])}
+                    onTrackOrder={() => {}} // Not implemented yet
+                    onQrOpen={() => {}} // Not implemented yet
+                    onFavorite={(item) => { toggleFavorite(item); triggerToast && triggerToast('Favorited', `${item.name} saved!`, 'success') }}
+                    favoritedIds={favorites}
                     searchQuery={searchQuery}
                     setSearchQuery={setSearchQuery}
-                    selectedCategory={selectedCategory}
-                    setSelectedCategory={setSelectedCategory}
-                    selectedCounter={selectedCounter}
-                    setSelectedCounter={setSelectedCounter}
-                    allCategories={allCategories}
-                    counters={counters}
-                    menuItems={menuItems}
-                    banners={banners}
-                    activeOrders={activeOrders}
-                    orders={orders}
-                    onAddToCart={(item) => setCart([...cart, { ...item, cart_id: Math.random().toString(36).substr(2, 9) }])}
-                    onToggleFavorite={(item) => triggerToast && triggerToast('Favorited', `${item.name} saved!`, 'success')}
-                    onNavigate={(tab) => setActiveTab(tab)}
+                    institutionName={institutionName}
+                    dbBanners={banners}
                   />
                 )}
 
                 {activeTab === 'nutrition' && (
-                  <NutritionTab />
+                  <NutritionTab userName={profile?.full_name} />
                 )}
 
                 {activeTab === 'analytics' && (
-                  <AnalyticsTab />
+                  <AnalyticsTab orders={orders} />
                 )}
 
                 {activeTab === 'offers' && (
-                  <OffersTab />
+                  <OffersTab 
+                    offerItems={offerItems}
+                    onAddCart={(item) => setCart([...cart, { ...item, cart_id: Math.random().toString(36).substr(2, 9) }])}
+                    onFavorite={(item) => { toggleFavorite(item); triggerToast && triggerToast('Favorited', `${item.name} saved!`, 'success') }}
+                    favoritedIds={favorites}
+                    onGoExplore={() => setActiveTab('explore')}
+                  />
                 )}
 
                 {activeTab === 'history' && (
-                  <HistoryTab />
+                  <HistoryTab 
+                    pastOrders={pastOrders}
+                    menuItems={menuItems}
+                    onReorder={() => {}} // Reorder logic
+                    onGoExplore={() => setActiveTab('explore')}
+                  />
                 )}
 
                 {activeTab === 'profile' && (
-                  <ProfileTab />
+                  <ProfileTab 
+                    profile={profile as any}
+                    userEmail={user?.email}
+                    institutionName={institutionName}
+                    institutionCode={institutionCode}
+                    liveRole={liveRole}
+                    ordersCount={orders.length}
+                    favoritesCount={favorites.size}
+                    avatarUrl={null}
+                    onEditProfile={() => {}}
+                    onSignOut={() => signOut()}
+                  />
                 )}
 
                 {/* ═══════════════════ CHECKOUT TAB ═══════════════════ */}

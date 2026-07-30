@@ -797,8 +797,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const orderItemNames = useMemo(() => new Set(orders.flatMap((o) => o.items.map((i) => i.name))), [orders]);
   const orderedCategories = useMemo(() => new Set(menuItems.filter((i) => orderItemNames.has(i.name)).map((i) => i.category)), [menuItems, orderItemNames]);
 
-  const activeOrders = orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
-  const pastOrders = orders.filter((o) => !ACTIVE_STATUSES.includes(o.status));
+  const activeOrders: Order[] = []; // orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
+  const pastOrders: Order[] = []; // orders.filter((o) => !ACTIVE_STATUSES.includes(o.status));
   const offerItems = menuItems.filter((i) => i.offer_label).slice(0, 8);
   const trendingItems = [...menuItems].sort((a, b) => Number(b.popular) - Number(a.popular) || b.rating - a.rating).slice(0, 10);
   const quickReorderItems = menuItems.filter((i) => orderItemNames.has(i.name)).slice(0, 8);

@@ -6,6 +6,8 @@ import type { UserRole } from '../../types';
 interface PremiumHeaderProps {
   institutionName: string;
   institutionCode: string;
+  institutionCity?: string;
+  institutionCampus?: string;
   liveRole?: UserRole | null;
   avatarUrl?: string | null;
   userName?: string;
@@ -22,6 +24,8 @@ interface PremiumHeaderProps {
 export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
   institutionName,
   institutionCode,
+  institutionCity,
+  institutionCampus,
   avatarUrl,
   userName,
   unreadNotif,
@@ -93,8 +97,12 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
             </div>
 
             <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-500 mt-0.5">
-              <span className="font-medium text-slate-700">{institutionCode}</span>
-              <span className="text-slate-300">•</span>
+              {(institutionCampus || institutionCity) && (
+                <span className="font-medium text-slate-600">
+                  {[institutionCampus, institutionCity].filter(Boolean).join(', ')}
+                </span>
+              )}
+              {(institutionCampus || institutionCity) && <span className="text-slate-300">•</span>}
               <span className="flex items-center gap-1 text-slate-500">
                 <Clock className="w-3.5 h-3.5 text-blue-600" />
                 {currentTime || '12:21 PM'}

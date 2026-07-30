@@ -521,6 +521,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [countersList, setCountersList] = useState<any[]>([]);
   const [institutionName, setInstitutionName] = useState('');
   const [institutionCode, setInstitutionCode] = useState('');
+  const [institutionCity, setInstitutionCity] = useState('');
+  const [institutionCampus, setInstitutionCampus] = useState('');
   const [cart, setCart] = useState<{ item: MenuItem; quantity: number }[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCounter, setSelectedCounter] = useState('ALL');
@@ -699,13 +701,15 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         if (instId) {
           const { data: inst } = await supabase
             .from('institutions')
-            .select('institution_name, name, campus, institution_code')
+            .select('institution_name, name, campus, city, institution_code')
             .eq('id', instId)
             .maybeSingle();
           if (inst) {
             const nameField = inst.institution_name || inst.name || '';
             setInstitutionName(`${nameField}${inst.campus ? ` · ${inst.campus}` : ''}`);
             setInstitutionCode(inst.institution_code || '');
+            setInstitutionCampus(inst.campus || '');
+            setInstitutionCity(inst.city || '');
           }
         }
 
@@ -1208,6 +1212,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       <PremiumHeader
         institutionName={institutionName}
         institutionCode={institutionCode}
+        institutionCity={institutionCity}
+        institutionCampus={institutionCampus}
         liveRole={liveRole}
         avatarUrl={profile?.avatar_url || user?.user_metadata?.avatar_url}
         userName={profile?.full_name || user?.email}

@@ -112,11 +112,10 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
             </div>
 
             {/* Stats row */}
-            <div className="grid grid-cols-3 gap-3 mt-5">
+            <div className="grid grid-cols-2 gap-3 mt-5">
               {[
                 { label: 'Orders', value: ordersCount.toString(), icon: '🛒' },
                 { label: 'Favourites', value: favoritesCount.toString(), icon: '❤️' },
-                { label: 'Wallet', value: profile?.wallet_balance !== undefined ? formatINR(profile.wallet_balance) : '—', icon: '💳' },
               ].map(s => (
                 <div key={s.label} className="rounded-2xl bg-white/5 border border-white/10 p-3 text-center">
                   <p className="text-lg">{s.icon}</p>

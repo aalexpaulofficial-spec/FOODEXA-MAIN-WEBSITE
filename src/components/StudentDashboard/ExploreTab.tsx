@@ -88,23 +88,7 @@ const BannerCarousel: React.FC<{ dbBanners?: any[] }> = ({ dbBanners }) => {
 
 // ── Quick Stats Cards ──────────────────────────────────────────────────────────
 const QuickStatsGrid: React.FC = () => (
-  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-    {/* Wallet Balance */}
-    <div className="bg-white rounded-2xl p-5 border border-[#E2E8F0] shadow-sm flex flex-col justify-between min-h-[120px]">
-      <div className="flex justify-between items-start">
-        <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-100">
-          <Wallet className="w-5 h-5 text-emerald-600" />
-        </div>
-        <button className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition-colors active:scale-95">
-          Add Money
-        </button>
-      </div>
-      <div className="mt-3">
-        <p className="text-xs font-medium text-slate-500 mb-1">Wallet Balance</p>
-        <h4 className="text-2xl font-bold text-slate-900">₹1,240</h4>
-      </div>
-    </div>
-
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
     {/* Meal Pass */}
     <div className="bg-white rounded-2xl p-5 border border-[#E2E8F0] shadow-sm flex flex-col justify-between min-h-[120px]">
       <div className="flex justify-between items-start">
@@ -270,18 +254,6 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
             <div className="pt-2 border-t border-slate-100">
               <p className="text-xs font-bold text-slate-900 mb-3">Recent Transactions</p>
               <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center">
-                      <Wallet className="w-4 h-4 text-emerald-600" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-slate-900">Added to Wallet</p>
-                      <p className="text-[10px] text-slate-500">Today, 09:41 AM</p>
-                    </div>
-                  </div>
-                  <span className="font-black text-emerald-600">+₹500</span>
-                </div>
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center">

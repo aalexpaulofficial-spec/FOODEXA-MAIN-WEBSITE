@@ -90,12 +90,6 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
         {/* Right — Action Buttons */}
         <div className="flex items-center gap-2 shrink-0">
 
-          {/* Wallet Balance Badge */}
-          <div className="hidden sm:flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-700 shadow-sm cursor-pointer hover:bg-emerald-100 transition-colors">
-            <Wallet className="w-3.5 h-3.5 text-emerald-600" />
-            <span>₹{walletBalance !== undefined ? walletBalance : 1240}</span>
-          </div>
-
           {/* Ask LX AI — vibrant gradient + glow */}
           <button
             onClick={onOpenLxAI}
@@ -105,13 +99,6 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
             <Sparkles className="w-3.5 h-3.5" />
             Ask LX AI
           </button>
-
-          {walletBalance !== undefined && (
-            <div className="flex items-center gap-1 bg-white border border-slate-200 shadow-sm px-2.5 py-1.5 rounded-full text-xs font-black text-slate-700">
-              <Wallet className="w-3.5 h-3.5 text-emerald-500" />
-              <span>₹{walletBalance.toLocaleString('en-IN')}</span>
-            </div>
-          )}
 
           {/* Notifications Bell */}
           <button

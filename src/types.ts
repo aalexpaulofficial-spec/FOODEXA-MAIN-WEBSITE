@@ -241,23 +241,34 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  student_id: string;
   user_id: string;
   email: string;
+  customer_name: string | null;
+  phone: string | null;
   role: UserRole | null;
   institution_id: string | null;
   institution_code: string | null;
+  canteen_id: string | null;
   counter_id: string | null;
   category_id: string | null;
   order_id: string;
   counter: string;
   items: OrderItem[];
   total_amount: number;
+  transaction_amount: number;
   status: OrderStatus;
+  order_status: string;
   payment_status: string;
+  kitchen_status: string | undefined;
+  counter_status: string | undefined;
   pickup_code: string | null;
+  pickup_token: string | undefined;
+  qr_pickup_code: string | null;
   qr_code: string | null;
   qr_code_data: string | null;
   locker_number: string | null;
+  notes: string | null;
   created_at: string;
   accepted_at: string | null;
   preparing_at: string | null;
@@ -265,6 +276,7 @@ export interface Order {
   completed_at: string | null;
   updated_at: string;
   estimated_prep_time?: number;
+  estimated_ready_at: string | null;
   token_number?: string;
   pickup_pin?: string;
   kitchen_queue_status?: string;

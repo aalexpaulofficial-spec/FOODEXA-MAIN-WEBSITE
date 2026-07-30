@@ -109,11 +109,15 @@ export default async function handler(req, res) {
     await supabasePatch('orders', {
       payment_status: 'paid',
       status: 'accepted',
+      order_status: 'accepted',
       razorpay_order_id: razorpay_order_id,
       razorpay_payment_id: razorpay_payment_id,
       razorpay_signature: razorpay_signature,
       payment_method: paymentDetails?.method || null,
       updated_at: new Date().toISOString(),
+      estimated_ready_at: new Date().toISOString(),
+      kitchen_status: 'pending',
+      counter_status: 'pending',
     }, { order_id: order_id });
 
     return res.json({

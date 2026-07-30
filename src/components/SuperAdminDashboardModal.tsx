@@ -93,7 +93,7 @@ export const SuperAdminDashboardModal: React.FC<SuperAdminDashboardModalProps> =
                     {recentOrders.map((o) => (
                       <div key={o.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                         <div className="flex items-center justify-between"><p className="text-xs font-black text-emerald-300">{o.order_id}</p><span className="text-[10px] font-mono text-slate-400">{new Date(o.created_at).toLocaleDateString()}</span></div>
-                        <p className="mt-2 text-xs text-slate-300">Counter: {o.counter}</p>
+                        <p className="mt-2 text-xs text-slate-300">Counter: {o.canteen_id || o.counter_status || ''}</p>
                         <p className="text-xs text-slate-300">Total: {o.total_amount}</p>
                         <span className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black ${o.status === 'completed' ? 'text-emerald-300 border-emerald-500/40 bg-emerald-950/40' : 'text-yellow-300 border-yellow-500/40 bg-yellow-950/40'}`}>{o.status}</span>
                       </div>

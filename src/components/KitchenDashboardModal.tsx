@@ -108,7 +108,7 @@ export const KitchenDashboardModal: React.FC<KitchenDashboardModalProps> = ({ is
               <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
                   <Inbox className="w-5 h-5 text-amber-400" />
-                  <p className="mt-4 text-3xl font-black text-white">{orders.filter((o) => o.kitchen_queue_status === 'incoming' || o.status === 'pending').length}</p>
+                  <p className="mt-4 text-3xl font-black text-white">{orders.filter((o) => o.kitchen_status === 'pending' || o.status === 'pending').length}</p>
                   <p className="text-xs font-bold text-slate-500">Incoming</p>
                 </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -142,8 +142,8 @@ export const KitchenDashboardModal: React.FC<KitchenDashboardModalProps> = ({ is
                           </div>
                           <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${o.status === 'ready' ? 'text-emerald-300 bg-emerald-950/40' : o.status === 'preparing' ? 'text-indigo-300 bg-indigo-950/40' : 'text-yellow-300 bg-yellow-950/40'}`}>{o.status}</span>
                         </div>
-                        <p className="text-xs text-slate-300">Counter: {o.counter}</p>
-                        <p className="text-xs text-slate-300">PIN: {o.pickup_pin || o.pickup_code || 'N/A'}</p>
+                        <p className="text-xs text-slate-300">Counter: {o.canteen_id || o.counter_status || ''}</p>
+                        <p className="text-xs text-slate-300">PIN: {o.pickup_code || 'N/A'}</p>
                         <div className="flex flex-wrap gap-2">
                           <button onClick={() => updateStatus(o.id, 'accepted')} className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[10px] font-bold text-amber-300 hover:bg-amber-950 transition-colors">Accept</button>
                           <button onClick={() => updateStatus(o.id, 'preparing')} className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[10px] font-bold text-violet-300 hover:bg-violet-950 transition-colors">Prepare</button>

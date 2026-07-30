@@ -150,7 +150,7 @@ const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => v
   }, [isOpen]);
 
   if (!isOpen || !order) return null;
-  const qrValue = order.qr_code_data || order.qr_code || order.pickup_code || order.order_id;
+  const qrValue = order.qr_pickup_code || order.qr_code_data || order.pickup_code || order.order_id;
   const mins = Math.floor(countdown / 60);
   const secs = countdown % 60;
 
@@ -559,8 +559,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             ...o, status: newStatus.toLowerCase() as OrderStatus,
             ready_at: payload.new.ready_at || o.ready_at,
             completed_at: payload.new.completed_at || o.completed_at,
-            qr_code: payload.new.qr_code || payload.new.qr_code_data || o.qr_code,
-            qr_code_data: payload.new.qr_code_data || o.qr_code_data,
+            qr_pickup_code: payload.new.qr_pickup_code || o.qr_pickup_code,
             pickup_code: payload.new.pickup_code || o.pickup_code,
           } : o);
         }
@@ -617,19 +616,29 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             .order('created_at', { ascending: false });
           if (!orderResult.error) {
             setOrders((orderResult.data || []).map((r: any) => ({
-              id: String(r.id), user_id: String(r.user_id || ''), email: String(r.email || ''),
+              id: String(r.id), student_id: String(r.student_id || r.user_id || ''), user_id: String(r.user_id || r.student_id || ''), email: String(r.email || ''),
+              customer_name: r.customer_name || null, phone: r.phone || null,
               role: ['student', 'faculty', 'guest', 'institution_admin', 'kitchen_staff', 'canteen_manager', 'super_admin'].includes(r.role) ? r.role : null,
               institution_id: r.institution_id || null, institution_code: r.institution_code || null,
-              counter_id: null, category_id: null,
-              order_id: String(r.order_id || r.id), counter: String(r.counter || ''),
+              canteen_id: r.canteen_id || null, counter_id: null, category_id: null,
+              order_id: String(r.order_id || r.id), counter: String(r.canteen_id || ''),
               items: Array.isArray(r.items) ? r.items.map((i: any) => ({ name: String(i.item_name || i.name || 'Item'), quantity: Number(i.quantity || 1), price: Number(i.price || 0) })) : [],
-              total_amount: Number(r.total_amount || r.total || 0),
+              total_amount: Number(r.total_amount || r.total || 0), transaction_amount: Number(r.transaction_amount || r.total_amount || 0),
               status: (r.status || 'pending').toLowerCase() as OrderStatus,
-              payment_status: r.payment_status || 'pending', pickup_code: r.pickup_code || r.qr_code || null,
-              qr_code: r.qr_code || null, qr_code_data: r.qr_code_data || null,
-              locker_number: r.locker_number || null, created_at: r.created_at || '',
+              order_status: r.order_status || r.status || 'pending',
+              payment_status: r.payment_status || 'pending',
+              kitchen_status: r.kitchen_status || undefined, counter_status: r.counter_status || undefined,
+              pickup_code: r.pickup_code || null, pickup_token: r.pickup_token || undefined,
+              qr_pickup_code: r.qr_pickup_code || null, qr_code: r.qr_code || null, qr_code_data: r.qr_code_data || null,
+              locker_number: r.locker_number || null, notes: r.notes || null,
+              created_at: r.created_at || '',
               accepted_at: r.accepted_at || null, preparing_at: r.preparing_at || null,
               ready_at: r.ready_at || null, completed_at: r.completed_at || null, updated_at: r.updated_at || '',
+              estimated_prep_time: r.estimated_ready_at ? Math.max(0, Math.round((new Date(r.estimated_ready_at).getTime() - Date.now()) / 60000)) : 15,
+              estimated_ready_at: r.estimated_ready_at || null,
+              token_number: r.pickup_token || undefined,
+              pickup_pin: r.pickup_code || null,
+              kitchen_queue_status: r.kitchen_status || undefined,
             })));
           }
         }
@@ -836,7 +845,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     return result;
   }, [menuItems, searchQuery, selectedCounter, selectedCategory, showVegFilter, showNonVeg, selectedPriceRange, selectedPrepTime, sortBy]);
 
-  const { subtotal: cartSubtotal, discount: cartDiscount, grandTotal: cartGrandTotal } = useMemo(() => {
+  const { subtotal: cartSubtotal, discount: cartDiscount, convenienceFee: cartConvenienceFee, grandTotal: cartGrandTotal } = useMemo(() => {
     return calculateCartTotals(cart, couponDiscount);
   }, [cart, couponDiscount]);
 
@@ -1937,7 +1946,11 @@ const orderResult = await placeOrder({
                                 <span>Subtotal</span>
                                 <span>{formatINR(cartSubtotal)}</span>
                               </div>
-                              {cartDiscount > 0 && (
+                               <div className="flex justify-between text-xs text-slate-400">
+                                 <span>Convenience Fee</span>
+                                 <span>{formatINR(cartConvenienceFee)}</span>
+                               </div>
+                               {cartDiscount > 0 && (
                                 <div className="flex justify-between text-xs text-emerald-400">
                                   <span>Discount</span>
                                   <span>-{formatINR(cartDiscount)}</span>

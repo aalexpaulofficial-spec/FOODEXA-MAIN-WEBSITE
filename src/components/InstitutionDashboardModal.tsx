@@ -143,11 +143,11 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                           <p className="text-xs font-black text-emerald-300">{o.order_id} {o.token_number && <span className="ml-1 text-amber-300">· {o.token_number}</span>}</p>
                           <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${o.status === 'completed' ? 'text-emerald-300' : o.status === 'preparing' ? 'text-indigo-300' : o.status === 'ready' ? 'text-emerald-300' : 'text-yellow-300'}`}>{o.status}</span>
                         </div>
-                        <p className="mt-2 text-xs text-slate-300">Counter: {o.counter}</p>
+                        <p className="mt-2 text-xs text-slate-300">Counter: {o.canteen_id || o.counter_status || ''}</p>
                         <p className="text-xs text-slate-300">Items: {o.items?.length || 0}</p>
                         <p className="text-xs text-slate-300">Total: {o.total_amount}</p>
-                        {o.pickup_pin && <p className="text-xs text-cyan-400 font-mono mt-1">PIN: {o.pickup_pin}</p>}
-                        {o.estimated_prep_time && <p className="text-xs text-amber-400 font-bold mt-1">~{o.estimated_prep_time} mins est.</p>}
+                        {o.pickup_code && <p className="text-xs text-cyan-400 font-mono mt-1">Code: {o.pickup_code}</p>}
+                        {o.estimated_ready_at && <p className="text-xs text-amber-400 font-bold mt-1">~{Math.round((new Date(o.estimated_ready_at).getTime() - Date.now()) / 60000) || 15} mins est.</p>}
                       </div>
                     ))}
                   </div>

@@ -243,33 +243,45 @@ export async function fetchOrders(params: { user_id?: string; institution_id?: s
 export function mapOrder(row: any): Order {
   return {
     id: String(row.id),
-    user_id: String(row.user_id || ''),
+    student_id: String(row.student_id || row.user_id || ''),
+    user_id: String(row.user_id || row.student_id || ''),
     email: String(row.email || ''),
+    customer_name: row.customer_name || null,
+    phone: row.phone || null,
     role: ['student', 'faculty', 'guest', 'institution_admin', 'kitchen_staff', 'canteen_manager', 'super_admin'].includes(row.role) ? row.role : null,
     institution_id: row.institution_id || null,
     institution_code: row.institution_code || null,
+    canteen_id: row.canteen_id || null,
     counter_id: row.counter_id || null,
     category_id: row.category_id || null,
     order_id: String(row.order_id || row.id),
-    counter: '',
+    counter: row.canteen_id || row.counter_status || '',
     items: normalizeOrderItems(row.items),
     total_amount: Number(row.total_amount || row.total || 0),
+    transaction_amount: Number(row.transaction_amount || row.total_amount || 0),
     status: normalizeOrderStatus(row.status),
+    order_status: row.order_status || row.status || 'pending',
     payment_status: row.payment_status || 'pending',
-    pickup_code: row.pickup_code || row.qr_code || null,
+    kitchen_status: row.kitchen_status || undefined,
+    counter_status: row.counter_status || undefined,
+    pickup_code: row.pickup_code || null,
+    pickup_token: row.pickup_token || undefined,
+    qr_pickup_code: row.qr_pickup_code || null,
     qr_code: row.qr_code || row.qr || null,
     qr_code_data: row.qr_code_data || null,
     pickup_pin: row.pickup_pin || null,
     locker_number: row.locker_number || row.locker || null,
+    notes: row.notes || null,
     created_at: row.created_at || row.inserted_at || '',
     accepted_at: row.accepted_at || null,
     preparing_at: row.preparing_at || null,
     ready_at: row.ready_at || null,
     completed_at: row.completed_at || null,
     updated_at: row.updated_at || row.created_at || '',
-    estimated_prep_time: row.estimated_prep_time || undefined,
-    token_number: row.token_number || undefined,
-    kitchen_queue_status: row.kitchen_queue_status || undefined,
+    estimated_prep_time: row.estimated_ready_at ? new Date(row.estimated_ready_at).getTime() - Date.now() > 0 ? Math.round((new Date(row.estimated_ready_at).getTime() - Date.now()) / 60000) : 15 : undefined,
+    estimated_ready_at: row.estimated_ready_at || null,
+    token_number: row.pickup_token || undefined,
+    kitchen_queue_status: row.kitchen_status || undefined,
   };
 }
 
@@ -301,6 +313,10 @@ export async function placeOrder(params: {
   user_id: string;
   email: string;
   role: UserRole;
+  customer_name?: string;
+  phone?: string;
+  canteen_id?: string;
+  notes?: string;
   institution_id: string | null;
   institution_code: string | null;
   items: { id: string; name: string; quantity: number; price: number };
@@ -318,23 +334,24 @@ export async function placeOrder(params: {
   const isPaid = Boolean(params.razorpay_payment_id && params.razorpay_signature);
   const now = new Date().toISOString();
   const payload: Record<string, any> = {
-    user_id: params.user_id,
+    student_id: params.user_id,
     email: params.email,
-    role: params.role,
+    customer_name: params.customer_name || params.email || '',
+    phone: params.phone || null,
     institution_id: params.institution_id,
-    institution_code: params.institution_code,
-    order_id: orderId,
-    token_number: tokenNumber,
-    items: params.itemsFull,
+    canteen_id: params.canteen_id || null,
     total_amount: params.total_amount,
+    transaction_amount: params.total_amount,
     status: isPaid ? 'pending' : 'pending',
+    order_status: isPaid ? 'pending' : 'pending',
     payment_status: isPaid ? 'paid' : 'pending',
+    pickup_token: tokenNumber,
     pickup_code: pickupCode,
-    pickup_pin: pickupPin,
-    qr_code: `FOODEXA-${orderId}`,
-    qr_code_data: JSON.stringify({ orderId, pickupCode, token: tokenNumber, pin: pickupPin }),
-    kitchen_queue_status: 'incoming',
-    estimated_prep_time: 15,
+    qr_pickup_code: `FOODEXA-${orderId}`,
+    notes: params.notes || null,
+    kitchen_status: 'pending',
+    counter_status: 'pending',
+    estimated_ready_at: new Date(Date.now() + 15 * 60000).toISOString(),
     created_at: now,
     updated_at: now,
   };
@@ -722,12 +739,14 @@ export async function filterMenuItems(filters: FoodFilters, institutionId?: stri
 export function calculateCartTotals(items: CartItem[], couponDiscount: number = 0): {
   subtotal: number;
   discount: number;
+  convenienceFee: number;
   grandTotal: number;
 } {
   const subtotal = items.reduce((sum, item) => sum + (item.item.offer_price || item.item.price) * item.quantity, 0);
   const discount = Math.min(couponDiscount, subtotal);
-  const grandTotal = Math.round((subtotal - discount) * 100) / 100;
-  return { subtotal, discount, grandTotal };
+  const convenienceFee = 0;
+  const grandTotal = Math.round((subtotal - discount + convenienceFee) * 100) / 100;
+  return { subtotal, discount, convenienceFee, grandTotal };
 }
 
 // ==================== COUPONS ====================

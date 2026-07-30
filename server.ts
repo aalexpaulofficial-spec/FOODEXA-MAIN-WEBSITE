@@ -38,6 +38,7 @@ async function startServer() {
 
   const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
   const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
+  const razorpayWebhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || '';
 
   let razorpay: Razorpay | null = null;
 
@@ -384,11 +385,15 @@ notes: {
        const orderUpdate: any = {
          payment_status: 'paid',
          status: 'accepted',
+         order_status: 'accepted',
          razorpay_order_id: razorpay_order_id,
          razorpay_payment_id: razorpay_payment_id,
          razorpay_signature: razorpay_signature,
          payment_method: paymentDetails?.method || null,
          updated_at: new Date().toISOString(),
+         estimated_ready_at: new Date().toISOString(),
+         kitchen_status: 'pending',
+         counter_status: 'pending',
        };
 
       const { error: orderUpdateError } = await supabaseQuery('orders', 'PATCH', orderUpdate, { order_id: order_id });
@@ -462,7 +467,8 @@ notes: {
         // Update order as paid (idempotent - already done by verify endpoint)
         await supabaseQuery('orders', 'PATCH', {
           payment_status: 'paid',
-          status: 'pending',
+          status: 'accepted',
+          order_status: 'accepted',
           razorpay_payment_id: razorpay_payment_id,
           payment_method: method || null,
           updated_at: new Date().toISOString(),
@@ -483,10 +489,12 @@ notes: {
       } else if (event === 'order.paid') {
         const orderEntity = payload?.payload?.order?.entity;
         if (orderEntity) {
-          await supabaseQuery('orders', 'PATCH', {
-            payment_status: 'paid',
-            updated_at: new Date().toISOString(),
-          }, { order_id: orderEntity.id || '' });
+        await supabaseQuery('orders', 'PATCH', {
+          payment_status: 'paid',
+          status: 'accepted',
+          order_status: 'accepted',
+          updated_at: new Date().toISOString(),
+        }, { order_id: orderEntity.id || '' });
 
           await supabaseQuery('payments', 'PATCH', {
             payment_status: 'captured',

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Search, Mic, Sparkles, QrCode, X,
   Utensils, Coffee, Sun, Moon, Cookie, GlassWater, IceCream, HeartPulse, Package, Flame, Star, Heart,
-  ChevronRight, Gift, Zap, ArrowRight
+  Gift, Zap, ArrowRight, TrendingUp, Clock, Plus, Dumbbell, ShoppingBag, Activity, Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { MenuItem, Order } from '../../types';
@@ -293,10 +293,222 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
           </div>
         </div>
 
-        {/* ── ActiveLiveOrder (CurrentActiveOrderCard) ──────────────── */}
+        {/* ── Trending Today ─────────────────────────────────────── */}
+        {menuItems.length > 0 && (
+          <div className="w-full my-6">
+            <div className="flex items-center justify-between mb-3.5">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 tracking-tight">Trending Today</h3>
+                  <p className="text-xs text-slate-500">Most ordered across {institutionName} campus</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-none scroll-smooth">
+              {[...menuItems]
+                .sort((a, b) => Number(b.popular) - Number(a.popular) || b.rating - a.rating)
+                .slice(0, 6)
+                .map((item, index) => (
+                  <motion.div
+                    key={item.id}
+                    whileHover={{ y: -4 }}
+                    className="min-w-[240px] sm:min-w-[260px] glass-card glass-card-hover rounded-3xl p-3.5 flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="relative rounded-2xl overflow-hidden h-36 mb-3">
+                        <img
+                          src={item.image_url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-md px-2 py-0.5 rounded-lg text-[10px] font-bold text-white flex items-center gap-1">
+                          <Flame className="w-3 h-3 text-amber-400" />
+                          #{index + 1} Trending
+                        </div>
+                        <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded-lg text-[10px] font-bold text-slate-900 flex items-center gap-1 shadow-sm">
+                          <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                          {item.rating?.toFixed(1) || '4.5'}
+                        </div>
+                      </div>
+
+                      <h4 className="font-bold text-slate-900 text-sm line-clamp-1">{item.name}</h4>
+                      <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{item.canteen_name || 'Campus Canteen'}</p>
+
+                      <div className="flex items-center gap-3 my-2 text-xs text-slate-500">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          {item.prep_time || 10} mins
+                        </span>
+                        <span>•</span>
+                        <span className="text-emerald-600 font-medium">
+                          {item.calories || 350} kcal
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                      <p className="text-base font-bold text-slate-900">₹{item.price}</p>
+                      <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => onAddCart(item)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm hover:bg-blue-700 transition-all"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── ActiveLiveOrder (CurrentActiveOrderCard) ────────────── */}
         {activeOrders.length > 0 && (
           <ActiveLiveOrder orders={activeOrders} onTrack={onTrackOrder} onQrOpen={onQrOpen} />
         )}
+
+        {/* ── AI Recommendation Card ─────────────────────────── */}
+        {menuItems.length > 0 && (() => {
+          const recommended = menuItems.find(i => i.popular) || menuItems[0];
+          return recommended ? (
+            <div className="w-full my-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 text-white flex items-center justify-center shadow-md shadow-cyan-500/20">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900 tracking-tight">Recommended For You</h3>
+                </div>
+                <span className="text-xs font-semibold text-cyan-700 bg-cyan-50 border border-cyan-200 px-2.5 py-0.5 rounded-full">
+                  LX AI Curated
+                </span>
+              </div>
+
+              <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 rounded-3xl p-5 sm:p-7 text-white shadow-xl relative overflow-hidden border border-slate-700/60">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center relative z-10">
+                  <div className="md:col-span-5 relative group">
+                    <img
+                      src={recommended.image_url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600'}
+                      alt={recommended.name}
+                      className="w-full h-48 sm:h-56 md:h-60 rounded-2xl object-cover shadow-lg ring-1 ring-white/10 group-hover:scale-[1.02] transition-all"
+                    />
+                    <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-md px-3 py-1 rounded-xl text-xs font-bold text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                      <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />
+                      {recommended.protein_grams || 42}g Protein
+                    </div>
+                    <div className="absolute bottom-3 right-3 bg-slate-900/80 backdrop-blur-md px-2.5 py-1 rounded-xl text-xs font-bold text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                      <Star className="w-3.5 h-3.5 fill-amber-400" />
+                      {recommended.rating?.toFixed(2) || '4.95'} ({recommended.review_count || 512})
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-7 flex flex-col justify-between">
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-400/30 mb-2">
+                        <span>Based on your class schedule & workout</span>
+                      </div>
+                      <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white mt-1">{recommended.name}</h2>
+                      <p className="text-xs sm:text-sm text-slate-300 mt-1.5 leading-relaxed">{recommended.description}</p>
+
+                      <div className="grid grid-cols-3 gap-2 my-4">
+                        <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/10 text-center">
+                          <p className="text-[10px] text-slate-400 uppercase font-bold">Calories</p>
+                          <p className="text-sm font-bold text-amber-300 mt-0.5 flex items-center justify-center gap-1">
+                            <Flame className="w-3.5 h-3.5 text-amber-400" />{recommended.calories || 520} kcal
+                          </p>
+                        </div>
+                        <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/10 text-center">
+                          <p className="text-[10px] text-slate-400 uppercase font-bold">Protein</p>
+                          <p className="text-sm font-bold text-emerald-300 mt-0.5 flex items-center justify-center gap-1">
+                            <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />{recommended.protein_grams || 42}g
+                          </p>
+                        </div>
+                        <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/10 text-center">
+                          <p className="text-[10px] text-slate-400 uppercase font-bold">Prep Time</p>
+                          <p className="text-sm font-bold text-cyan-300 mt-0.5 flex items-center justify-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-cyan-400" />{recommended.prep_time || 8} mins
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-semibold">Special Student Price</p>
+                        <p className="text-xl font-extrabold text-white">₹{recommended.price}</p>
+                      </div>
+                      <motion.button
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => onAddCart(recommended)}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/30 transition-all"
+                      >
+                        <ShoppingBag className="w-4 h-4" />
+                        <span>Order Now</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </motion.button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null;
+        })()}
+
+        {/* ── Live Kitchen Monitor ──────────────────────────────── */}
+        <div className="w-full my-6 glass-card rounded-3xl p-5 sm:p-6 shadow-lg relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <Activity className="w-5 h-5 text-blue-600 animate-pulse" />
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight">Live Kitchen Monitor</h3>
+              </div>
+              <p className="text-xs text-slate-500">{institutionName} Food Pavilion</p>
+            </div>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1.5 w-fit">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+              Green — Fast Express
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Kitchen Load</p>
+              <p className="text-xl font-extrabold text-slate-900 mt-0.5">72%</p>
+              <div className="w-full bg-slate-200 rounded-full h-1.5 mt-2 overflow-hidden">
+                <div className="h-full bg-amber-500 rounded-full" style={{ width: '72%' }}></div>
+              </div>
+            </div>
+            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Avg Wait Time</p>
+              <p className="text-xl font-extrabold text-blue-600 mt-0.5 flex items-center justify-center gap-1">
+                <Clock className="w-4 h-4" />7 mins
+              </p>
+              <p className="text-[10px] text-slate-400 mt-1">Express Counters Active</p>
+            </div>
+            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Orders Preparing</p>
+              <p className="text-xl font-extrabold text-amber-600 mt-0.5 flex items-center justify-center gap-1">
+                <Flame className="w-4 h-4" />49
+              </p>
+              <p className="text-[10px] text-slate-400 mt-1">In Cooking Pipeline</p>
+            </div>
+            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Chefs Active</p>
+              <p className="text-xl font-extrabold text-slate-900 mt-0.5 flex items-center justify-center gap-1">
+                <Users className="w-4 h-4 text-slate-600" />9
+              </p>
+              <p className="text-[10px] text-slate-400 mt-1">Full Staff Capacity</p>
+            </div>
+          </div>
+        </div>
 
         {/* ── FoodMenuGrid ──────────────────────────────────────────── */}
         <div className="w-full my-6">

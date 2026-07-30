@@ -1293,7 +1293,14 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 )}
 
                 {activeTab === 'nutrition' && (
-                  <NutritionTab userName={profile?.full_name} />
+                  <NutritionTab 
+                    userName={profile?.full_name}
+                    menuItems={menuItems}
+                    onAddCart={(item) => setCart((prev) => { const idx = prev.findIndex(e => e.item.id === item.id); return idx >= 0 ? prev.map((e, i) => i === idx ? { ...e, quantity: e.quantity + 1 } : e) : [...prev, { item, quantity: 1 }]; })}
+                    onFavorite={(item) => { toggleFavorite(item); triggerToast && triggerToast('Favorited', `${item.name} saved!`, 'success') }}
+                    favoritedIds={favorites}
+                    setIsLxAiOpen={setShowLxAi}
+                  />
                 )}
 
                 {activeTab === 'analytics' && (

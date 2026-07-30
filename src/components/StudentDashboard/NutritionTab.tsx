@@ -1,187 +1,183 @@
-import React, { useMemo } from 'react';
-import { Activity, Brain, Droplets, Flame } from 'lucide-react';
+import React, { useState } from 'react';
+import { HeartPulse, Dumbbell, Flame, GlassWater, Sparkles, ChevronRight } from 'lucide-react';
+import { motion } from 'framer-motion';
+import type { MenuItem } from '../../types';
+import { FoodCard } from './FoodCard';
 
 interface NutritionTabProps {
-  // Future: accept real data from DB
+  userName?: string;
   caloriesConsumed?: number;
   caloriesGoal?: number;
   proteinConsumed?: number;
   proteinGoal?: number;
-  carbsConsumed?: number;
-  carbsGoal?: number;
   waterConsumed?: number;
   waterGoal?: number;
   healthScore?: number;
-  userName?: string;
+  menuItems?: MenuItem[];
+  onAddCart?: (item: MenuItem) => void;
+  onFavorite?: (item: MenuItem) => void;
+  favoritedIds?: Set<string>;
+  setIsLxAiOpen?: (v: boolean) => void;
 }
-
-interface ProgressBarProps {
-  label: string;
-  icon: React.ReactNode;
-  current: number;
-  goal: number;
-  unit: string;
-  color: string;
-  glowColor: string;
-}
-
-const NutritionBar: React.FC<ProgressBarProps> = ({
-  label,
-  icon,
-  current,
-  goal,
-  unit,
-  color,
-  glowColor,
-}) => {
-  const pct = Math.min(100, Math.round((current / goal) * 100));
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className={`w-7 h-7 rounded-lg ${color} bg-opacity-20 flex items-center justify-center`}>
-            {icon}
-          </div>
-          <span className="text-sm font-semibold text-slate-900">{label}</span>
-        </div>
-        <div className="text-right">
-          <span className="text-sm font-black text-slate-900">{current}</span>
-          <span className="text-[10px] text-slate-500 ml-1">/ {goal} {unit}</span>
-        </div>
-      </div>
-      <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all duration-1000 ease-out ${color}`}
-          style={{
-            width: `${pct}%`,
-            boxShadow: pct > 0 ? `0 0 8px ${glowColor}` : 'none',
-          }}
-        />
-      </div>
-      <p className="text-[10px] text-slate-500 text-right">{pct}% of daily goal</p>
-    </div>
-  );
-};
 
 export const NutritionTab: React.FC<NutritionTabProps> = ({
-  caloriesConsumed = 1240,
+  caloriesConsumed = 1480,
   caloriesGoal = 2200,
-  proteinConsumed = 45,
-  proteinGoal = 80,
-  carbsConsumed = 160,
-  carbsGoal = 280,
-  waterConsumed = 1.4,
-  waterGoal = 2.5,
-  healthScore = 72,
-  userName,
+  proteinConsumed = 88,
+  proteinGoal = 120,
+  waterConsumed = 6,
+  waterGoal = 8,
+  healthScore = 88,
+  menuItems = [],
+  onAddCart = () => {},
+  onFavorite = () => {},
+  favoritedIds = new Set(),
+  setIsLxAiOpen = () => {}
 }) => {
-  const healthLabel = healthScore >= 80 ? 'Excellent' : healthScore >= 60 ? 'Good' : 'Fair';
-  const healthColor = healthScore >= 80 ? 'text-emerald-400' : healthScore >= 60 ? 'text-blue-400' : 'text-amber-400';
+  const [waterGlasses, setWaterGlasses] = useState(waterConsumed);
+
+  const caloriePct = Math.min(100, Math.round((caloriesConsumed / caloriesGoal) * 100));
+  const proteinPct = Math.min(100, Math.round((proteinConsumed / proteinGoal) * 100));
+
+  const displayItems = [...menuItems].slice(0, 10); // Today's campus menu
 
   return (
     <div className="flex-1 overflow-y-auto pb-32">
-      <div className="p-4 space-y-5 max-w-2xl mx-auto">
-
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-black text-slate-900">Nutrition Tracker</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Powered by LX AI · {new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'short', day: 'numeric' })}
-            </p>
-          </div>
-          {/* Health Score badge */}
-          <div className="flex flex-col items-center bg-white rounded-2xl px-4 py-2.5 border border-slate-200 shadow-sm">
-            <span className={`text-2xl font-black ${healthColor}`}>{healthScore}</span>
-            <span className="text-[9px] text-slate-500 uppercase tracking-wider">{healthLabel}</span>
-            <span className="text-[8px] text-slate-400">Health Score</span>
-          </div>
-        </div>
-
-        {/* AI Nutrition Tracker Card — light emerald gradient */}
-        <div className="relative overflow-hidden rounded-3xl border border-emerald-500/20 shadow-xl bg-white">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-teal-50/50 to-white" />
-          <div className="absolute inset-0 bg-gradient-to-r from-emerald-100/20 via-transparent to-teal-100/20 pointer-events-none" />
-
-          <div className="relative z-10 p-5 space-y-6">
-            {/* Tracker Header */}
+      <div className="p-4 max-w-7xl mx-auto">
+        {/* ── AiNutritionTracker ────────────────────────────────────────── */}
+        <div className="w-full my-6 bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden border border-slate-700">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-white/10">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-100/50 border border-emerald-200 flex items-center justify-center">
-                <Brain className="text-emerald-600 w-5 h-5" />
+              <div className="w-10 h-10 rounded-2xl bg-teal-500/20 text-teal-300 border border-teal-400/30 flex items-center justify-center font-bold">
+                <HeartPulse className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-slate-900">AI Nutrition Tracker</h3>
-                <p className="text-[10px] text-slate-500">Daily intake based on your orders</p>
+                <h3 className="text-lg font-bold text-white tracking-tight">AI Nutrition Tracker</h3>
+                <p className="text-xs text-slate-300">Monitored by LX AI Student Wellness</p>
               </div>
             </div>
 
-            {/* Nutrition bars */}
-            <div className="space-y-5">
-              <NutritionBar
-                label="Calories"
-                icon={<Flame className="w-4 h-4 text-orange-400" />}
-                current={caloriesConsumed}
-                goal={caloriesGoal}
-                unit="kcal"
-                color="bg-gradient-to-r from-orange-500 to-red-500"
-                glowColor="rgba(249, 115, 22, 0.5)"
-              />
-              <NutritionBar
-                label="Protein"
-                icon={<Activity className="w-4 h-4 text-blue-400" />}
-                current={proteinConsumed}
-                goal={proteinGoal}
-                unit="g"
-                color="bg-gradient-to-r from-blue-500 to-cyan-500"
-                glowColor="rgba(59, 130, 246, 0.5)"
-              />
-              <NutritionBar
-                label="Carbohydrates"
-                icon={<span className="text-xs">🌾</span>}
-                current={carbsConsumed}
-                goal={carbsGoal}
-                unit="g"
-                color="bg-gradient-to-r from-amber-500 to-yellow-400"
-                glowColor="rgba(245, 158, 11, 0.5)"
-              />
-              <NutritionBar
-                label="Water"
-                icon={<Droplets className="w-4 h-4 text-cyan-400" />}
-                current={waterConsumed}
-                goal={waterGoal}
-                unit="L"
-                color="bg-gradient-to-r from-cyan-500 to-teal-400"
-                glowColor="rgba(6, 182, 212, 0.5)"
-              />
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-full text-xs font-bold">
+                Health Score: {healthScore}/100
+              </span>
             </div>
           </div>
-        </div>
 
-        {/* Quick tips */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
-          <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-            <Brain className="w-4 h-4 text-blue-500" /> LX AI Tips for Today
-          </h3>
-          <div className="space-y-2">
-            {[
-              { tip: 'Add a protein-rich item to reach your daily goal', icon: '💪' },
-              { tip: 'You\'re 1.1L short of your water intake goal', icon: '💧' },
-              { tip: 'Try a Breakfast item — you haven\'t had one yet today', icon: '🌅' },
-            ].map((t, i) => (
-              <div key={i} className="flex items-start gap-2.5 rounded-xl bg-blue-50 border border-blue-100/80 px-3 py-2.5">
-                <span className="text-sm shrink-0">{t.icon}</span>
-                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">{t.tip}</p>
+          {/* Calories & Macro Rings */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-6">
+            
+            {/* Calories Progress Card */}
+            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-slate-300 font-bold flex items-center gap-1">
+                  <Flame className="w-4 h-4 text-amber-400" />
+                  Calories Today
+                </span>
+                <span className="font-bold text-amber-300">{caloriesConsumed} / {caloriesGoal} kcal</span>
               </div>
-            ))}
+
+              <div className="w-full bg-white/10 rounded-full h-2.5 mt-2 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-amber-400 to-orange-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${caloriePct}%` }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Protein Target */}
+            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-slate-300 font-bold flex items-center gap-1">
+                  <Dumbbell className="w-4 h-4 text-emerald-400" />
+                  Protein Target
+                </span>
+                <span className="font-bold text-emerald-300">{proteinConsumed} / {proteinGoal}g</span>
+              </div>
+
+              <div className="w-full bg-white/10 rounded-full h-2.5 mt-2 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-emerald-400 to-teal-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${proteinPct}%` }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Water Glasses Logger */}
+            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-cyan-300 flex items-center gap-1">
+                  <GlassWater className="w-4 h-4 text-cyan-300" />
+                  Water Intake
+                </p>
+                <p className="text-sm font-extrabold text-white mt-1">
+                  {waterGlasses} / {waterGoal} Glasses
+                </p>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setWaterGlasses(Math.max(0, waterGlasses - 1))}
+                  className="w-7 h-7 bg-white/10 hover:bg-white/20 text-white rounded-xl flex items-center justify-center font-bold text-xs"
+                >
+                  -
+                </button>
+                <button
+                  onClick={() => setWaterGlasses(waterGlasses + 1)}
+                  className="w-7 h-7 bg-cyan-500 text-slate-900 hover:bg-cyan-400 rounded-xl flex items-center justify-center font-bold text-xs shadow-md"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* LX AI Smart Insight Callout */}
+          <div className="bg-gradient-to-r from-blue-600/30 to-cyan-500/30 border border-cyan-400/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-5 h-5 text-cyan-300 shrink-0" />
+              <p className="text-xs text-slate-200">
+                <strong className="text-white">LX AI Insight:</strong> You need 32g more protein to hit today's study energy goal. Consider ordering the Grilled Moroccan Chicken Bowl for dinner.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setIsLxAiOpen(true)}
+              className="px-4 py-2 bg-cyan-500 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md hover:bg-cyan-400 transition-all shrink-0"
+            >
+              Ask LX AI
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
 
-        {/* Placeholder notice */}
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center">
-          <p className="text-[11px] text-slate-400 font-medium">
-            🔬 Detailed nutrition data will appear here once menu items have calorie/macro data in the database.
-          </p>
+        {/* ── FoodMenuGrid (Today's Campus Menu) ────────────────────── */}
+        <div className="w-full my-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 tracking-tight">Today's Campus Menu</h3>
+              <p className="text-xs text-slate-500">
+                Showing {displayItems.length} fresh items ready for express pickup
+              </p>
+            </div>
+          </div>
+
+          {displayItems.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {displayItems.map(item => (
+                <FoodCard
+                  key={item.id}
+                  item={item}
+                  onAdd={onAddCart}
+                  onFavorite={onFavorite}
+                  isFavorited={favoritedIds.has(item.id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
+
       </div>
     </div>
   );

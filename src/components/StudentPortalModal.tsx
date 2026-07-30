@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   formatINR, formatDateTime, subscribeOrders, subscribeMenuItems, subscribeAnnouncements,
   subscribeBanners, subscribeMenuCategories, subscribeCounters,
-  placeOrder, createRazorpayOrder, verifyRazorpayPayment, updateOrderAfterPayment, updateOrderPaymentStatus, getMenuAvailability, mapMenuItem,
+  placeOrder, createRazorpayOrder, verifyRazorpayPayment, updateOrderAfterPayment, updateOrderPaymentStatus, getItemAvailability, mapMenuItem,
   fetchMenuItems as fetchMenuItemsService, searchMenuItems, filterMenuItems,
   calculateCartTotals, validateCoupon, applyCouponUsage,
   fetchUserFavorites, toggleFavorite, fetchAIRecommendations, getOrderProgress, getEstimatedTimeRemaining, generateReceipt,
@@ -286,7 +286,7 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
 
   // ── Availability logic ──
   // Uses shared utility that matches Institution Dashboard logic
-  const { isSoldOut, canAddToCart } = getMenuAvailability(item);
+  const { isSoldOut, canAddToCart } = getItemAvailability(item);
 
   const handleAdd = () => {
     if (!canAddToCart) return;
@@ -407,9 +407,9 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
               <Clock className="w-2 h-2" />{item.prep_time || `~${item.prep_time_minutes}m`}
             </span>
           )}
-          {item.stock_quantity !== undefined && item.stock_quantity <= 5 && item.stock_quantity > 0 && (
+          {item.stock !== undefined && item.stock <= 5 && item.stock > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-950/50 px-2 py-0.5 text-[9px] font-bold text-amber-300">
-              <Package className="w-2 h-2" /> {item.stock_quantity} left
+              <Package className="w-2 h-2" /> {item.stock} left
             </span>
           )}
         </div>
@@ -1512,7 +1512,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     )}
 
                     {/* Fast Pickup */}
-                    {menuItems.filter((i) => i.prep_time_minutes !== undefined && i.prep_time_minutes <= 10 && getMenuAvailability(i).canAddToCart).length > 0 && (
+                    {menuItems.filter((i) => i.prep_time_minutes !== undefined && i.prep_time_minutes <= 10 && getItemAvailability(i).canAddToCart).length > 0 && (
                       <section className="space-y-3">
                         <div className="flex items-center justify-between">
                           <h3 className="text-base font-black text-white flex items-center gap-2">
@@ -1521,7 +1521,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           <button onClick={() => { setActiveTab('menu'); setSortBy('prep_time'); }} className="text-[10px] font-bold text-emerald-400">See all →</button>
                         </div>
                         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                          {menuItems.filter((i) => i.prep_time_minutes !== undefined && i.prep_time_minutes <= 10 && getMenuAvailability(i).canAddToCart).slice(0, 4).map((item) => (
+                          {menuItems.filter((i) => i.prep_time_minutes !== undefined && i.prep_time_minutes <= 10 && getItemAvailability(i).canAddToCart).slice(0, 4).map((item) => (
                             <FoodCard key={item.id} item={item} onAdd={addToCart} onFavorite={toggleFavorite} isFavorited={favorites.has(item.id)} />
                           ))}
                         </div>

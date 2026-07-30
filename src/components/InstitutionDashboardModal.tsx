@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { X, Building2, Loader2, LogOut, Utensils, ClipboardList, Users, Inbox, ChefHat, QrCode, CheckCircle2, Package, Plus, Minus, Save, XCircle, RefreshCw, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { mapMenuItem, subscribeMenuItems, getMenuAvailability, formatINR } from '../lib/supabase-service';
+import { mapMenuItem, subscribeMenuItems, getItemAvailability, formatINR } from '../lib/supabase-service';
 import type { OrderStatus, MenuItem } from '../types';
 
 type QueueFilter = 'incoming' | 'preparing' | 'ready' | 'completed';
@@ -102,10 +102,10 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
     setSavingStock(true);
     const { error } = await supabase
       .from('menu_items')
-      .update({ stock_quantity: Math.max(0, Math.floor(newStock)) })
+      .update({ stock: Math.max(0, Math.floor(newStock)) })
       .eq('id', id);
     if (!error) {
-      setMenuItems((prev) => prev.map((i) => i.id === id ? { ...i, stock_quantity: Math.max(0, Math.floor(newStock)) } : i));
+      setMenuItems((prev) => prev.map((i) => i.id === id ? { ...i, stock: Math.max(0, Math.floor(newStock)) } : i));
     }
     setEditingStockId(null);
     setSavingStock(false);
@@ -125,8 +125,8 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
     completed: queued.completed?.length || 0,
   };
 
-  const outOfStockCount = menuItems.filter((i) => i.stock_quantity !== undefined && i.stock_quantity <= 0).length;
-  const lowStockCount = menuItems.filter((i) => i.stock_quantity !== undefined && i.stock_quantity > 0 && i.stock_quantity <= 5).length;
+  const outOfStockCount = menuItems.filter((i) => getItemAvailability(i).isSoldOut).length;
+  const lowStockCount = menuItems.filter((i) => !getItemAvailability(i).isSoldOut && i.stock > 0 && i.stock <= 5).length;
 
   if (!isOpen) return null;
 
@@ -228,7 +228,7 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                   ) : (
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {menuItems.map((item) => {
-                        const { isSoldOut } = getMenuAvailability(item);
+                        const { isSoldOut } = getItemAvailability(item);
                         return (
                           <div key={item.id} className={`rounded-2xl border p-4 transition-all ${isSoldOut ? 'border-red-500/30 bg-red-950/20' : 'border-slate-800 bg-slate-950 hover:border-slate-700'}`}>
                             <div className="flex items-start justify-between gap-3">
@@ -263,7 +263,7 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                             {/* Stock section */}
                             <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-800 pt-3">
                               <div className="flex items-center gap-2">
-                                <Package className={`w-3.5 h-3.5 ${isSoldOut ? 'text-red-400' : item.stock_quantity !== undefined && item.stock_quantity <= 5 ? 'text-amber-400' : 'text-emerald-400'}`} />
+                                <Package className={`w-3.5 h-3.5 ${isSoldOut ? 'text-red-400' : item.stock !== undefined && item.stock <= 5 ? 'text-amber-400' : 'text-emerald-400'}`} />
                                 {editingStockId === item.id ? (
                                   <div className="flex items-center gap-1">
                                     <button
@@ -294,7 +294,7 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                                 ) : (
                                   <>
                                     <span className={`text-xs font-bold ${isSoldOut ? 'text-red-400' : 'text-white'}`}>
-                                      {item.stock_quantity !== undefined ? item.stock_quantity : '∞'}
+                                      {item.stock !== undefined ? item.stock : '∞'}
                                     </span>
                                     <span className="text-[9px] text-slate-500">in stock</span>
                                   </>
@@ -305,7 +305,7 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                                   <span className="inline-flex items-center gap-1 rounded-full border border-red-500/50 bg-red-950/80 px-2 py-0.5 text-[9px] font-black text-red-300">
                                     <XCircle className="w-2.5 h-2.5" /> Out of Stock
                                   </span>
-                                ) : !item.is_available && item.stock_quantity !== undefined && item.stock_quantity > 0 ? (
+                                ) : !item.is_available && item.stock !== undefined && item.stock > 0 ? (
                                   <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/50 bg-amber-950/80 px-2 py-0.5 text-[9px] font-bold text-amber-300">
                                     <AlertCircle className="w-2.5 h-2.5" /> Unavailable
                                   </span>
@@ -316,7 +316,7 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                                 )}
                                 {editingStockId !== item.id && (
                                   <button
-                                    onClick={() => { setEditingStockId(item.id); setStockInput(item.stock_quantity ?? 0); }}
+                                    onClick={() => { setEditingStockId(item.id); setStockInput(item.stock ?? 0); }}
                                     className="p-1 rounded-full text-slate-500 hover:text-white hover:bg-slate-800 transition-colors"
                                   >
                                     <Package className="w-3 h-3" />

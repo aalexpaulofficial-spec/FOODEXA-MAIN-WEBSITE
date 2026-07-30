@@ -185,9 +185,11 @@ export interface PartnerUniversity {
 export interface MenuItem {
   id: string;
   name: string;
+  food_name?: string;
   counter: string;
   counter_name: string;
   counter_id: string | null;
+  canteen_id: string | null;
   price: number;
   offer_price: number | null;
   offer_label: string | null;
@@ -199,6 +201,10 @@ export interface MenuItem {
   description: string;
   is_available: boolean;
   is_published: boolean;
+  status: string;
+  available: boolean;
+  availability: boolean;
+  is_archived: boolean;
   popular: boolean;
   nutrition: string | null;
   institution_id: string | null;
@@ -211,7 +217,7 @@ export interface MenuItem {
   is_healthy?: boolean;
   trending?: boolean;
   today_orders?: number;
-  stock_quantity?: number;
+  stock: number;
   ai_popularity_score?: number;
   tags?: string[];
   created_at?: string;

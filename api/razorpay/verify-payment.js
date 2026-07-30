@@ -93,7 +93,7 @@ export default async function handler(req, res) {
       console.warn("[Razorpay] Could not fetch payment details:", fetchErr);
     }
 
-    // Update payment record in Supabase
+    // Update payment record in Supabase (payments table has no constraint — store raw method)
     await supabasePatch('payments', {
       payment_status: 'captured',
       razorpay_status: paymentDetails?.status || 'captured',
@@ -106,6 +106,9 @@ export default async function handler(req, res) {
     }, { razorpay_order_id: razorpay_order_id });
 
     // Update the order in Supabase
+    // IMPORTANT: orders_payment_method_check constraint only allows 'razorpay' or 'cash' (lowercase).
+    // Razorpay's paymentDetails.method returns values like 'upi', 'card', 'netbanking' — NOT allowed.
+    // Always use 'razorpay' for Razorpay-processed payments.
     const now = new Date();
     await supabasePatch('orders', {
       payment_status: 'paid',
@@ -114,7 +117,7 @@ export default async function handler(req, res) {
       razorpay_order_id: razorpay_order_id,
       razorpay_payment_id: razorpay_payment_id,
       razorpay_signature: razorpay_signature,
-      payment_method: paymentDetails?.method || 'Razorpay',
+      payment_method: 'razorpay',
       paid_at: now.toISOString(),
       accepted_at: now.toISOString(),
       updated_at: now.toISOString(),

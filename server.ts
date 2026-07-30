@@ -390,7 +390,7 @@ notes: {
          razorpay_order_id: razorpay_order_id,
          razorpay_payment_id: razorpay_payment_id,
          razorpay_signature: razorpay_signature,
-         payment_method: paymentDetails?.method || 'Razorpay',
+         payment_method: 'razorpay',
          paid_at: now.toISOString(),
          accepted_at: now.toISOString(),
          updated_at: now.toISOString(),
@@ -473,7 +473,7 @@ notes: {
           status: 'accepted',
           order_status: 'Accepted',
           razorpay_payment_id: razorpay_payment_id,
-          payment_method: method || null,
+          payment_method: 'razorpay',
           updated_at: new Date().toISOString(),
         }, { razorpay_order_id });
 

@@ -148,15 +148,15 @@ export function getItemAvailability(item: MenuItem): {
   isSoldOut: boolean;
   canAddToCart: boolean;
 } {
-  // Lenient availability check: if any availability field is false, it's unavailable. Otherwise true.
-  const isAvailable = (item.is_available ?? item.availability ?? item.available ?? true) !== false;
-  const isPublished = (item.status ?? 'published') === 'published';
-  const isArchived = (item.is_archived ?? false) === true;
+  // Only block if item is EXPLICITLY archived OR explicitly marked as unavailable
+  // Default: always allow adding to cart
+  const explicitlyArchived = item.is_archived === true;
+  const explicitlyUnavailable = item.is_available === false;
   
-  const canAddToCart = isAvailable && isPublished && !isArchived;
+  const canAddToCart = !explicitlyArchived && !explicitlyUnavailable;
   return {
     isSoldOut: !canAddToCart,
-    canAddToCart
+    canAddToCart,
   };
 }
 

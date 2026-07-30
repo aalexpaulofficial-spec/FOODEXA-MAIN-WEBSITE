@@ -26,7 +26,9 @@ export const FoodCard: React.FC<FoodCardProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [imgErr, setImgErr] = useState(false);
   const isVeg = item.is_veg !== false;
-  const { isSoldOut, canAddToCart } = getItemAvailability(item);
+  // Always allow add to cart — only explicitly archived/unavailable items are blocked
+  const { isSoldOut } = getItemAvailability(item);
+  const canAddToCart = true; // Always enabled unless you want to block explicitly
 
   const rating = item.ai_popularity_score || item.rating || 0;
 

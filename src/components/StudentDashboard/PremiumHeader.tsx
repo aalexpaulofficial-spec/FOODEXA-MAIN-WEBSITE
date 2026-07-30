@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Sparkles, Building2, Clock, Calendar } from 'lucide-react';
+import { Bell, Sparkles, Building2, Clock, Calendar, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { UserRole } from '../../types';
 
@@ -129,6 +129,21 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
           >
             <Sparkles className="w-5 h-5 text-white" />
           </motion.button>
+
+          {/* Wallet - Coming Soon */}
+          <button
+            disabled
+            className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white border border-slate-100 text-slate-400 shadow-sm cursor-not-allowed opacity-80"
+            title="Wallet coming soon"
+          >
+            <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-400 flex items-center justify-center border border-emerald-100">
+              <Wallet className="w-3.5 h-3.5" />
+            </div>
+            <div className="text-left">
+              <p className="text-[9px] text-slate-400 uppercase tracking-wider font-bold leading-tight">Wallet</p>
+              <p className="text-[10px] font-bold text-slate-400 leading-tight">Soon</p>
+            </div>
+          </button>
 
           {/* Notifications Bell */}
           <button

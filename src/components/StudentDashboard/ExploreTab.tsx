@@ -35,53 +35,77 @@ const DEFAULT_BANNERS = [
   },
 ];
 
+import { motion, AnimatePresence } from 'framer-motion';
+
 // ── BannerCarousel ─────────────────────────────────────────────────────────────
 const BannerCarousel: React.FC<{ dbBanners?: any[] }> = ({ dbBanners }) => {
   const [current, setCurrent] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval>>();
 
   const banners = DEFAULT_BANNERS;
 
   useEffect(() => {
     if (banners.length <= 1) return;
-    timerRef.current = setInterval(() => {
+    const timer = setInterval(() => {
       setCurrent(c => (c + 1) % banners.length);
-    }, 4500);
-    return () => clearInterval(timerRef.current);
+    }, 5000);
+    return () => clearInterval(timer);
   }, [banners.length]);
 
   const b = banners[current];
 
   return (
-    <div className="relative overflow-hidden rounded-2xl shadow-md border border-slate-200" style={{ height: '300px' }}>
-      {/* Gradient background */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${b.gradient} transition-all duration-700`} />
-      {/* Decorative orbs */}
-      <div className="absolute -right-16 -top-16 w-72 h-72 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-12 -left-12 w-56 h-56 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="relative w-full overflow-hidden rounded-3xl my-5 shadow-lg shadow-slate-200/50">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={b.id}
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -50 }}
+          transition={{ duration: 0.4, ease: 'easeOut' }}
+          className={`p-6 sm:p-8 bg-gradient-to-r ${b.gradient} text-white relative overflow-hidden flex flex-col justify-between min-h-[160px] sm:min-h-[180px]`}
+        >
+          {/* Subtle Background Glow Circles */}
+          <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+          <div className="absolute right-1/3 -top-12 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
 
-      {/* Content */}
-      <div className="relative z-10 flex flex-col justify-center h-full px-8">
-        <span className="inline-flex items-center px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs font-bold text-white mb-4 w-fit tracking-wide">
-          {b.badge}
-        </span>
-        <h3 className="text-4xl sm:text-5xl font-black text-white leading-tight whitespace-pre-line mb-3 drop-shadow-sm">
-          {b.title}
-        </h3>
-        <p className="text-sm text-white/90 leading-relaxed max-w-[65%]">{b.subtitle}</p>
-        <div className="absolute right-8 bottom-8 text-8xl select-none drop-shadow-lg opacity-90">{b.emoji}</div>
-      </div>
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-white/20 backdrop-blur-md text-white border border-white/20 uppercase tracking-wider">
+                {b.badge}
+              </span>
+            </div>
 
-      {/* Dot indicators */}
-      <div className="absolute bottom-5 left-8 flex items-center gap-2">
-        {banners.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => { clearInterval(timerRef.current); setCurrent(i); }}
-            className={`rounded-full transition-all duration-300 ${i === current ? 'w-6 h-2 bg-white' : 'w-2 h-2 bg-white/50'}`}
-          />
-        ))}
-      </div>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white max-w-xl whitespace-pre-line leading-tight">
+              {b.title}
+            </h2>
+            <p className="text-xs sm:text-sm text-white/80 mt-1 max-w-lg leading-relaxed">
+              {b.subtitle}
+            </p>
+          </div>
+
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-7xl sm:text-8xl select-none drop-shadow-lg opacity-80 pointer-events-none">{b.emoji}</div>
+
+          <div className="relative z-10 flex items-center justify-between mt-4">
+            <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs sm:text-sm shadow-md hover:bg-slate-100 transition-all hover:scale-105 active:scale-95">
+              Explore Now
+              <ChevronRight className="w-4 h-4 text-slate-700" />
+            </button>
+
+            {/* Pagination Dots */}
+            <div className="flex items-center gap-1.5">
+              {banners.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrent(idx)}
+                  className={`h-2 rounded-full transition-all ${
+                    idx === current ? 'w-6 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 };
@@ -203,23 +227,28 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
       <div className="p-4 space-y-5 max-w-4xl mx-auto">
 
         {/* ── Search Bar ────────────────────────────────────────────────── */}
-        <div className="relative w-full group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 transition-colors group-focus-within:text-emerald-500" />
+        <div className="relative flex items-center dash-glass-card rounded-2xl p-1.5 focus-within:ring-2 focus-within:ring-blue-500/30 focus-within:border-blue-500/50 transition-all shadow-md group">
+          <div className="pl-3.5 text-slate-500 group-focus-within:text-emerald-500">
+            <Search className="w-5 h-5" />
+          </div>
+
           <input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search meals, drinks, snacks, canteens..."
-            className="w-full rounded-full bg-white border border-[#E2E8F0] py-3.5 pl-12 pr-28 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100/80 shadow-sm transition-all"
+            className="w-full bg-transparent px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none"
           />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-            <button className="p-2 rounded-full hover:bg-slate-100 transition-colors" title="Voice search">
-              <Mic className="w-4 h-4 text-slate-400 hover:text-emerald-500 transition-colors" />
+
+          {/* Feature Buttons */}
+          <div className="flex items-center gap-1 border-l border-slate-100 pl-2">
+            <button className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Voice Search">
+              <Mic className="w-4 h-4" />
             </button>
-            <button className="p-2 rounded-full hover:bg-slate-100 transition-colors" title="AI search">
-              <Sparkles className="w-4 h-4 text-emerald-500" />
+            <button className="p-2 text-slate-500 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all" title="AI Smart Search">
+              <Sparkles className="w-4 h-4" />
             </button>
-            <button className="p-2 rounded-full hover:bg-slate-100 transition-colors" title="QR scan">
-              <QrCode className="w-4 h-4 text-slate-400 hover:text-emerald-500 transition-colors" />
+            <button className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all" title="Scan Food Barcode">
+              <QrCode className="w-4 h-4" />
             </button>
           </div>
         </div>

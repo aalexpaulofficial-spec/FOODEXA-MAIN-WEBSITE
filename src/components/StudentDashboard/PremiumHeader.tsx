@@ -1,5 +1,5 @@
-import React from 'react';
-import { Bell, ShoppingCart, Sparkles, School, Wallet } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bell, ShoppingCart, Sparkles, School, Clock, Calendar } from 'lucide-react';
 import type { UserRole } from '../../types';
 
 interface PremiumHeaderProps {
@@ -18,7 +18,10 @@ interface PremiumHeaderProps {
 }
 
 const getGreeting = () => {
-  return 'Hello';
+  const h = new Date().getHours();
+  if (h < 12) return 'Good Morning';
+  if (h < 17) return 'Good Afternoon';
+  return 'Good Evening';
 };
 
 export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
@@ -26,7 +29,6 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
   institutionCode,
   avatarUrl,
   userName,
-  walletBalance,
   unreadNotif,
   cartCount,
   onOpenNotifications,
@@ -38,76 +40,91 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
     ? userName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
     : 'S';
 
-  return (
-    <header className="sticky top-0 z-40 shrink-0 bg-white border-b border-[#E2E8F0] shadow-sm">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
+  const [currentTime, setCurrentTime] = useState('');
+  const [currentDate, setCurrentDate] = useState('');
 
-        {/* Left — User Greeting + Avatar */}
-        <div className="flex items-center gap-3 min-w-0">
-          {/* Avatar with active dot */}
+  useEffect(() => {
+    const update = () => {
+      const now = new Date();
+      setCurrentTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      setCurrentDate(now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }));
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <header className="sticky top-0 z-40 shrink-0 dash-glass-header px-4 sm:px-8 py-3.5 transition-all">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+
+        {/* Left — Avatar + Greeting */}
+        <div className="flex items-center gap-3.5 min-w-0">
+          {/* Avatar */}
           <div className="relative shrink-0">
             {avatarUrl ? (
               <img
                 src={avatarUrl}
                 alt="Avatar"
-                className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow-sm"
+                className="w-12 h-12 rounded-2xl object-cover ring-2 ring-blue-600/30 shadow-md"
               />
             ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-sm font-black text-white ring-2 ring-white shadow-sm">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-cyan-500 text-sm font-black text-white shadow-md">
                 {initials}
               </div>
             )}
-            {/* Green online dot */}
-            <span className="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white shadow-sm" />
           </div>
 
-          {/* Greeting Text */}
+          {/* Greeting + Institution */}
           <div className="min-w-0">
-            <p className="text-sm font-extrabold text-slate-900 truncate max-w-[110px] sm:max-w-[180px] leading-tight">
-              Hello, {name}!
-            </p>
-          </div>
-        </div>
-
-        {/* Center — Institution Badge */}
-        <div className="hidden sm:flex flex-col items-center gap-1 shrink-0">
-          <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 px-3 py-1 rounded-full text-[10px] font-bold shadow-sm">
-            <div className="w-4 h-4 rounded-full bg-white border border-emerald-200 flex items-center justify-center text-[9px]">
-              <School className="w-2.5 h-2.5 text-emerald-600" />
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900">
+                {getGreeting()}, {name} <span className="inline-block">👋</span>
+              </h1>
+              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium dash-glass-pill text-blue-700 shadow-sm">
+                <School className="w-3 h-3 text-blue-600" />
+                {institutionName || 'Campus Portal'}
+              </span>
             </div>
-            <span className="truncate max-w-[140px]">{institutionName || 'Campus Portal'}</span>
-            {institutionCode && (
-              <span className="text-emerald-500 font-mono text-[9px]">· {institutionCode}</span>
-            )}
+            <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+              {institutionCode && (
+                <span className="font-medium text-slate-700">{institutionCode}</span>
+              )}
+              {institutionCode && <span className="text-slate-300">•</span>}
+              <span className="flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-blue-600" />
+                {currentTime}
+              </span>
+              <span className="hidden md:inline text-slate-300">•</span>
+              <span className="hidden md:flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                {currentDate}
+              </span>
+            </div>
           </div>
-          <span className="text-[9px] text-slate-400 font-medium">
-            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-            {' · '}
-            {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-          </span>
         </div>
 
-        {/* Right — Action Buttons */}
+        {/* Right — Actions */}
         <div className="flex items-center gap-2 shrink-0">
 
-          {/* Ask LX AI — vibrant gradient + glow */}
+          {/* LX AI button — blue→indigo→cyan gradient */}
           <button
             onClick={onOpenLxAI}
-            className="hidden sm:flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:from-emerald-400 hover:to-teal-500 transition-all active:scale-[0.97]"
-            style={{ boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)' }}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-blue-600/90 via-indigo-600/90 to-cyan-500/90 text-white text-xs font-semibold shadow-md shadow-blue-500/20 backdrop-blur-md border border-white/30 hover:shadow-lg hover:shadow-blue-500/30 transition-all active:scale-[0.97]"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            Ask LX AI
+            <Sparkles className="w-3.5 h-3.5 animate-pulse text-cyan-200" />
+            <span className="hidden sm:inline">Ask LX AI</span>
           </button>
 
           {/* Notifications Bell */}
           <button
             onClick={onOpenNotifications}
-            className="relative p-2 rounded-full border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all active:scale-95"
+            className="relative p-2.5 rounded-2xl dash-glass-pill text-slate-700 hover:text-slate-900 hover:bg-white/90 transition-all shadow-sm focus:outline-none"
           >
-            <Bell className="w-4 h-4" />
+            <Bell className="w-5 h-5" />
             {unreadNotif > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-black text-white ring-1 ring-white">
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-sm">
                 {unreadNotif > 9 ? '9+' : unreadNotif}
               </span>
             )}
@@ -116,16 +133,17 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
           {/* Cart */}
           <button
             onClick={onOpenCart}
-            className="relative p-2 rounded-full border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 shadow-sm transition-all active:scale-95"
+            className="relative p-2.5 rounded-2xl dash-glass-pill text-slate-700 hover:text-slate-900 hover:bg-white/90 transition-all shadow-sm focus:outline-none"
           >
-            <ShoppingCart className="w-4 h-4" />
+            <ShoppingCart className="w-5 h-5" />
             {cartCount > 0 && (
               <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-black text-white ring-1 ring-white">
-                {cartCount}
+                {cartCount > 9 ? '9+' : cartCount}
               </span>
             )}
           </button>
         </div>
+
       </div>
     </header>
   );

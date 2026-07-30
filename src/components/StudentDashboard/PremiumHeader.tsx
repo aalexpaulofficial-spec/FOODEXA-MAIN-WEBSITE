@@ -90,8 +90,8 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
               <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900 font-sans">
                 {greeting}, {name} <span className="inline-block animate-wave">👋</span>
               </h1>
-              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium glass-pill text-blue-700 shadow-xs">
-                <Building2 className="w-3 h-3 text-blue-600" />
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold bg-white border border-slate-100 shadow-sm text-blue-700">
+                <Building2 className="w-3.5 h-3.5 text-blue-600" />
                 {institutionName || 'Campus Portal'}
               </span>
             </div>
@@ -131,25 +131,9 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={onOpenLxAI}
-              className="flex items-center justify-center w-9 h-9 sm:w-auto sm:h-auto sm:px-3.5 sm:py-2 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-400 text-white text-xs font-semibold shadow-md shadow-blue-500/20"
+              className="flex items-center justify-center w-9 h-9 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-400 shadow-md shadow-blue-500/20"
             >
-              <Sparkles className="w-4 h-4 sm:w-3.5 sm:h-3.5 sm:mr-1.5 text-white" />
-              <span className="hidden sm:inline">Ask LX AI</span>
-            </motion.button>
-
-            {/* Wallet Balance Pill */}
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white border border-slate-100 text-slate-900 shadow-sm transition-all"
-            >
-              <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
-                <Wallet className="w-3.5 h-3.5" />
-              </div>
-              <div className="text-left">
-                <p className="text-[9px] text-slate-400 uppercase tracking-wider font-bold leading-tight">Wallet</p>
-                <p className="text-xs sm:text-sm font-black text-slate-900 leading-tight">₹{Math.round(walletBalance || 0)}</p>
-              </div>
+              <Sparkles className="w-4 h-4 text-white" />
             </motion.button>
 
             {/* Notifications Bell */}

@@ -1453,13 +1453,17 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
                         {/* Additional */}
                         <div className="space-y-3">
-                          <input
-                            type="text"
-                            placeholder="Coupon Code"
-                            value={couponCode}
-                            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-emerald-400 outline-none shadow-sm transition-colors"
-                          />
+                          <div className="relative opacity-60">
+                            <input
+                              type="text"
+                              disabled
+                              value="AS26"
+                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 pr-28 text-xs font-bold text-slate-900 cursor-not-allowed outline-none shadow-sm"
+                            />
+                            <div className="absolute right-2 top-2 bottom-2 rounded-lg bg-slate-200 px-3 flex items-center text-[10px] font-black text-slate-500 cursor-not-allowed">
+                              Coming Soon
+                            </div>
+                          </div>
                           <textarea
                             placeholder="Notes for Kitchen (Optional)"
                             value={kitchenNotes}
@@ -1764,16 +1768,15 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             {cart.length > 0 && (
               <>
                 {/* Coupon Code */}
-                <div className="relative">
+                <div className="relative opacity-60">
                   <input
                     type="text"
-                    placeholder="COUPON CODE (E.G. CHRISTSTUDENT20)"
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                    className="w-full rounded-2xl border-none bg-white py-4 pl-5 pr-24 text-xs font-bold text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 shadow-sm outline-none"
+                    disabled
+                    value="AS26"
+                    className="w-full rounded-2xl border-none bg-white py-4 pl-5 pr-28 text-xs font-bold text-slate-900 focus:ring-0 shadow-sm outline-none cursor-not-allowed"
                   />
-                  <button className="absolute right-2 top-2 bottom-2 rounded-xl bg-slate-900 px-5 text-xs font-black text-white hover:bg-slate-800 transition-colors shadow-md">
-                    Apply
+                  <button disabled className="absolute right-2 top-2 bottom-2 rounded-xl bg-slate-900 px-4 text-xs font-black text-white cursor-not-allowed shadow-md opacity-80">
+                    Coming Soon
                   </button>
                 </div>
 

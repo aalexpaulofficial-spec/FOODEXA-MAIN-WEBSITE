@@ -118,34 +118,36 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
           </div>
         </div>
 
-        {/* RIGHT: LX AI + Bell */}
-        <div className="flex items-center gap-2.5 shrink-0">
-          {/* LX AI Pill */}
+        {/* RIGHT: LX AI + Wallet + Bell — all uniform w-10 h-10 on mobile */}
+        <div className="flex items-center gap-2 shrink-0">
+
+          {/* ✨ LX AI */}
           <motion.button
             whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.96 }}
             onClick={onOpenLxAI}
-            className="flex items-center justify-center w-10 h-10 rounded-2xl bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 shadow-md shadow-blue-500/30"
+            className="w-10 h-10 flex items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 shadow-md shadow-blue-500/30"
+            title="Ask LX AI"
           >
             <Sparkles className="w-5 h-5 text-white" />
           </motion.button>
 
-          {/* Wallet - Coming Soon */}
+          {/* 💳 Wallet – Coming Soon: icon-only on mobile, pill with text on sm+ */}
           <button
             disabled
-            className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white border border-slate-100 text-slate-400 shadow-sm cursor-not-allowed opacity-80"
-            title="Wallet coming soon"
+            title="Wallet — Coming Soon"
+            className="relative w-10 h-10 sm:w-auto sm:h-auto sm:flex sm:items-center sm:gap-2 sm:px-3 sm:py-1.5 flex items-center justify-center rounded-2xl bg-white border border-slate-100 shadow-sm cursor-not-allowed opacity-75"
           >
-            <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-400 flex items-center justify-center border border-emerald-100">
-              <Wallet className="w-3.5 h-3.5" />
+            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-emerald-50 text-emerald-400 flex items-center justify-center sm:border sm:border-emerald-100">
+              <Wallet className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             </div>
-            <div className="text-left">
+            <div className="hidden sm:block text-left">
               <p className="text-[9px] text-slate-400 uppercase tracking-wider font-bold leading-tight">Wallet</p>
               <p className="text-[10px] font-bold text-slate-400 leading-tight">Soon</p>
             </div>
           </button>
 
-          {/* Notifications Bell */}
+          {/* 🔔 Notifications Bell */}
           <button
             onClick={onOpenNotifications}
             className="relative w-10 h-10 flex items-center justify-center rounded-2xl bg-white border border-slate-100 text-slate-700 shadow-sm hover:text-slate-900 transition-all focus:outline-none"
@@ -155,6 +157,7 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
               {unreadNotif > 0 ? unreadNotif : '0'}
             </span>
           </button>
+
         </div>
 
       </div>

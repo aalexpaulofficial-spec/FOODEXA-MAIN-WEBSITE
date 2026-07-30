@@ -304,7 +304,6 @@ export function mapOrder(row: any): Order {
     completed_at: row.completed_at || null,
     paid_at: row.paid_at || null,
     updated_at: row.updated_at || row.created_at || '',
-    estimated_ready_at: row.estimated_ready_at || null,
     token_number: row.token_number || row.pickup_token || undefined,
     kitchen_queue_status: row.kitchen_status || undefined,
     razorpay_order_id: row.razorpay_order_id || null,
@@ -456,28 +455,87 @@ export async function updateOrderAfterPayment(params: {
   razorpay_payment_id: string;
   razorpay_signature: string;
   payment_method?: string;
-}): Promise<{ success: boolean; error?: string }> {
+  institution_id?: string | null;
+  canteen_id?: string | null;
+  student_id?: string;
+  total_amount?: number;
+  prep_time_minutes?: number;
+}): Promise<{ success: boolean; data?: Order | null; error?: string }> {
   const now = new Date().toISOString();
-  const { error } = await supabase.from('orders').update({
-    payment_status: 'paid',
-    status: 'accepted',
-    order_status: 'Accepted',
-    payment_method: params.payment_method === 'cash' ? 'cash' : 'razorpay',
-    razorpay_order_id: params.razorpay_order_id,
-    razorpay_payment_id: params.razorpay_payment_id,
-    razorpay_signature: params.razorpay_signature,
-    paid_at: now,
-    accepted_at: now,
-    updated_at: now,
-    kitchen_status: 'Pending',
-    counter_status: 'Incoming',
-    estimated_ready_at: new Date(Date.now() + 15 * 60000).toISOString(),
-  }).eq('id', params.order_id);
+  const prepTime = params.prep_time_minutes || 15;
 
-  if (error) {
-    return { success: false, error: error.message };
+  // Step A: Update the order row with all payment fields
+  const { data: updatedOrder, error: updateError } = await supabase
+    .from('orders')
+    .update({
+      payment_status: 'paid',
+      status: 'confirmed',
+      order_status: 'Confirmed',
+      payment_method: 'razorpay',
+      razorpay_order_id: params.razorpay_order_id,
+      razorpay_payment_id: params.razorpay_payment_id,
+      razorpay_signature: params.razorpay_signature,
+      payment_id: params.razorpay_payment_id,
+      transaction_id: params.razorpay_order_id,
+      transaction_reference: params.razorpay_payment_id,
+      paid_at: now,
+      accepted_at: now,
+      updated_at: now,
+      kitchen_status: 'Pending',
+      counter_status: 'Incoming',
+      estimated_ready_at: new Date(Date.now() + prepTime * 60000).toISOString(),
+    })
+    .eq('id', params.order_id)
+    .select()
+    .single();
+
+  if (updateError || !updatedOrder) {
+    return { success: false, error: updateError?.message || 'Failed to update order after payment.' };
   }
-  return { success: true };
+
+  // Step B: Insert into payments table (best-effort, do not block on failure)
+  try {
+    const paymentRow: Record<string, any> = {
+      order_id: params.order_id,
+      razorpay_order_id: params.razorpay_order_id,
+      razorpay_payment_id: params.razorpay_payment_id,
+      razorpay_signature: params.razorpay_signature,
+      amount: params.total_amount || updatedOrder.total_amount || 0,
+      currency: 'INR',
+      status: 'paid',
+      payment_method: 'razorpay',
+      created_at: now,
+      updated_at: now,
+    };
+    if (params.institution_id) paymentRow.institution_id = params.institution_id;
+    if (params.student_id) paymentRow.user_id = params.student_id;
+    await supabase.from('payments').insert([paymentRow]);
+  } catch (_) { /* best-effort */ }
+
+  // Step C: Insert notifications (best-effort)
+  try {
+    const notifs: Record<string, any>[] = [];
+    const baseNotif = {
+      created_at: now,
+      is_read: false,
+      order_id: params.order_id,
+    };
+    if (params.student_id) {
+      notifs.push({ ...baseNotif, type: 'order_confirmed', title: 'Order Confirmed!', message: `Your order has been confirmed and is being prepared.`, user_id: params.student_id });
+    }
+    if (params.institution_id) {
+      notifs.push({ ...baseNotif, type: 'new_order', title: 'New Order Received', message: `A new order has been placed and payment confirmed.`, institution_id: params.institution_id });
+    }
+    if (notifs.length > 0) await supabase.from('notifications').insert(notifs);
+  } catch (_) { /* best-effort */ }
+
+  return { success: true, data: mapOrder(updatedOrder) };
+}
+
+export async function fetchOrderById(orderId: string): Promise<Order | null> {
+  const { data, error } = await supabase.from('orders').select('*, items:order_items(*)').eq('id', orderId).single();
+  if (error || !data) return null;
+  return mapOrder(data);
 }
 
 export async function cancelOrder(orderId: string): Promise<{ success: boolean; error?: string }> {

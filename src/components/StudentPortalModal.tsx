@@ -1209,28 +1209,27 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     <div className="fixed inset-0 z-50 flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 text-slate-900 overflow-hidden">
       <QRModal isOpen={!!qrOrder} onClose={() => setQrOrder(null)} order={qrOrder} />
 
-      <PremiumHeader
-        institutionName={institutionName}
-        institutionCode={institutionCode}
-        institutionCity={institutionCity}
-        institutionCampus={institutionCampus}
-        liveRole={liveRole}
-        avatarUrl={profile?.avatar_url || user?.user_metadata?.avatar_url}
-        userName={profile?.full_name || user?.email}
-        walletBalance={profile?.wallet_balance}
-        unreadNotif={unreadNotif}
-        cartCount={cartCount}
-        onOpenNotifications={() => { setShowNotifications(!showNotifications); setUnreadNotif(0); }}
-        onOpenCart={() => setShowCart(!showCart)}
-        onOpenLxAI={() => triggerToast && triggerToast('LX AI', 'AI Assistant coming soon!', 'info')}
-        onClose={onClose}
-      />
-
       {/* ── MAIN LAYOUT ─────────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto scroll-smooth min-w-0">
+          <PremiumHeader
+            institutionName={institutionName}
+            institutionCode={institutionCode}
+            institutionCity={institutionCity}
+            institutionCampus={institutionCampus}
+            liveRole={liveRole}
+            avatarUrl={profile?.avatar_url || user?.user_metadata?.avatar_url}
+            userName={profile?.full_name || user?.email}
+            walletBalance={profile?.wallet_balance}
+            unreadNotif={unreadNotif}
+            cartCount={cartCount}
+            onOpenNotifications={() => { setShowNotifications(!showNotifications); setUnreadNotif(0); }}
+            onOpenCart={() => setShowCart(!showCart)}
+            onOpenLxAI={() => triggerToast && triggerToast('LX AI', 'AI Assistant coming soon!', 'info')}
+            onClose={onClose}
+          />
           <div className="mx-auto max-w-7xl px-4 py-5 pb-28 lg:pb-8 space-y-6">
 
             {/* Error Banner */}

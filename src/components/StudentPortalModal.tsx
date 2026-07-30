@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   formatINR, formatDateTime, subscribeOrders, subscribeMenuItems, subscribeAnnouncements,
   subscribeBanners, subscribeMenuCategories, subscribeHomepageSections, subscribeCounters,
-  placeOrder, createRazorpayOrder, verifyRazorpayPayment, mapMenuItem,
+  placeOrder, createRazorpayOrder, verifyRazorpayPayment, updateOrderAfterPayment, updateOrderPaymentStatus, mapMenuItem,
   fetchUserCart, saveUserCart, fetchBanners, fetchHomepageSections, fetchCounters,
   fetchMenuItems as fetchMenuItemsService, searchMenuItems, filterMenuItems,
   calculateCartTotals, validateCoupon, applyCouponUsage,
@@ -907,54 +907,96 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     if (!cart.length) return;
     setSubmittingOrder(true); setError(null);
     try {
-       const tempOrderId = `FDX-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-       const itemsForBackend = cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price }));
-const razorpayResult = await createRazorpayOrder({
-          amount: cartGrandTotal, currency: 'INR', user_id: user.id, email: profile.email,
-          phone: profile.phone || undefined, name: profile.full_name || undefined,
-          institution_id: profile.institution_id || undefined, order_id: tempOrderId,
-          items: itemsForBackend,
-        });
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+      const seq = String(Math.floor(Math.random() * 999999) + 1).padStart(6, '0');
+      const orderNumber = `FDX-${dateStr}-${seq}`;
+      const orderId = `FDX-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+
+      const itemsForBackend = cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price }));
+      const itemsFull = cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price, image_url: e.item.image_url, is_veg: e.item.is_veg }));
+
+      // Step 1: Create Supabase order FIRST with pending status
+      const orderResult = await placeOrder({
+        user_id: user.id,
+        email: profile.email,
+        role: liveRole,
+        customer_name: profile.full_name || user.email?.split('@')[0] || 'Customer',
+        phone: profile.phone || '0000000000',
+        institution_id: profile.institution_id,
+        institution_code: institutionCode,
+        canteen_id: cart[0]?.item.counter_id || null,
+        items: itemsForBackend,
+        itemsFull: itemsFull,
+        total_amount: cartGrandTotal,
+        notes: kitchenNotes || null,
+        order_id: orderId,
+      });
+
+      if (orderResult.error || !orderResult.data) {
+        setError(orderResult.error || 'Failed to create order.');
+        setSubmittingOrder(false);
+        if (triggerToast) triggerToast('Order Creation Failed', orderResult.error || 'Please try again.', 'warning');
+        return;
+      }
+
+      // Step 2: Create Razorpay order
+      const razorpayResult = await createRazorpayOrder({
+        amount: cartGrandTotal, currency: 'INR', user_id: user.id, email: profile.email,
+        phone: profile.phone || undefined, name: profile.full_name || undefined,
+        institution_id: profile.institution_id || undefined, order_id: orderId,
+        items: itemsForBackend,
+      });
       if (!razorpayResult.success || !razorpayResult.order_id) {
+        await updateOrderPaymentStatus({ order_id: orderId, payment_status: 'failed', status: 'cancelled', order_status: 'Payment Failed' });
         setError(razorpayResult.error || 'Failed to initialize payment.'); setSubmittingOrder(false); if (triggerToast) triggerToast('Payment Initialization Failed', razorpayResult.error || 'Please try again.', 'warning'); return;
       }
 
       const razorpayKeyId = razorpayResult.razorpay_key_id;
       if (!razorpayKeyId) { setError('Payment configuration error.'); setSubmittingOrder(false); return; }
 
+      // Step 3: Open Razorpay checkout
       const options: any = {
         key: razorpayKeyId, amount: razorpayResult.amount, currency: razorpayResult.currency || 'INR',
-        name: 'FOODEXA', description: `Campus Order`,
+        name: 'FOODEXA', description: `Campus Order - ${orderNumber}`,
         image: 'https://foodexa.com/logo.png',
         order_id: razorpayResult.order_id,
         handler: async function (response: any) {
           const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = response;
           try {
-            const verifyResult = await verifyRazorpayPayment({ razorpay_order_id, razorpay_payment_id, razorpay_signature, user_id: user.id, order_id: tempOrderId });
+            // Step 4: Verify payment (server updates order in Supabase)
+            const verifyResult = await verifyRazorpayPayment({ razorpay_order_id, razorpay_payment_id, razorpay_signature, user_id: user.id, order_id: orderId });
             if (!verifyResult.success) { setError(verifyResult.error || 'Payment verification failed.'); setActiveTab('payment_failed'); setSubmittingOrder(false); if (triggerToast) triggerToast('Payment Verification Failed', verifyResult.error || 'Contact support.', 'warning'); return; }
-const orderResult = await placeOrder({
-               user_id: user.id, email: profile.email, role: liveRole, institution_id: profile.institution_id,
-                institution_code: institutionCode,
-               items: itemsForBackend,
-               itemsFull: cart.map((e) => ({ id: e.item.id, name: e.item.name, quantity: e.quantity, price: e.item.offer_price || e.item.price, image_url: e.item.image_url, is_veg: e.item.is_veg })),
-               total_amount: cartGrandTotal, razorpay_order_id, razorpay_payment_id, razorpay_signature,
-             });
-            if (orderResult.error) { setError(`Order failed: ${orderResult.error}`); setActiveTab('payment_failed'); setSubmittingOrder(false); if (triggerToast) triggerToast('Order Creation Failed', orderResult.error || 'Contact support.', 'warning'); return; }
-            if (orderResult.data) setOrders((prev) => [orderResult.data!, ...prev]);
+
+            // Step 5: Update local state
+            const paidOrder: Order = {
+              ...orderResult.data,
+              payment_status: 'paid',
+              status: 'accepted',
+              order_status: 'Accepted',
+              payment_method: 'Razorpay',
+              razorpay_order_id,
+              razorpay_payment_id,
+              razorpay_signature,
+              paid_at: new Date().toISOString(),
+              accepted_at: new Date().toISOString(),
+            };
+            setOrders((prev) => [paidOrder, ...prev]);
             setCart([]); setShowCart(false); setCouponDiscount(0); setCouponCode(''); setActiveTab('payment_success'); setSubmittingOrder(false); setError(null);
-            if (triggerToast) triggerToast('Order Placed Successfully', `Order ${orderResult.data.order_id} is being prepared.`, 'success');
+            if (triggerToast) triggerToast('Order Placed Successfully', `Order ${orderNumber} is being prepared.`, 'success');
           } catch (verifyErr: any) {
             setError('Payment completed but verification failed. Contact support.'); setActiveTab('payment_failed'); setSubmittingOrder(false); if (triggerToast) triggerToast('Verification Error', 'Payment completed but order creation failed.', 'warning');
           }
         },
         prefill: { name: profile.full_name || '', email: profile.email || '', contact: profile.phone || '' },
-        notes: { institution_id: profile.institution_id || '', order_id: tempOrderId },
+        notes: { institution_id: profile.institution_id || '', order_id: orderId },
         theme: { color: '#10b981' },
         modal: { ondismiss: function () { setSubmittingOrder(false); } },
       };
 
       const razorpay = new window.Razorpay(options);
-      razorpay.on('payment.failed', function (response: any) {
+      razorpay.on('payment.failed', async function (response: any) {
+        await updateOrderPaymentStatus({ order_id: orderId, payment_status: 'failed', order_status: 'Payment Failed' });
         setError(`Payment failed: ${response?.error?.description || 'Please try again.'}`); setActiveTab('payment_failed'); setSubmittingOrder(false); if (triggerToast) triggerToast('Payment Failed', response?.error?.description || 'Please try again.', 'warning');
       });
       razorpay.open();

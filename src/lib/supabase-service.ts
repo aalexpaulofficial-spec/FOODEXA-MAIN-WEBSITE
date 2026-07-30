@@ -255,13 +255,15 @@ export function mapOrder(row: any): Order {
     counter_id: row.counter_id || null,
     category_id: row.category_id || null,
     order_id: String(row.order_id || row.id),
-    counter: row.canteen_id || row.counter_status || '',
+    order_number: row.order_number || undefined,
+    counter: row.counter || row.canteen_id || '',
     items: normalizeOrderItems(row.items),
     total_amount: Number(row.total_amount || row.total || 0),
     transaction_amount: Number(row.transaction_amount || row.total_amount || 0),
     status: normalizeOrderStatus(row.status),
     order_status: row.order_status || row.status || 'pending',
     payment_status: row.payment_status || 'pending',
+    payment_method: row.payment_method || undefined,
     kitchen_status: row.kitchen_status || undefined,
     counter_status: row.counter_status || undefined,
     pickup_code: row.pickup_code || null,
@@ -277,11 +279,15 @@ export function mapOrder(row: any): Order {
     preparing_at: row.preparing_at || null,
     ready_at: row.ready_at || null,
     completed_at: row.completed_at || null,
+    paid_at: row.paid_at || null,
     updated_at: row.updated_at || row.created_at || '',
     estimated_prep_time: row.estimated_ready_at ? new Date(row.estimated_ready_at).getTime() - Date.now() > 0 ? Math.round((new Date(row.estimated_ready_at).getTime() - Date.now()) / 60000) : 15 : undefined,
     estimated_ready_at: row.estimated_ready_at || null,
-    token_number: row.pickup_token || undefined,
+    token_number: row.token_number || row.pickup_token || undefined,
     kitchen_queue_status: row.kitchen_status || undefined,
+    razorpay_order_id: row.razorpay_order_id || null,
+    razorpay_payment_id: row.razorpay_payment_id || null,
+    razorpay_signature: row.razorpay_signature || null,
   };
 }
 
@@ -319,46 +325,65 @@ export async function placeOrder(params: {
   notes?: string;
   institution_id: string | null;
   institution_code: string | null;
-  items: { id: string; name: string; quantity: number; price: number };
+  items: { id: string; name: string; quantity: number; price: number }[];
   itemsFull: { id: string; name: string; quantity: number; price: number; image_url?: string | null; is_veg?: boolean }[];
   total_amount: number;
   razorpay_order_id?: string;
   razorpay_payment_id?: string;
   razorpay_signature?: string;
   payment_method?: string;
+  order_id?: string;
 }): Promise<{ data: Order | null; error: string | null }> {
-  const orderId = `FDX-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  const now = new Date();
+  const nowISO = now.toISOString();
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const seq = String(Math.floor(Math.random() * 999999) + 1).padStart(6, '0');
+  const orderNumber = `FDX-${dateStr}-${seq}`;
+  const orderId = params.order_id || `FDX-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
   const tokenNumber = `TKN-${Math.floor(1000 + Math.random() * 9000)}`;
   const pickupCode = `PC-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
   const pickupPin = `${Math.floor(1000 + Math.random() * 9000)}`;
   const isPaid = Boolean(params.razorpay_payment_id && params.razorpay_signature);
-  const now = new Date().toISOString();
+  const customerName = params.customer_name || params.email?.split('@')[0] || 'Customer';
+  const phone = params.phone || '0000000000';
+
   const payload: Record<string, any> = {
+    order_number: orderNumber,
+    order_id: orderId,
     student_id: params.user_id,
+    user_id: params.user_id,
     email: params.email,
-    customer_name: params.customer_name || params.email || '',
-    phone: params.phone || null,
+    customer_name: customerName,
+    phone: phone,
     institution_id: params.institution_id,
+    institution_code: params.institution_code || null,
     canteen_id: params.canteen_id || null,
     total_amount: params.total_amount,
     transaction_amount: params.total_amount,
-    status: isPaid ? 'pending' : 'pending',
-    order_status: isPaid ? 'pending' : 'pending',
+    status: isPaid ? 'accepted' : 'pending',
+    order_status: isPaid ? 'Accepted' : 'Pending Payment',
     payment_status: isPaid ? 'paid' : 'pending',
+    payment_method: isPaid ? (params.payment_method || 'Razorpay') : 'pending',
     pickup_token: tokenNumber,
     pickup_code: pickupCode,
     qr_pickup_code: `FOODEXA-${orderId}`,
+    token_number: tokenNumber,
     notes: params.notes || null,
-    kitchen_status: 'pending',
-    counter_status: 'pending',
-    estimated_ready_at: new Date(Date.now() + 15 * 60000).toISOString(),
-    created_at: now,
-    updated_at: now,
+    kitchen_status: 'Pending',
+    counter_status: 'Incoming',
+    estimated_ready_at: new Date(now.getTime() + 15 * 60000).toISOString(),
+    created_at: nowISO,
+    updated_at: nowISO,
   };
+
+  if (isPaid) {
+    payload.paid_at = nowISO;
+    payload.accepted_at = nowISO;
+  }
+
   if (params.razorpay_order_id) payload.razorpay_order_id = params.razorpay_order_id;
   if (params.razorpay_payment_id) payload.razorpay_payment_id = params.razorpay_payment_id;
   if (params.razorpay_signature) payload.razorpay_signature = params.razorpay_signature;
-  if (params.payment_method) payload.payment_method = params.payment_method;
 
   const { data: orderData, error: orderError } = await supabase.from('orders').insert([payload]).select().single();
   if (orderError || !orderData) {
@@ -371,6 +396,8 @@ export async function placeOrder(params: {
     name: item.name,
     quantity: item.quantity,
     price: item.price,
+    image_url: item.image_url || null,
+    is_veg: item.is_veg || null,
   }));
   const { error: itemsError } = await supabase.from('order_items').insert(orderItemsPayload);
   if (itemsError) {
@@ -378,6 +405,49 @@ export async function placeOrder(params: {
   }
 
   return { data: mapOrder(orderData), error: null };
+}
+
+export async function updateOrderAfterPayment(params: {
+  order_id: string;
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+  payment_method?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const now = new Date().toISOString();
+  const { error } = await supabase.from('orders').update({
+    payment_status: 'paid',
+    status: 'accepted',
+    order_status: 'Accepted',
+    payment_method: params.payment_method || 'Razorpay',
+    razorpay_order_id: params.razorpay_order_id,
+    razorpay_payment_id: params.razorpay_payment_id,
+    razorpay_signature: params.razorpay_signature,
+    paid_at: now,
+    accepted_at: now,
+    updated_at: now,
+    kitchen_status: 'Pending',
+    counter_status: 'Incoming',
+    estimated_ready_at: new Date(Date.now() + 15 * 60000).toISOString(),
+  }).eq('order_id', params.order_id);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
+export async function updateOrderPaymentStatus(params: {
+  order_id: string;
+  payment_status?: string;
+  status?: string;
+  order_status?: string;
+}): Promise<void> {
+  const update: Record<string, any> = { updated_at: new Date().toISOString() };
+  if (params.payment_status) update.payment_status = params.payment_status;
+  if (params.status) update.status = params.status;
+  if (params.order_status) update.order_status = params.order_status;
+  await supabase.from('orders').update(update).eq('order_id', params.order_id);
 }
 
 export async function createRazorpayOrder(params: {

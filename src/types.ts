@@ -253,6 +253,7 @@ export interface Order {
   counter_id: string | null;
   category_id: string | null;
   order_id: string;
+  order_number?: string;
   counter: string;
   items: OrderItem[];
   total_amount: number;
@@ -260,6 +261,7 @@ export interface Order {
   status: OrderStatus;
   order_status: string;
   payment_status: string;
+  payment_method?: string | null;
   kitchen_status: string | undefined;
   counter_status: string | undefined;
   pickup_code: string | null;
@@ -274,13 +276,16 @@ export interface Order {
   preparing_at: string | null;
   ready_at: string | null;
   completed_at: string | null;
+  paid_at?: string | null;
   updated_at: string;
   estimated_prep_time?: number;
   estimated_ready_at: string | null;
   token_number?: string;
   pickup_pin?: string;
   kitchen_queue_status?: string;
-  kitchen_status?: string;
+  razorpay_order_id?: string | null;
+  razorpay_payment_id?: string | null;
+  razorpay_signature?: string | null;
 }
 
 export interface NotificationItem {

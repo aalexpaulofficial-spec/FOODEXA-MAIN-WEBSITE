@@ -382,18 +382,21 @@ notes: {
       await supabaseQuery('payments', 'PATCH', paymentUpdate, { razorpay_order_id: razorpay_order_id });
 
        // Update the order in Supabase
+       const now = new Date();
        const orderUpdate: any = {
          payment_status: 'paid',
          status: 'accepted',
-         order_status: 'accepted',
+         order_status: 'Accepted',
          razorpay_order_id: razorpay_order_id,
          razorpay_payment_id: razorpay_payment_id,
          razorpay_signature: razorpay_signature,
-         payment_method: paymentDetails?.method || null,
-         updated_at: new Date().toISOString(),
-         estimated_ready_at: new Date().toISOString(),
-         kitchen_status: 'pending',
-         counter_status: 'pending',
+         payment_method: paymentDetails?.method || 'Razorpay',
+         paid_at: now.toISOString(),
+         accepted_at: now.toISOString(),
+         updated_at: now.toISOString(),
+         estimated_ready_at: new Date(now.getTime() + 15 * 60000).toISOString(),
+         kitchen_status: 'Pending',
+         counter_status: 'Incoming',
        };
 
       const { error: orderUpdateError } = await supabaseQuery('orders', 'PATCH', orderUpdate, { order_id: order_id });
@@ -468,7 +471,7 @@ notes: {
         await supabaseQuery('orders', 'PATCH', {
           payment_status: 'paid',
           status: 'accepted',
-          order_status: 'accepted',
+          order_status: 'Accepted',
           razorpay_payment_id: razorpay_payment_id,
           payment_method: method || null,
           updated_at: new Date().toISOString(),
@@ -492,7 +495,7 @@ notes: {
         await supabaseQuery('orders', 'PATCH', {
           payment_status: 'paid',
           status: 'accepted',
-          order_status: 'accepted',
+          order_status: 'Accepted',
           updated_at: new Date().toISOString(),
         }, { order_id: orderEntity.id || '' });
 

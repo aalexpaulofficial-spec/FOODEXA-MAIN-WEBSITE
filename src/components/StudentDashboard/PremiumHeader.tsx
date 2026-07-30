@@ -117,10 +117,10 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
         </div>
 
         {/* Right Action Bar (Bell, LX AI, Institution Badge) */}
-        <div className="flex items-center justify-between sm:justify-end gap-2.5">
+        <div className="flex items-center justify-between sm:justify-end gap-2.5 mt-1 sm:mt-0">
           
           {/* Institution Pill (Mobile) */}
-          <div className="sm:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold glass-pill text-blue-800">
+          <div className="sm:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold bg-white border border-slate-100 shadow-sm text-blue-700">
             <Building2 className="w-3.5 h-3.5 text-blue-600" />
             {institutionCode || institutionName}
           </div>
@@ -131,40 +131,36 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={onOpenLxAI}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-blue-600/90 via-indigo-600/90 to-cyan-500/90 text-white text-xs font-semibold shadow-md shadow-blue-500/20 backdrop-blur-md border border-white/30 hover:shadow-lg transition-all"
+              className="flex items-center justify-center w-9 h-9 sm:w-auto sm:h-auto sm:px-3.5 sm:py-2 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-400 text-white text-xs font-semibold shadow-md shadow-blue-500/20"
             >
-              <Sparkles className="w-3.5 h-3.5 animate-pulse text-cyan-200" />
+              <Sparkles className="w-4 h-4 sm:w-3.5 sm:h-3.5 sm:mr-1.5 text-white" />
               <span className="hidden sm:inline">Ask LX AI</span>
             </motion.button>
 
             {/* Wallet Balance Pill */}
-            {walletBalance !== undefined && (
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-2xl glass-pill text-slate-900 shadow-sm hover:bg-white/90 transition-all"
-              >
-                <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center border border-emerald-500/20">
-                  <Wallet className="w-3.5 h-3.5" />
-                </div>
-                <div className="text-left">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold leading-tight">Wallet</p>
-                  <p className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">₹{Math.round(walletBalance)}</p>
-                </div>
-              </motion.button>
-            )}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white border border-slate-100 text-slate-900 shadow-sm transition-all"
+            >
+              <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                <Wallet className="w-3.5 h-3.5" />
+              </div>
+              <div className="text-left">
+                <p className="text-[9px] text-slate-400 uppercase tracking-wider font-bold leading-tight">Wallet</p>
+                <p className="text-xs sm:text-sm font-black text-slate-900 leading-tight">₹{Math.round(walletBalance || 0)}</p>
+              </div>
+            </motion.button>
 
             {/* Notifications Bell */}
             <button
               onClick={onOpenNotifications}
-              className="relative p-2.5 rounded-2xl glass-pill text-slate-700 hover:text-slate-900 hover:bg-white/90 transition-all shadow-sm focus:outline-none"
+              className="relative w-9 h-9 flex items-center justify-center rounded-2xl bg-white border border-slate-100 text-slate-700 shadow-sm hover:text-slate-900 transition-all focus:outline-none"
             >
-              <Bell className="w-5 h-5" />
-              {unreadNotif > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                  {unreadNotif}
-                </span>
-              )}
+              <Bell className="w-4 h-4" />
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-sm">
+                {unreadNotif > 0 ? unreadNotif : '0'}
+              </span>
             </button>
           </div>
 

@@ -1909,6 +1909,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         activeTab={activeTab as PremiumTab}
         setActiveTab={(tab) => setActiveTab(tab as PortalTab)}
         activeOrderCount={activeOrders.length}
+        cartCount={cartCount}
+        onOpenCart={() => setShowCart(true)}
       />
     </div>
   );

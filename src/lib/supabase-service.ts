@@ -148,13 +148,12 @@ export function getItemAvailability(item: MenuItem): {
   isSoldOut: boolean;
   canAddToCart: boolean;
 } {
-  const stock = Number(item.stock ?? 0);
-  const canAddToCart =
-    item.status === 'published' &&
-    item.available === true &&
-    item.availability === true &&
-    item.is_available === true &&
-    item.is_archived === false;
+  // Lenient availability check: if any availability field is false, it's unavailable. Otherwise true.
+  const isAvailable = (item.is_available ?? item.availability ?? item.available ?? true) !== false;
+  const isPublished = (item.status ?? 'published') === 'published';
+  const isArchived = (item.is_archived ?? false) === true;
+  
+  const canAddToCart = isAvailable && isPublished && !isArchived;
   return {
     isSoldOut: !canAddToCart,
     canAddToCart

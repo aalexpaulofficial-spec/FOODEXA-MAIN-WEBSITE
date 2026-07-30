@@ -421,8 +421,10 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
                 : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 hover:from-emerald-400 hover:to-teal-400 hover:shadow-emerald-950/40 hover:shadow-md'
           }`}
         >
-          {!item.is_available || (item.stock_quantity !== undefined && item.stock_quantity <= 0) ? (
+          {!item.is_available ? (
             'Sold Out'
+          ) : (item.stock_quantity !== undefined && item.stock_quantity <= 0) ? (
+            'Out of Stock'
           ) : adding ? (
             <><Check className="w-4 h-4" /> Added!</>
           ) : (
@@ -604,7 +606,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           let menuQuery = supabase
             .from('menu_items')
             .select('*')
-            .neq('status', 'archived')
             .order('food_name', { ascending: true });
           if (instId) {
             menuQuery = menuQuery.eq('institution_id', instId);
@@ -697,7 +698,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
     const unsubOrders = user?.id ? subscribeOrders(handleOrderUpdate, { user_id: user.id }) : () => {};
     const unsubMenu = subscribeMenuItems((payload: any) => {
-      if (payload.eventType === 'INSERT' && payload.new?.is_published !== false) {
+      if (payload.eventType === 'INSERT') {
         setMenuItems((prev) => { const exists = prev.find((i) => i.id === String(payload.new.id)); return exists ? prev : [...prev, mapMenuItem(payload.new)]; });
       } else if (payload.eventType === 'UPDATE') {
         setMenuItems((prev) => prev.map((i) => i.id === String(payload.new.id) ? { ...i, ...mapMenuItem(payload.new), id: i.id } : i));

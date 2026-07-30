@@ -152,23 +152,31 @@ export function mapMenuItem(row: any): MenuItem {
     prepTimeMinutes = Number(row.prep_time);
   }
 
+  const name = row.item_name || row.food_name || row.name || null;
+  const counterName = row.counter_name || row.food_type || row.counter || null;
+  const category = row.category || row.food_type || row.category_name || null;
+  const isAvailable = row.is_available !== undefined ? row.is_available : (row.is_published !== undefined ? row.is_published : true);
+  const isArchived = row.status === 'archived' || row.is_published === false;
+  const stockRaw = row.stock_quantity !== undefined ? row.stock_quantity : (row.stock !== undefined ? row.stock : undefined);
+  const stockQuantity = stockRaw !== undefined && stockRaw !== null ? Number(stockRaw) : undefined;
+
   return {
     id: String(row.id),
-    name: String(row.food_name || row.name || 'Unnamed'),
-    counter: String(row.food_type || 'Counter'),
-    counter_name: String(row.food_type || 'Counter'),
-    counter_id: row.canteen_id || null,
+    name: name ? String(name) : 'Item',
+    counter: counterName ? String(counterName) : 'Counter',
+    counter_name: counterName ? String(counterName) : 'Counter',
+    counter_id: row.canteen_id || row.counter_id || null,
     price: Number(row.price || 0),
     offer_price: row.offer_price || null,
     offer_label: row.offer_label || null,
     prep_time: row.prep_time != null ? String(row.prep_time) : null,
     rating: Number(row.rating || 0),
-    category: String(row.food_type || row.category_name || 'Menu'),
+    category: category ? String(category) : 'Menu',
     category_id: row.category_id || null,
     image_url: row.image_url || row.thumbnail_url || null,
-    description: String(row.description || ''),
-    is_available: row.is_available !== false,
-    is_published: row.is_published !== false && row.status !== 'archived',
+    description: row.description || '',
+    is_available: isAvailable && !isArchived,
+    is_published: row.is_published !== false && !isArchived,
     popular: Boolean(row.is_featured || row.is_today_special || (row.ai_popularity_score > 0)),
     nutrition: row.calories ? JSON.stringify({ calories: row.calories, protein: row.protein, carbs: row.carbs || row.carbohydrates, fat: row.fat }) : null,
     institution_id: row.institution_id || null,
@@ -181,7 +189,7 @@ export function mapMenuItem(row: any): MenuItem {
     is_healthy: false,
     trending: row.is_featured || false,
     today_orders: 0,
-    stock_quantity: row.stock_quantity !== undefined ? Number(row.stock_quantity) : row.stock !== undefined ? Number(row.stock) : undefined,
+    stock_quantity: stockQuantity,
     ai_popularity_score: row.ai_popularity_score !== undefined ? Number(row.ai_popularity_score) : row.rating || 0,
     tags: [],
   };

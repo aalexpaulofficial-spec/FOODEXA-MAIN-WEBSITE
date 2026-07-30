@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Search, Mic, QrCode, Sparkles, Wallet, Ticket,
-  HeartPulse, Utensils, Zap, Salad, ChevronRight, TrendingUp,
+  Search, Mic, Sparkles, QrCode, X, Camera, Check,
+  Utensils, Coffee, Sun, Moon, Cookie, GlassWater, IceCream, HeartPulse, Package, Flame, Star, Heart,
+  TrendingUp, ChevronRight, Salad
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { MenuItem, Order } from '../../types';
 import { ActiveLiveOrder } from './ActiveLiveOrder';
 import { FoodCard } from './FoodCard';
 
-// ── Banner data ────────────────────────────────────────────────────────────────
 const DEFAULT_BANNERS = [
   {
     id: 'specials',
@@ -35,145 +36,20 @@ const DEFAULT_BANNERS = [
   },
 ];
 
-import { motion, AnimatePresence } from 'framer-motion';
-
-// ── BannerCarousel ─────────────────────────────────────────────────────────────
-const BannerCarousel: React.FC<{ dbBanners?: any[] }> = ({ dbBanners }) => {
-  const [current, setCurrent] = useState(0);
-
-  const banners = DEFAULT_BANNERS;
-
-  useEffect(() => {
-    if (banners.length <= 1) return;
-    const timer = setInterval(() => {
-      setCurrent(c => (c + 1) % banners.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [banners.length]);
-
-  const b = banners[current];
-
-  return (
-    <div className="relative w-full overflow-hidden rounded-3xl my-5 shadow-lg shadow-slate-200/50">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={b.id}
-          initial={{ opacity: 0, x: 50 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -50 }}
-          transition={{ duration: 0.4, ease: 'easeOut' }}
-          className={`p-6 sm:p-8 bg-gradient-to-r ${b.gradient} text-white relative overflow-hidden flex flex-col justify-between min-h-[160px] sm:min-h-[180px]`}
-        >
-          {/* Subtle Background Glow Circles */}
-          <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-          <div className="absolute right-1/3 -top-12 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
-
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-white/20 backdrop-blur-md text-white border border-white/20 uppercase tracking-wider">
-                {b.badge}
-              </span>
-            </div>
-
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white max-w-xl whitespace-pre-line leading-tight">
-              {b.title}
-            </h2>
-            <p className="text-xs sm:text-sm text-white/80 mt-1 max-w-lg leading-relaxed">
-              {b.subtitle}
-            </p>
-          </div>
-
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-7xl sm:text-8xl select-none drop-shadow-lg opacity-80 pointer-events-none">{b.emoji}</div>
-
-          <div className="relative z-10 flex items-center justify-between mt-4">
-            <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs sm:text-sm shadow-md hover:bg-slate-100 transition-all hover:scale-105 active:scale-95">
-              Explore Now
-              <ChevronRight className="w-4 h-4 text-slate-700" />
-            </button>
-
-            {/* Pagination Dots */}
-            <div className="flex items-center gap-1.5">
-              {banners.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setCurrent(idx)}
-                  className={`h-2 rounded-full transition-all ${
-                    idx === current ? 'w-6 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-        </motion.div>
-      </AnimatePresence>
-    </div>
-  );
-};
-
-// ── Quick Stats Cards ──────────────────────────────────────────────────────────
-const QuickStatsGrid: React.FC = () => (
-  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-    {/* Meal Pass */}
-    <div className="bg-white rounded-2xl p-5 border border-[#E2E8F0] shadow-sm flex flex-col justify-between min-h-[120px]">
-      <div className="flex justify-between items-start">
-        <div className="p-2.5 bg-blue-50 rounded-xl border border-blue-100">
-          <Ticket className="w-5 h-5 text-blue-600" />
-        </div>
-        <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg">
-          Active
-        </span>
-      </div>
-      <div className="mt-3">
-        <p className="text-xs font-medium text-slate-500 mb-1">Meal Pass</p>
-        <h4 className="text-2xl font-bold text-slate-900">14 <span className="text-base font-medium text-slate-400">Days Left</span></h4>
-      </div>
-    </div>
-
-    {/* Calories */}
-    <div className="bg-white rounded-2xl p-5 border border-[#E2E8F0] shadow-sm flex flex-col justify-between min-h-[120px]">
-      <div className="flex justify-between items-start">
-        <div className="p-2.5 bg-orange-50 rounded-xl border border-orange-100">
-          <HeartPulse className="w-5 h-5 text-orange-500" />
-        </div>
-        {/* Mini progress ring */}
-        <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
-          <circle cx="18" cy="18" r="14" fill="none" stroke="#fed7aa" strokeWidth="4" />
-          <circle cx="18" cy="18" r="14" fill="none" stroke="#f97316" strokeWidth="4"
-            strokeDasharray={`${(1840 / 2500) * 87.96} 87.96`} strokeLinecap="round" />
-        </svg>
-      </div>
-      <div className="mt-1">
-        <p className="text-xs font-medium text-slate-500 mb-1">Daily Calories</p>
-        <h4 className="text-2xl font-bold text-slate-900">1,840 <span className="text-base font-medium text-slate-400">/ 2500</span></h4>
-      </div>
-    </div>
-  </div>
-);
-
-// ── Quick Action Grid ──────────────────────────────────────────────────────────
-const QuickActions: React.FC = () => {
-  const actions = [
-    { icon: Utensils, label: 'Order\nFood', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100', hover: 'hover:bg-emerald-100' },
-    { icon: QrCode, label: 'Scan\nQR Code', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100', hover: 'hover:bg-blue-100' },
-    { icon: Ticket, label: 'Renew\nPass', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100', hover: 'hover:bg-purple-100' },
-    { icon: Sparkles, label: 'AI Food\nAssistant', color: 'text-emerald-600', bg: 'bg-gradient-to-br from-emerald-50 to-teal-50', border: 'border-emerald-100', hover: 'hover:from-emerald-100 hover:to-teal-100' },
-  ];
-
-  return (
-    <div className="grid grid-cols-4 gap-3">
-      {actions.map(({ icon: Icon, label, color, bg, border, hover }) => (
-        <button key={label} className={`flex flex-col items-center gap-2 p-3 bg-white border ${border} rounded-2xl shadow-sm ${hover} transition-all active:scale-95 group`}>
-          <div className={`w-12 h-12 rounded-xl ${bg} border ${border} flex items-center justify-center transition-colors`}>
-            <Icon className={`w-6 h-6 ${color}`} />
-          </div>
-          <span className="text-[11px] font-semibold text-slate-700 text-center leading-tight whitespace-pre-line">{label}</span>
-        </button>
-      ))}
-    </div>
-  );
-};
-
-// ── ExploreTab Main ────────────────────────────────────────────────────────────
+const CATEGORIES = [
+  { id: 'All', name: 'All', icon: <Utensils className="w-4 h-4" /> },
+  { id: 'Breakfast', name: 'Breakfast', icon: <Sun className="w-4 h-4" /> },
+  { id: 'Lunch', name: 'Lunch', icon: <Coffee className="w-4 h-4" /> },
+  { id: 'Dinner', name: 'Dinner', icon: <Moon className="w-4 h-4" /> },
+  { id: 'Snacks', name: 'Snacks', icon: <Cookie className="w-4 h-4" /> },
+  { id: 'Beverages', name: 'Beverages', icon: <GlassWater className="w-4 h-4" /> },
+  { id: 'Desserts', name: 'Desserts', icon: <IceCream className="w-4 h-4" /> },
+  { id: 'Healthy Meals', name: 'Healthy Meals', icon: <HeartPulse className="w-4 h-4" /> },
+  { id: 'Combos', name: 'Combos', icon: <Package className="w-4 h-4" /> },
+  { id: 'Today\'s Specials', name: 'Specials', icon: <Flame className="w-4 h-4" /> },
+  { id: 'Most Ordered', name: 'Most Ordered', icon: <Star className="w-4 h-4" /> },
+  { id: 'Favorites', name: 'Favorites', icon: <Heart className="w-4 h-4" /> },
+];
 
 interface ExploreTabProps {
   menuItems: MenuItem[];
@@ -205,183 +81,244 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
   dbBanners,
 }) => {
   const [activeCategory, setActiveCategory] = useState('All');
-  const [vegFilter, setVegFilter] = useState<'ALL' | 'veg' | 'nonVeg'>('ALL');
+  const [dietaryFilter, setDietaryFilter] = useState<'all' | 'veg' | 'non-veg'>('all');
+  const [currentBanner, setCurrentBanner] = useState(0);
 
-  const defaultCats = ['Breakfast', 'Lunch', 'Snacks', 'Dinner'];
-  const dynamicCategories = Array.from(new Set(menuItems.map(i => i.category).filter(Boolean)));
-  const allCats = ['All', ...Array.from(new Set([...defaultCats, ...dynamicCategories]))];
+  const banners = DEFAULT_BANNERS;
+
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentBanner(c => (c + 1) % banners.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [banners.length]);
+
+  const b = banners[currentBanner];
 
   const trendingItems = [...menuItems]
     .sort((a, b) => Number(b.popular) - Number(a.popular) || b.rating - a.rating)
     .slice(0, 6);
 
   const displayItems = filteredItems.filter(item => {
-    if (activeCategory !== 'All' && item.category !== activeCategory) return false;
-    if (vegFilter === 'veg' && item.is_veg === false) return false;
-    if (vegFilter === 'nonVeg' && item.is_veg !== false) return false;
-    return true;
+    const isFav = favoritedIds?.has(item.id);
+    
+    // Category match
+    const matchesCat = activeCategory === 'All' ||
+      (activeCategory === 'Favorites' && isFav) ||
+      (activeCategory === 'Today\'s Specials' && item.popular) || // approximate
+      (activeCategory === 'Most Ordered' && item.popular) ||
+      item.category?.toLowerCase() === activeCategory.toLowerCase();
+
+    // Dietary match
+    const matchesDiet = dietaryFilter === 'all' ||
+      (dietaryFilter === 'veg' && item.is_veg !== false) ||
+      (dietaryFilter === 'non-veg' && item.is_veg === false);
+
+    return matchesCat && matchesDiet;
   });
 
   return (
-    <div className="flex-1 overflow-y-auto pb-32 bg-[#F8FAFC]">
+    <div className="flex-1 overflow-y-auto pb-32">
       <div className="p-4 space-y-5 max-w-4xl mx-auto">
-
-        {/* ── Search Bar ────────────────────────────────────────────────── */}
-        <div className="relative flex items-center dash-glass-card rounded-2xl p-1.5 focus-within:ring-2 focus-within:ring-blue-500/30 focus-within:border-blue-500/50 transition-all shadow-md group">
-          <div className="pl-3.5 text-slate-500 group-focus-within:text-emerald-500">
-            <Search className="w-5 h-5" />
-          </div>
-
-          <input
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search meals, drinks, snacks, canteens..."
-            className="w-full bg-transparent px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none"
-          />
-
-          {/* Feature Buttons */}
-          <div className="flex items-center gap-1 border-l border-slate-100 pl-2">
-            <button className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Voice Search">
-              <Mic className="w-4 h-4" />
-            </button>
-            <button className="p-2 text-slate-500 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all" title="AI Smart Search">
-              <Sparkles className="w-4 h-4" />
-            </button>
-            <button className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all" title="Scan Food Barcode">
-              <QrCode className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* ── Banner Carousel ──────────────────────────────────────────── */}
-        <BannerCarousel dbBanners={dbBanners} />
-
-        {/* ── Quick Stats Cards ────────────────────────────────────────── */}
-        <QuickStatsGrid />
-
-        {/* ── Quick Action Grid ────────────────────────────────────────── */}
-        <QuickActions />
-
-        {/* ── Live Order Status & Recent Transactions ───────────────────── */}
-        <div className="bg-white border border-[#E2E8F0] rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-emerald-600" /> Live Order & Transactions
-            </h2>
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Activity</span>
-          </div>
-          <div className="p-4 space-y-4">
-            {activeOrders.length > 0 ? (
-              <ActiveLiveOrder orders={activeOrders} onTrack={onTrackOrder} onQrOpen={onQrOpen} />
-            ) : (
-              <div className="text-center py-4 border border-slate-100 rounded-xl bg-slate-50">
-                <p className="text-xs text-slate-500 font-medium">No active orders right now.</p>
-              </div>
-            )}
-            
-            {/* Recent Transactions Timeline */}
-            <div className="pt-2 border-t border-slate-100">
-              <p className="text-xs font-bold text-slate-900 mb-3">Recent Transactions</p>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center">
-                      <Ticket className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-slate-900">Meal Pass Renewed</p>
-                      <p className="text-[10px] text-slate-500">Yesterday, 08:30 PM</p>
-                    </div>
-                  </div>
-                  <span className="font-black text-slate-900">-₹2,500</span>
-                </div>
-              </div>
+        
+        {/* ── SearchBar ────────────────────────────────────────────── */}
+        <div className="w-full my-4">
+          <div className="relative flex items-center glass-card rounded-2xl p-1.5 focus-within:ring-2 focus-within:ring-blue-500/30 focus-within:border-blue-500/50 transition-all shadow-md">
+            <div className="pl-3.5 text-slate-500">
+              <Search className="w-5 h-5" />
             </div>
-          </div>
-        </div>
 
-        {/* ── Trending Today ───────────────────────────────────────────── */}
-        {trendingItems.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-3 px-1">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-emerald-600" /> Trending Today
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">Most ordered across {institutionName || 'campus'}</p>
-              </div>
-              <button className="flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-700 transition-colors">
-                See all <ChevronRight className="w-3.5 h-3.5" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search meals, drinks, snacks, canteens..."
+              className="w-full bg-transparent px-3 py-2 text-sm sm:text-base text-slate-900 placeholder-slate-400 focus:outline-none"
+            />
+
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg mr-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+
+            <div className="flex items-center gap-1 border-l border-slate-100 pl-2">
+              <button className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Voice Search">
+                <Mic className="w-4 h-4" />
+              </button>
+              <button className="p-2 text-slate-500 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all" title="AI Smart Search">
+                <Sparkles className="w-4 h-4" />
+              </button>
+              <button className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all" title="Scan Food Barcode">
+                <QrCode className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-3 snap-x snap-mandatory -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
-              {trendingItems.map((item, idx) => (
-                <div key={item.id} className="w-[260px] shrink-0 snap-center">
-                  <FoodCard item={item} onAdd={onAddCart} onFavorite={onFavorite} isFavorited={favoritedIds?.has(item.id)} trendingRank={idx + 1} />
+          </div>
+        </div>
+
+        {/* ── BannerCarousel ────────────────────────────────────────── */}
+        <div className="relative w-full overflow-hidden rounded-3xl my-5 shadow-lg shadow-slate-200/50">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={b.id}
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -50 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+              className={`p-6 sm:p-8 bg-gradient-to-r ${b.gradient} text-white relative overflow-hidden flex flex-col justify-between min-h-[160px] sm:min-h-[180px]`}
+            >
+              <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+              <div className="absolute right-1/3 -top-12 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
+
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-3 py-1 rounded-full text-[11px] font-bold bg-white/20 backdrop-blur-md text-white border border-white/20 uppercase tracking-wider">
+                    {b.badge}
+                  </span>
                 </div>
-              ))}
+
+                <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white max-w-xl whitespace-pre-line leading-tight">
+                  {b.title}
+                </h2>
+                <p className="text-xs sm:text-sm text-white/80 mt-1 max-w-lg leading-relaxed">
+                  {b.subtitle}
+                </p>
+              </div>
+
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-7xl sm:text-8xl select-none drop-shadow-lg opacity-80 pointer-events-none">{b.emoji}</div>
+
+              <div className="relative z-10 flex items-center justify-between mt-4">
+                <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs sm:text-sm shadow-md hover:bg-slate-100 transition-all hover:scale-105 active:scale-95">
+                  Explore Now
+                  <ChevronRight className="w-4 h-4 text-slate-700" />
+                </button>
+
+                <div className="flex items-center gap-1.5">
+                  {banners.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentBanner(idx)}
+                      className={`h-2 rounded-full transition-all ${
+                        idx === currentBanner ? 'w-6 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* ── Categories ────────────────────────────────────────────── */}
+        <div className="w-full my-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3.5">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 tracking-tight">Food Categories</h3>
+              <p className="text-xs text-slate-500">Explore items across all {institutionName} canteens</p>
             </div>
-          </section>
+
+            <div className="flex items-center glass-pill p-1 rounded-2xl w-fit shadow-xs">
+              <button
+                onClick={() => setDietaryFilter('all')}
+                className={`px-3 py-1 rounded-xl text-xs font-semibold transition-all ${
+                  dietaryFilter === 'all'
+                    ? 'bg-white/90 text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                All
+              </button>
+              
+              <button
+                onClick={() => setDietaryFilter('veg')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold transition-all ${
+                  dietaryFilter === 'veg'
+                    ? 'bg-emerald-600/90 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-300"></span>
+                Veg Only
+              </button>
+
+              <button
+                onClick={() => setDietaryFilter('non-veg')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold transition-all ${
+                  dietaryFilter === 'non-veg'
+                    ? 'bg-red-600/90 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-red-300"></span>
+                Non-Veg
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none scroll-smooth" style={{ scrollbarWidth: 'none' }}>
+            {CATEGORIES.map((cat) => {
+              const isSelected = activeCategory === cat.id;
+              return (
+                <motion.button
+                  key={cat.id}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
+                    isSelected
+                      ? 'bg-blue-600/90 backdrop-blur-md text-white shadow-md shadow-blue-600/25 border border-white/30'
+                      : 'glass-pill text-slate-700 hover:bg-white/90 shadow-sm'
+                  }`}
+                >
+                  <span className={isSelected ? 'text-white' : 'text-slate-500'}>
+                    {cat.icon}
+                  </span>
+                  <span>{cat.name}</span>
+                </motion.button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── ActiveLiveOrder (CurrentActiveOrderCard) ──────────────── */}
+        {activeOrders.length > 0 && (
+          <ActiveLiveOrder orders={activeOrders} onTrack={onTrackOrder} onQrOpen={onQrOpen} />
         )}
 
-        {/* ── Today's Mess Menu ────────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm overflow-hidden">
-          {/* Section header */}
-          <div className="px-5 pt-5 pb-4 border-b border-slate-100">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-slate-900">Today's Mess Menu</h2>
-              <div className="flex gap-1 bg-slate-50 border border-slate-200 rounded-xl p-1">
-                <button onClick={() => setVegFilter('ALL')} className={`px-2.5 py-1 text-[10px] font-semibold rounded-lg transition-all ${vegFilter === 'ALL' ? 'bg-white shadow-sm text-slate-900 border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}>All</button>
-                <button onClick={() => setVegFilter('veg')} className={`px-2.5 py-1 text-[10px] font-semibold rounded-lg transition-all flex items-center gap-1 ${vegFilter === 'veg' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-current" /> Veg
-                </button>
-                <button onClick={() => setVegFilter('nonVeg')} className={`px-2.5 py-1 text-[10px] font-semibold rounded-lg transition-all flex items-center gap-1 ${vegFilter === 'nonVeg' ? 'bg-red-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-current" /> Non-Veg
-                </button>
-              </div>
-            </div>
-
-            {/* Category tabs */}
-            <div className="flex gap-2 overflow-x-auto -mx-5 px-5" style={{ scrollbarWidth: 'none' }}>
-              {allCats.map(cat => {
-                const active = activeCategory === cat;
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => setActiveCategory(cat)}
-                    className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
-                      active
-                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
-                        : 'bg-slate-50 border border-slate-200 text-slate-600 hover:border-emerald-300 hover:text-emerald-600'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                );
-              })}
+        {/* ── FoodMenuGrid ──────────────────────────────────────────── */}
+        <div className="w-full my-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 tracking-tight">Today's Campus Menu</h3>
+              <p className="text-xs text-slate-500">
+                Showing {displayItems.length} fresh items ready for express pickup
+              </p>
             </div>
           </div>
 
-          {/* Food grid */}
-          <div className="p-5 bg-slate-50/40">
-            {displayItems.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {displayItems.map(item => (
-                  <FoodCard key={item.id} item={item} onAdd={onAddCart} onFavorite={onFavorite} isFavorited={favoritedIds?.has(item.id)} />
-                ))}
-              </div>
-            ) : (
-              <div className="py-12 text-center">
-                <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 flex items-center justify-center mb-3">
-                  <Salad className="w-6 h-6 text-slate-300" />
-                </div>
-                <p className="text-sm font-semibold text-slate-500">No items available</p>
-                <p className="text-xs text-slate-400 mt-1">Check back later for {activeCategory}</p>
-              </div>
-            )}
-          </div>
-        </section>
-
+          {displayItems.length === 0 ? (
+            <div className="bg-white rounded-3xl p-10 text-center border border-slate-200/80 my-4 shadow-sm">
+              <p className="text-slate-400 font-medium text-sm">No food items found matching your filters.</p>
+              <p className="text-xs text-slate-400 mt-1">Try clearing your search or switching categories.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {displayItems.map(item => (
+                <FoodCard
+                  key={item.id}
+                  item={item}
+                  onAdd={onAddCart}
+                  onFavorite={onFavorite}
+                  isFavorited={favoritedIds?.has(item.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+        
       </div>
     </div>
   );

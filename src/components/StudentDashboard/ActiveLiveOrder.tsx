@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, QrCode, Zap, CheckCircle2, ChevronRight } from 'lucide-react';
+import { Clock, QrCode, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
+import { motion } from 'framer-motion';
 import type { Order, OrderStatus } from '../../types';
 
 const STAGES_ORDER = [
@@ -12,11 +13,11 @@ const STAGES_ORDER = [
 
 const statusLabel = (s: OrderStatus): string => {
   const m: Record<OrderStatus, string> = {
-    pending: 'Pending',
-    accepted: 'Accepted',
+    pending: 'Order Confirmed',
+    accepted: 'Kitchen Accepted',
     preparing: 'Cooking',
     ready: 'Ready for Pickup',
-    completed: 'Completed',
+    completed: 'Collected',
     cancelled: 'Cancelled',
   };
   return m[s] || s;
@@ -48,15 +49,18 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
 
   if (!order) return null;
 
+  const currentStageIndex = STAGES_ORDER.indexOf(order.status) >= 0 ? STAGES_ORDER.indexOf(order.status) : 0;
+  const progressPct = Math.round(((currentStageIndex + 1) / STAGES_ORDER.length) * 100);
+
   const prepMinutes = (order as any).estimated_prep_time_minutes || 15;
-  const progressRaw = (elapsed / (prepMinutes * 60 * 1000)) * 100;
-  const progressPct = Math.min(100, progressRaw);
-  
   const remainingMs = Math.max(0, prepMinutes * 60 * 1000 - elapsed);
   const mins = Math.floor(remainingMs / 60000);
   const secs = Math.floor((remainingMs % 60000) / 1000);
 
-  const isReady = order.status === 'ready';
+  const formatRemaining = () => {
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
   const orderNum = (order as any).order_number || order.order_id?.slice(-8).toUpperCase();
 
   return (
@@ -64,7 +68,7 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
       {/* Background Glow */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-white/10 relative z-10">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-white/10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-cyan-300">
             <Zap className="w-5 h-5 animate-pulse" />
@@ -77,26 +81,26 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
               </span>
             </div>
             {orderNum && (
-              <h3 className="text-lg font-bold text-white tracking-tight mt-0.5">
+              <h3 className="text-lg font-bold text-white tracking-tight">
                 Order #{orderNum}
               </h3>
             )}
           </div>
         </div>
 
-        {!isReady && (
+        {order.status !== 'ready' && order.status !== 'completed' && (
           <div className="bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border border-white/10 flex items-center gap-2 w-fit">
-            <Clock className="w-4 h-4 text-cyan-300 animate-spin" style={{ animationDuration: '3s' }} />
+            <Clock className="w-4 h-4 text-cyan-300 animate-spin" />
             <span className="text-xs text-slate-300">Est. Time:</span>
             <span className="text-sm font-extrabold text-white">
-              {mins}:{secs.toString().padStart(2, '0')}
+              {formatRemaining()}
             </span>
           </div>
         )}
       </div>
 
       {/* Items Summary */}
-      <div className="my-4 relative z-10">
+      <div className="my-4">
         <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Items Ordered</p>
         <p className="text-sm font-semibold text-white line-clamp-1">
           {order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}
@@ -108,21 +112,23 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
         )}
       </div>
 
-      {/* Stage Progress */}
-      <div className="my-4 relative z-10">
+      {/* Animated Stage Progress */}
+      <div className="my-4">
         <div className="flex items-center justify-between text-xs mb-1.5">
           <span className="font-bold text-cyan-300 flex items-center gap-1">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
             Stage: {statusLabel(order.status)}
           </span>
-          <span className="text-slate-400 font-semibold">{Math.round(progressPct)}% Complete</span>
+          <span className="text-slate-400 font-semibold">{progressPct}% Complete</span>
         </div>
 
         <div className="w-full bg-white/10 rounded-full h-2.5 overflow-hidden p-0.5 border border-white/10">
-          <div
-            className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full transition-all duration-1000 ease-out"
-            style={{ width: `${progressPct}%` }}
-          ></div>
+          <motion.div
+            className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full"
+            initial={{ width: 0 }}
+            animate={{ width: `${progressPct}%` }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+          ></motion.div>
         </div>
       </div>
 
@@ -133,14 +139,14 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
           className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/15 transition-all"
         >
           <QrCode className="w-4 h-4 text-cyan-300" />
-          Show QR
+          Show QR Pickup
         </button>
 
         <button
           onClick={() => onTrack(order)}
           className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 transition-all"
         >
-          <span>Track Timeline</span>
+          <span>Track Live Timeline</span>
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>

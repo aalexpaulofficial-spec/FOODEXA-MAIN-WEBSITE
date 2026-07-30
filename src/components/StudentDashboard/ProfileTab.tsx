@@ -1,224 +1,177 @@
-import React from 'react';
-import {
-  User, Mail, Phone, Building2, BookOpen, Calendar, Award, MapPin,
-  Edit3, LogOut, ChevronRight, Shield, Star, Receipt,
-} from 'lucide-react';
-import type { UserRole, Profile } from '../../types';
+import React, { useState } from 'react';
+import { Building2, MapPin, LogOut, Check } from 'lucide-react';
+import { motion } from 'framer-motion';
 
-const roleLabel = (role: UserRole | null | undefined) => {
-  if (role === 'student') return 'Student';
-  if (role === 'faculty') return 'Faculty';
-  if (role === 'guest') return 'Guest';
-  return 'Member';
-};
+const AVATARS = [
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300&h=300',
+  'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=300&h=300',
+  'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=300&h=300',
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300&h=300'
+];
 
 interface ProfileTabProps {
-  profile: Profile | null;
-  userEmail?: string;
+  userEmail: string;
+  userName: string;
   institutionName: string;
   institutionCode: string;
-  liveRole: UserRole | null;
-  ordersCount: number;
-  favoritesCount: number;
   avatarUrl?: string | null;
-  onEditProfile: () => void;
   onSignOut: () => void;
-  onLeaveInstitution: () => void;
-  onGoHistory: () => void;
 }
 
-const DetailRow: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({
-  icon, label, value,
-}) => (
-  <div className="flex items-center gap-3.5 px-4 py-3.5">
-    <div className="w-10 h-10 rounded-2xl bg-blue-50/50 backdrop-blur-md flex items-center justify-center shrink-0 border border-blue-100/50 shadow-sm">
-      {icon}
-    </div>
-    <div className="min-w-0 flex-1">
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
-      <p className="text-sm font-bold text-slate-900 truncate">{value || '—'}</p>
-    </div>
-  </div>
-);
-
 export const ProfileTab: React.FC<ProfileTabProps> = ({
-  profile,
   userEmail,
+  userName,
   institutionName,
   institutionCode,
-  liveRole,
-  ordersCount,
-  favoritesCount,
   avatarUrl,
-  onEditProfile,
-  onSignOut,
-  onLeaveInstitution,
-  onGoHistory,
+  onSignOut
 }) => {
-  const displayName = profile?.full_name || userEmail || 'User';
-  const initials = displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-  const email = profile?.email || userEmail || '';
+  const [dietaryPref, setDietaryPref] = useState('all');
+  const [selectedAvatar, setSelectedAvatar] = useState(avatarUrl || AVATARS[0]);
+
+  const handleAvatarChange = (avatarUrl: string) => {
+    setSelectedAvatar(avatarUrl);
+    // Ideally update Supabase here
+  };
+
+  const name = userName || 'Student';
+  const initials = userName
+    ? userName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    : 'S';
 
   return (
-    <div className="flex-1 overflow-y-auto pb-32">
-      <div className="p-4 space-y-4 max-w-2xl mx-auto">
+    <div className="w-full my-6 max-w-4xl mx-auto space-y-6 px-4 pb-32">
+      <div>
+        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Student Identity Profile</h2>
+        <p className="text-xs text-slate-500">Verified {institutionName} Student Account</p>
+      </div>
 
-        {/* Glassmorphism Hero card */}
-        <div className="relative overflow-hidden rounded-3xl shadow-lg border border-slate-200 bg-white/70 backdrop-blur-2xl">
-          {/* Subtle gradient background inside the card */}
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-50/80 via-white/40 to-cyan-50/80" />
-          
-          <div className="relative z-10 p-6">
-            <div className="flex items-center gap-4">
-              {/* Avatar */}
-              <div className="relative">
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt="Avatar"
-                    className="w-20 h-20 rounded-3xl object-cover ring-2 ring-white shadow-xl shrink-0"
-                  />
-                ) : (
-                  <div className={`flex-shrink-0 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-600 to-cyan-500 text-2xl font-black text-white shadow-xl ring-2 ring-white`}>
-                    {initials}
-                  </div>
-                )}
-                <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow-sm">
-                  <div className="w-4 h-4 bg-emerald-500 rounded-full border-2 border-white animate-pulse" />
-                </div>
+      {/* Main Student Card */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden border border-slate-700">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 relative z-10 text-center sm:text-left">
+          <div className="relative group shrink-0">
+            {selectedAvatar ? (
+              <img
+                src={selectedAvatar}
+                alt={name}
+                referrerPolicy="no-referrer"
+                className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl object-cover ring-4 ring-white/20 shadow-xl"
+              />
+            ) : (
+              <div className="flex w-24 h-24 sm:w-28 sm:h-28 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-600 to-cyan-500 text-3xl font-black text-white shadow-xl ring-4 ring-white/20">
+                {initials}
               </div>
+            )}
+          </div>
 
-              <div className="min-w-0 flex-1">
-                <h3 className="text-xl sm:text-2xl font-black text-slate-900 truncate tracking-tight">{displayName}</h3>
-                <p className="text-xs font-semibold text-slate-500 truncate mt-0.5">{email}</p>
-
-                {/* Role + institution badges */}
-                <div className="flex flex-wrap gap-1.5 mt-2.5">
-                  <span className="inline-flex items-center gap-1 rounded-xl bg-blue-100/80 border border-blue-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-blue-700 shadow-sm backdrop-blur-md">
-                    <Shield className="w-3 h-3" />
-                    {roleLabel(liveRole)}
-                  </span>
-                  {institutionCode && (
-                    <span className="rounded-xl border border-slate-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600 shadow-sm backdrop-blur-md flex items-center gap-1">
-                      <Building2 className="w-3 h-3" />
-                      {institutionCode}
-                    </span>
-                  )}
-                </div>
-              </div>
+          <div className="flex-1 w-full">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-cyan-300 border border-cyan-400/30 mb-2">
+              <Building2 className="w-3.5 h-3.5 text-cyan-300" />
+              {institutionName}
             </div>
 
-            {/* Stats row inside the hero card */}
-            <div className="grid grid-cols-2 gap-3 mt-6">
-              {[
-                { label: 'Total Orders', value: ordersCount.toString(), icon: '🛍️', bg: 'bg-indigo-50/80', border: 'border-indigo-100/50' },
-                { label: 'Favourites', value: favoritesCount.toString(), icon: '❤️', bg: 'bg-rose-50/80', border: 'border-rose-100/50' },
-              ].map(s => (
-                <div key={s.label} className={`rounded-2xl ${s.bg} border ${s.border} p-3.5 flex items-center gap-3 backdrop-blur-md shadow-sm`}>
-                  <div className="text-2xl bg-white p-2 rounded-xl shadow-sm">{s.icon}</div>
-                  <div>
-                    <p className="text-lg font-black text-slate-900 truncate">{s.value}</p>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{s.label}</p>
-                  </div>
-                </div>
-              ))}
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              {name}
+            </h1>
+
+            <p className="text-xs sm:text-sm text-slate-300 mt-1">
+              Email: <span className="font-mono text-cyan-300 font-bold">{userEmail}</span>
+            </p>
+
+            <p className="text-xs text-slate-400 mt-0.5">{institutionCode}</p>
+
+            {/* Quick Stats Row (Without Wallet) */}
+            <div className="grid grid-cols-2 gap-3 my-5 pt-4 border-t border-white/10 text-center">
+              <div className="p-2">
+                <p className="text-[10px] text-slate-400 uppercase font-bold">Reward Pts</p>
+                <p className="text-base font-extrabold text-amber-400 mt-0.5">250</p>
+              </div>
+
+              <div className="p-2">
+                <p className="text-[10px] text-slate-400 uppercase font-bold">Total Orders</p>
+                <p className="text-base font-extrabold text-cyan-300 mt-0.5">14</p>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Detail rows - Glassmorphism list */}
-        <div className="rounded-3xl border border-slate-200/80 bg-white/60 backdrop-blur-xl shadow-sm overflow-hidden divide-y divide-slate-100/80">
-          <DetailRow
-            icon={<User className="w-5 h-5 text-blue-600" />}
-            label="Full Name"
-            value={profile?.full_name || ''}
-          />
-          <DetailRow
-            icon={<Phone className="w-5 h-5 text-cyan-600" />}
-            label="Phone"
-            value={profile?.phone || ''}
-          />
-          <DetailRow
-            icon={<Building2 className="w-5 h-5 text-indigo-600" />}
-            label="Institution"
-            value={institutionName}
-          />
-          <DetailRow
-            icon={<BookOpen className="w-5 h-5 text-violet-600" />}
-            label="Department"
-            value={profile?.department || ''}
-          />
-          <DetailRow
-            icon={<Calendar className="w-5 h-5 text-emerald-600" />}
-            label="Semester"
-            value={profile?.semester || ''}
-          />
-          <DetailRow
-            icon={<Award className="w-5 h-5 text-amber-600" />}
-            label="Programme"
-            value={profile?.programme || ''}
-          />
-          <DetailRow
-            icon={<MapPin className="w-5 h-5 text-rose-600" />}
-            label="Campus Block"
-            value={profile?.campus_block || ''}
-          />
+        {/* Change Avatar Selector */}
+        <div className="mt-4 pt-4 border-t border-white/10">
+          <p className="text-xs text-slate-300 mb-2 font-semibold">Choose Profile Picture Avatar</p>
+          <div className="flex items-center justify-center sm:justify-start gap-3">
+            {AVATARS.map((url, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleAvatarChange(url)}
+                className={`relative rounded-2xl overflow-hidden border-2 transition-all ${
+                  selectedAvatar === url ? 'border-cyan-400 scale-105 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'
+                }`}
+              >
+                <img src={url} alt="" className="w-10 h-10 object-cover" />
+                {selectedAvatar === url && (
+                  <span className="absolute inset-0 bg-cyan-500/20 flex items-center justify-center">
+                    <Check className="w-4 h-4 text-white" />
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Settings Sections */}
+      <div className="glass-card rounded-3xl p-6 space-y-6">
+        
+        {/* Dietary Preference */}
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 mb-2.5">Dietary Preference</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {(['all', 'veg', 'non-veg'] as const).map(pref => (
+              <button
+                key={pref}
+                onClick={() => setDietaryPref(pref)}
+                className={`py-3 px-4 rounded-2xl border text-xs font-bold capitalize transition-all ${
+                  dietaryPref === pref
+                    ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm'
+                    : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {pref === 'all' ? '🥗 All Meals' : pref === 'veg' ? '🥦 Pure Veg' : '🍗 Non-Veg Included'}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="space-y-3 pt-2">
-          <button
-            onClick={onEditProfile}
-            className="flex w-full items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/80 backdrop-blur-xl px-4 py-4 text-sm font-bold text-slate-800 hover:bg-white hover:border-blue-300 transition-all shadow-sm active:scale-[0.98]"
-          >
-            <div className="w-10 h-10 rounded-xl bg-blue-100/50 flex items-center justify-center shrink-0 border border-blue-200/50">
-              <Edit3 className="w-5 h-5 text-blue-600" />
+        {/* Saved Delivery Spots */}
+        <div className="pt-4 border-t border-slate-100">
+          <h3 className="text-sm font-bold text-slate-900 mb-2.5 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-blue-600" />
+            Saved Campus Delivery / Table Spots
+          </h3>
+          <div className="space-y-2 text-xs">
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+              <span className="font-semibold text-slate-800">Main Library Block A</span>
+              <span className="text-[10px] text-blue-600 font-bold bg-blue-100 px-2 py-0.5 rounded-full">Default</span>
             </div>
-            Edit Profile
-            <ChevronRight className="w-5 h-5 text-slate-400 ml-auto" />
-          </button>
-
-          <button
-            onClick={onGoHistory}
-            className="flex w-full items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/80 backdrop-blur-xl px-4 py-4 text-sm font-bold text-slate-800 hover:bg-white hover:border-blue-300 transition-all shadow-sm active:scale-[0.98]"
-          >
-            <div className="w-10 h-10 rounded-xl bg-cyan-100/50 flex items-center justify-center shrink-0 border border-cyan-200/50">
-              <Receipt className="w-5 h-5 text-cyan-600" />
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+              <span className="font-semibold text-slate-800">Hostel Block C, Room 402</span>
             </div>
-            Order History
-            <ChevronRight className="w-5 h-5 text-slate-400 ml-auto" />
-          </button>
+          </div>
+        </div>
 
-          <button
-            className="flex w-full items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/80 backdrop-blur-xl px-4 py-4 text-sm font-bold text-slate-800 hover:bg-white hover:border-blue-300 transition-all shadow-sm active:scale-[0.98]"
-          >
-            <div className="w-10 h-10 rounded-xl bg-amber-100/50 flex items-center justify-center shrink-0 border border-amber-200/50">
-              <Star className="w-5 h-5 text-amber-500" />
-            </div>
-            My Favourites
-            <ChevronRight className="w-5 h-5 text-slate-400 ml-auto" />
-          </button>
-
-          {institutionCode && (
-            <button
-              onClick={onLeaveInstitution}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-200/80 bg-rose-50/80 backdrop-blur-xl py-4 text-sm font-bold text-rose-700 hover:bg-rose-100 transition-all shadow-sm active:scale-[0.98]"
-            >
-              <Building2 className="w-4 h-4" /> Leave Institution
-            </button>
-          )}
-
+        {/* Logout */}
+        <div className="pt-4 border-t border-slate-100">
           <button
             onClick={onSignOut}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200/80 bg-red-50/80 backdrop-blur-xl py-4 text-sm font-bold text-red-600 hover:bg-red-100 transition-all shadow-sm active:scale-[0.98]"
+            className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-2xl text-xs flex items-center justify-center gap-2 transition-all border border-red-200"
           >
-            <LogOut className="w-4 h-4" /> Sign Out
+            <LogOut className="w-4 h-4" />
+            Sign Out Securely
           </button>
         </div>
 
-        <p className="text-center text-[10px] font-semibold text-slate-400 pt-4 pb-2 uppercase tracking-widest">
-          FOODEXA v3.0 · Powered by Supabase
-        </p>
       </div>
     </div>
   );

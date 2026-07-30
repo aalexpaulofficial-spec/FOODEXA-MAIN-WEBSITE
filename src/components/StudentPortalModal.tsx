@@ -1835,6 +1835,16 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         </div>
       )}
 
+      {/* ── FLOATING LX AI BUTTON ────────────────────────────────────────── */}
+      <button
+        onClick={() => triggerToast && triggerToast('LX AI', 'AI Assistant coming soon!', 'ai')}
+        className="fixed bottom-24 right-5 z-40 p-3.5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white shadow-xl shadow-blue-600/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 border border-white/20"
+        title="Chat with LX AI Food Assistant"
+      >
+        <Sparkles className="w-5 h-5 text-cyan-200 animate-spin" />
+        <span className="text-xs font-bold hidden sm:inline">Ask LX AI</span>
+      </button>
+
       {/* ── BOTTOM NAV ───────────────────────────────────────────────────── */}
       <PremiumBottomNav
         activeTab={activeTab as PremiumTab}

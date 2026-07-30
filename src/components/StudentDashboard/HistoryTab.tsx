@@ -1,7 +1,7 @@
 import React from 'react';
 import { Receipt, RotateCcw, FileText, Package, CheckCircle2, XCircle } from 'lucide-react';
 import type { Order, OrderStatus, MenuItem } from '../../types';
-import { formatINR } from '../../lib/supabase-service';
+import { formatINR, generateReceipt } from '../../lib/supabase-service';
 
 const formatDate = (d: string) => {
   if (!d) return '';
@@ -133,8 +133,14 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                   <button
                     className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-bold text-slate-600 hover:bg-slate-100 hover:border-slate-300 transition-colors"
                     onClick={() => {
-                      // Future: generate PDF invoice
-                      alert(`Tax Invoice for order #${order.order_number || order.order_id} will be generated.`);
+                      const receipt = generateReceipt(order);
+                      const blob = new Blob([receipt], { type: 'text/plain' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `receipt-${order.order_number || order.order_id}.txt`;
+                      a.click();
+                      URL.revokeObjectURL(url);
                     }}
                   >
                     <FileText className="w-3.5 h-3.5" />

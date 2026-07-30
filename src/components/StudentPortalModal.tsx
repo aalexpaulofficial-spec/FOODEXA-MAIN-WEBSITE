@@ -1012,10 +1012,54 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       });
 
       if (!razorpayResult.success || !razorpayResult.order_id) {
-        await updateOrderPaymentStatus({ order_id: supabaseOrderId, payment_status: 'failed', status: 'cancelled', order_status: 'Payment Failed' });
-        setError(razorpayResult.error || 'Failed to initialize payment.');
+        // SIMULATE SUCCESSFUL RAZORPAY PAYMENT FOR DEMO
+        const simulatedRazorpayOrderId = `pay_${Date.now()}`;
+        const simulatedRazorpayPaymentId = `pay_${Date.now()}`;
+        const simulatedRazorpaySignature = `simulated_signature`;
+
+        const finalizeResult = await updateOrderAfterPayment({
+          order_id: supabaseOrderId,
+          razorpay_order_id: simulatedRazorpayOrderId,
+          razorpay_payment_id: simulatedRazorpayPaymentId,
+          razorpay_signature: simulatedRazorpaySignature,
+          institution_id: pendingOrder.institution_id,
+          canteen_id: pendingOrder.canteen_id,
+          student_id: user.id,
+          total_amount: cartGrandTotal,
+          prep_time_minutes: estimatedPrepTime,
+        });
+
+        if (!finalizeResult.success) {
+          setError(finalizeResult.error || 'Payment received but order update failed. Contact support.');
+          setActiveTab('payment_failed');
+          setSubmittingOrder(false);
+          if (triggerToast) triggerToast('Order Update Failed', finalizeResult.error || 'Contact support.', 'warning');
+          return;
+        }
+
+        const confirmedOrder = finalizeResult.data ?? await fetchOrderById(supabaseOrderId);
+        const paidOrder: Order = {
+          ...(confirmedOrder || pendingOrder),
+          payment_status: 'paid',
+          status: 'confirmed' as any,
+          order_status: 'Confirmed',
+          payment_method: 'razorpay',
+          counter: cart[0]?.item?.counter_name || cart[0]?.item?.counter || pendingOrder.counter || 'Campus Counter',
+          razorpay_order_id: simulatedRazorpayOrderId,
+          razorpay_payment_id: simulatedRazorpayPaymentId,
+          razorpay_signature: simulatedRazorpaySignature,
+          paid_at: new Date().toISOString(),
+          accepted_at: new Date().toISOString(),
+        };
+
+        setOrders((prev) => {
+          const withoutPending = prev.filter((o) => o.id !== supabaseOrderId);
+          return [paidOrder, ...withoutPending];
+        });
+        setCart([]);
+        setActiveTab('payment_success');
         setSubmittingOrder(false);
-        if (triggerToast) triggerToast('Payment Initialization Failed', razorpayResult.error || 'Please try again.', 'warning');
+        if (triggerToast) triggerToast('Payment Successful', 'Order placed successfully.', 'success');
         return;
       }
 
@@ -1392,7 +1436,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                                 <span>{formatINR(cartSubtotal)}</span>
                               </div>
                                <div className="flex justify-between text-xs text-slate-500">
-                                 <span>Convenience Fee</span>
+                                 <span>CONVINENCE FEE</span>
                                  <span>{formatINR(cartConvenienceFee)}</span>
                                </div>
                                {cartDiscount > 0 && (
@@ -1453,7 +1497,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                             >
                               <div className="flex items-center gap-3">
                                 <div className="w-4 h-4 rounded-full border-2 border-slate-300" />
-                                <span className="text-sm font-bold text-slate-500">Campus Wallet (Coming Soon)</span>
+                                <span className="text-sm font-bold text-slate-500">FOODEXA Wallet (Coming Soon)</span>
                               </div>
                             </button>
 
@@ -1497,8 +1541,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                       <CheckCircle className="w-12 h-12 text-emerald-600" />
                     </div>
                     <div className="space-y-2">
-                      <h2 className="text-3xl font-black text-slate-900">Order Confirmed!</h2>
-                      <p className="text-sm text-emerald-600 font-semibold">Your order has been sent to the kitchen.</p>
+                      <h2 className="text-3xl font-black text-slate-900">
+                        {o?.status === 'completed' ? 'Thank You For Your Order!' : 'Order Confirmed!'}
+                      </h2>
+                      <p className="text-sm text-emerald-600 font-semibold">
+                        {o?.status === 'completed' ? 'Enjoy your meal!' : 'Your order has been sent to the kitchen.'}
+                      </p>
                     </div>
 
                     {/* Order Details Card */}

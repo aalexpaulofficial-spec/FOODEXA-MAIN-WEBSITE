@@ -134,30 +134,30 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
         {/* ── SearchBar (top) ────────────────────────────────────────── */}
         <div className="w-full my-4">
           <div className="relative flex items-center glass-card rounded-2xl p-2 focus-within:ring-2 focus-within:ring-blue-500/30 focus-within:border-blue-500/50 transition-all shadow-md">
-            <div className="pl-4 text-slate-500">
-              <Search className="w-6 h-6" />
+            <div className="pl-4 text-slate-400">
+              <Search className="w-5 h-5" />
             </div>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search meals, drinks, snacks, canteens..."
-              className="w-full bg-transparent px-4 py-2.5 text-sm sm:text-base text-slate-900 placeholder-slate-400 focus:outline-none"
+              className="w-full bg-transparent px-3 py-2.5 text-sm sm:text-base text-slate-900 placeholder-slate-400 focus:outline-none"
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery('')} className="p-2 text-slate-400 hover:text-slate-600 rounded-lg mr-1">
                 <X className="w-5 h-5" />
               </button>
             )}
-            <div className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
-              <button className="p-2.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Voice Search">
-                <Mic className="w-6 h-6" />
+            <div className="flex items-center gap-2 border-l border-slate-200 pl-3 pr-1">
+              <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all" title="Voice Search">
+                <Mic className="w-5 h-5" />
               </button>
-              <button className="p-2.5 text-slate-500 hover:text-cyan-600 hover:bg-cyan-50 rounded-xl transition-all" title="AI Smart Search">
-                <Sparkles className="w-6 h-6" />
+              <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all" title="AI Smart Search">
+                <Sparkles className="w-5 h-5" />
               </button>
-              <button className="p-2.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all" title="Scan Food Barcode">
-                <QrCode className="w-6 h-6" />
+              <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all" title="Scan Food Barcode">
+                <QrCode className="w-5 h-5" />
               </button>
             </div>
           </div>

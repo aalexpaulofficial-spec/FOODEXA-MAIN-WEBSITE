@@ -1532,139 +1532,136 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 )}
 
                 {/* PAYMENT SUCCESS TAB */}
+                {/* ═══════════════════ LIVE CANTEEN TRACKING ═══════════════════ */}
                 {activeTab === 'payment_success' && (() => {
                   const o = orders[0];
+                  const LIVE_STEPS = [
+                    { label: 'Order Confirmed',       desc: 'Received at campus kitchen server'   },
+                    { label: 'Kitchen Accepted',       desc: 'Head chef assigned to order'         },
+                    { label: 'Preparing Ingredients',  desc: 'Fresh ingredients sliced & measured' },
+                    { label: 'Cooking & Firing',       desc: 'On stove / tandoor / oven'           },
+                    { label: 'Quality Check',          desc: 'Passed hygiene & temp check'         },
+                    { label: 'Packed & Sealed',        desc: 'Eco-friendly hot pack ready'         },
+                    { label: 'Ready at Counter',       desc: 'Scan QR at counter screen'           },
+                    { label: 'Order Collected',        desc: 'Enjoy your meal!'                    },
+                  ];
+                  const statusToStep: Record<string, number> = {
+                    pending: 0, accepted: 1, preparing: 2, cooking: 3,
+                    quality_check: 4, packed: 5, ready: 6, completed: 7,
+                  };
+                  const orderStatus = o?.status || 'pending';
+                  const liveStepIdx = statusToStep[orderStatus] ?? 0;
+                  const isCompleted = orderStatus === 'completed';
+
+                  if (isCompleted) return (
+                    <div className="max-w-sm mx-auto space-y-8 text-center py-12">
+                      <div className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-2xl shadow-emerald-500/30 animate-bounce">
+                        <CheckCircle className="w-16 h-16 text-white" />
+                      </div>
+                      <div className="space-y-2">
+                        <h2 className="text-4xl font-black text-slate-900">Thank You! 🎉</h2>
+                        <p className="text-base text-emerald-600 font-bold">Your order has been collected.</p>
+                        <p className="text-xs text-slate-500 font-medium">We hope you enjoy your meal! Come back soon.</p>
+                      </div>
+                      {o && (
+                        <div className="rounded-2xl bg-slate-50 border border-slate-200 p-5 text-left space-y-3">
+                          <div className="flex justify-between text-sm"><span className="font-bold text-slate-500">Order ID</span><span className="font-black text-slate-900 font-mono">{o.order_id}</span></div>
+                          <div className="flex justify-between text-sm"><span className="font-bold text-slate-500">Total Paid</span><span className="font-black text-emerald-600">{formatINR(o.total_amount)}</span></div>
+                        </div>
+                      )}
+                      <div className="space-y-3">
+                        <button onClick={() => { setCart([]); setActiveTab('explore'); }} className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-sm shadow-lg shadow-blue-500/30 hover:from-blue-500 hover:to-indigo-500 transition-all">Order Again</button>
+                        <button onClick={() => setActiveTab('history')} className="w-full py-3.5 rounded-2xl border border-slate-200 bg-white text-slate-700 font-bold text-sm hover:bg-slate-50 transition-colors">View Order History</button>
+                      </div>
+                    </div>
+                  );
+
                   return (
-                  <div className="max-w-md mx-auto space-y-6 text-center py-6">
-                    <div className="w-24 h-24 mx-auto bg-gradient-to-br from-emerald-100 to-teal-100 border border-emerald-200 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/10 animate-bounce-once">
-                      <CheckCircle className="w-12 h-12 text-emerald-600" />
-                    </div>
-                    <div className="space-y-2">
-                      <h2 className="text-3xl font-black text-slate-900">
-                        {o?.status === 'completed' ? 'Thank You For Your Order!' : 'Order Confirmed!'}
-                      </h2>
-                      <p className="text-sm text-emerald-600 font-semibold">
-                        {o?.status === 'completed' ? 'Enjoy your meal!' : 'Your order has been sent to the kitchen.'}
-                      </p>
-                    </div>
+                    <div className="max-w-sm mx-auto space-y-5 pb-12">
+                      {/* Header */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-black border border-blue-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping inline-block" />
+                          Live Canteen Tracking
+                        </span>
+                        <span className="text-xs font-black text-slate-600 font-mono">{o?.order_id || '#FX-0000'}</span>
+                      </div>
+                      <h2 className="text-2xl font-black text-slate-900">{o?.counter || institutionName || 'Campus Food Court'}</h2>
 
-                    {/* Order Details Card */}
-                    {o && (
-                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-6 space-y-4 text-left shadow-sm">
-                        <div className="flex flex-wrap items-center justify-between text-xs gap-2">
-                          <span className="text-slate-500 font-bold">Order ID</span>
-                          <span className="text-slate-900 font-mono font-black text-[10px]">{o.order_id}</span>
+                      {/* Pickup Location Card */}
+                      <div className="rounded-2xl bg-white border border-slate-200 p-4 flex items-start justify-between shadow-sm">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">PICKUP LOCATION</p>
+                          <p className="text-base font-black text-slate-900">{o?.counter || firstItemCounter || 'Counter 1'}</p>
                         </div>
-                        <div className="flex flex-wrap items-center justify-between text-xs gap-2">
-                          <span className="text-slate-500 font-bold">Token Number</span>
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">
-                            🎟️ {o.token_number || o.pickup_token || 'Generating...'}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-between text-xs gap-2">
-                          <span className="text-slate-500 font-bold">Counter</span>
-                          <span className="text-slate-900 font-bold">{o.counter || 'Campus Counter'}</span>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-between text-xs gap-2">
-                          <span className="text-slate-500 font-bold">Pickup PIN</span>
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-                            🔐 {o.pickup_code || o.pickup_pin || 'N/A'}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-between text-xs gap-2">
-                          <span className="text-slate-500 font-bold">Est. Wait Time</span>
-                          <span className="text-amber-600 font-bold">
-                            ~{o.estimated_ready_at ? Math.max(1, Math.ceil((new Date(o.estimated_ready_at).getTime() - Date.now()) / 60000)) : 15} mins
-                          </span>
-                        </div>
-
-                        {/* 30-second cancellation window */}
-                        {(() => {
-                          const cancelSecondsLeft = Math.max(0, 30 - Math.floor((currentTime - new Date(o.created_at).getTime()) / 1000));
-                          if (cancelSecondsLeft > 0 && o.status !== 'cancelled') {
-                            return (
-                              <div className="border border-red-200 bg-red-50 rounded-2xl p-4 text-center mt-4 space-y-3">
-                                <p className="text-[10px] text-red-600">You can cancel your order within {cancelSecondsLeft}s</p>
-                                <button
-                                  onClick={async () => {
-                                    setSubmittingOrder(true);
-                                    const res = await cancelOrder(o.id);
-                                    if (res.success) {
-                                      triggerToast && triggerToast('Order Cancelled', 'Your order was cancelled successfully.', 'success');
-                                      setActiveTab('history');
-                                    } else {
-                                      triggerToast && triggerToast('Failed', 'Could not cancel order.', 'error');
-                                    }
-                                    setSubmittingOrder(false);
-                                  }}
-                                  disabled={submittingOrder}
-                                  className="w-full py-2 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold rounded-xl transition-colors disabled:opacity-50 border border-red-200"
-                                >
-                                  {submittingOrder ? 'Cancelling...' : `Cancel Order (${cancelSecondsLeft}s)`}
-                                </button>
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
-
-                        {/* Bill breakdown */}
-                        {o.items?.length > 0 && (
-                          <div className="border-t border-slate-200 pt-4 space-y-2">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Your Order</p>
-                            {o.items.map((item, i) => (
-                              <div key={i} className="flex justify-between text-xs text-slate-700">
-                                <span className="font-semibold">{item.quantity}× {item.name}</span>
-                                <span className="text-slate-900">{formatINR(item.price * item.quantity)}</span>
-                              </div>
-                            ))}
-                            <div className="flex justify-between text-sm font-black text-slate-900 pt-2 border-t border-slate-200">
-                              <span>Total</span>
-                              <span className="text-emerald-600">{formatINR(o.total_amount)}</span>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Live progress bar */}
-                        <div className="border-t border-slate-200 pt-4">
-                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-3">Live Status</p>
-                          <OrderProgressBar status={o.status} />
+                        <div className="text-right">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">PICKUP CODE</p>
+                          <p className="text-base font-black text-blue-600">{o?.pickup_code || o?.pickup_token || `PICKUP-${String(o?.id || '').slice(-4).toUpperCase() || '0001'}`}</p>
                         </div>
                       </div>
-                    )}
 
-                    {/* Action buttons */}
-                    <div className="space-y-3">
-                      <button
-                        onClick={() => setActiveTab('payment_success')}
-                        className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3.5 text-sm font-black text-white shadow-lg hover:from-emerald-400 hover:to-teal-500 transition-all shadow-emerald-500/30"
-                      >
-                        <Activity className="w-4 h-4" /> Track Order Live
-                      </button>
-                      {o && (
-                        <>
-                          <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-100 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors border border-slate-200">
-                            <QrCode className="w-3.5 h-3.5" /> Show Pickup QR Code
+                      {/* 8-Step Vertical Tracker */}
+                      <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm">
+                        {LIVE_STEPS.map((step, i) => {
+                          const isDone = i < liveStepIdx;
+                          const isActive = i === liveStepIdx;
+                          return (
+                            <div key={i} className="flex gap-4">
+                              <div className="flex flex-col items-center">
+                                <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center shrink-0 font-black text-sm transition-all duration-500 ${
+                                  isDone ? 'bg-blue-600 border-blue-600 text-white' :
+                                  isActive ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' :
+                                  'bg-white border-slate-200 text-slate-400'
+                                }`}>
+                                  {isDone ? <Check className="w-5 h-5" /> : i + 1}
+                                </div>
+                                {i < LIVE_STEPS.length - 1 && (
+                                  <div className={`w-0.5 h-6 my-1 rounded-full transition-all duration-700 ${isDone ? 'bg-blue-500' : 'bg-slate-200'}`} />
+                                )}
+                              </div>
+                              <div className={`pt-1.5 flex-1 min-w-0 ${i < LIVE_STEPS.length - 1 ? 'pb-4' : 'pb-0'}`}>
+                                <div className="flex items-center gap-2">
+                                  <p className={`text-sm font-black ${isActive ? 'text-blue-600' : isDone ? 'text-slate-700' : 'text-slate-400'}`}>{step.label}</p>
+                                  {isActive && <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">In Progress</span>}
+                                </div>
+                                <p className={`text-xs mt-0.5 ${isActive || isDone ? 'text-slate-500' : 'text-slate-300'}`}>{step.desc}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Cancel within 30 seconds */}
+                      {(() => {
+                        const secs = Math.max(0, 30 - Math.floor((currentTime - new Date(o?.created_at || Date.now()).getTime()) / 1000));
+                        if (secs > 0 && o?.status !== 'cancelled') return (
+                          <button
+                            onClick={async () => {
+                              setSubmittingOrder(true);
+                              const res = await cancelOrder(o!.id);
+                              if (res.success) { triggerToast && triggerToast('Cancelled', 'Order cancelled.', 'success'); setActiveTab('history'); }
+                              else { triggerToast && triggerToast('Failed', 'Could not cancel.', 'error'); }
+                              setSubmittingOrder(false);
+                            }}
+                            disabled={submittingOrder}
+                            className="w-full py-3 rounded-2xl bg-red-50 border border-red-200 text-red-600 font-bold text-sm hover:bg-red-100 transition-colors disabled:opacity-50"
+                          >
+                            Cancel Order ({secs}s left)
                           </button>
-                          <button onClick={() => {
-                            const receipt = generateReceipt(o);
-                            const blob = new Blob([receipt], { type: 'text/plain' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `receipt-${o.order_id}.txt`;
-                            a.click();
-                            URL.revokeObjectURL(url);
-                            if (triggerToast) triggerToast('Receipt Downloaded', `Receipt for ${o.order_id} saved.`, 'success');
-                          }} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-100 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors border border-slate-200">
-                            <Receipt className="w-3.5 h-3.5" /> Download Receipt
-                          </button>
-                        </>
+                        );
+                        return null;
+                      })()}
+
+                      {/* Show QR when ready */}
+                      {(orderStatus === 'ready') && o && (
+                        <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-slate-900 text-white font-black text-sm shadow-lg hover:bg-slate-800 transition-colors">
+                          <QrCode className="w-4 h-4" /> Show Pickup QR Code
+                        </button>
                       )}
                     </div>
-                  </div>
                   );
                 })()}
+
 
 
                 {/* ═══════════════════ PAYMENT FAILED TAB ═══════════════════ */}

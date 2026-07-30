@@ -199,7 +199,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                 </p>
               </div>
 
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-7xl sm:text-8xl select-none drop-shadow-lg opacity-80 pointer-events-none">{b.emoji}</div>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-7xl sm:text-8xl select-none drop-shadow-lg opacity-80 pointer-events-none"></div>
 
               <div className="relative z-10 flex items-center justify-between mt-4">
                 <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs sm:text-sm shadow-md hover:bg-slate-100 transition-all hover:scale-105 active:scale-95">

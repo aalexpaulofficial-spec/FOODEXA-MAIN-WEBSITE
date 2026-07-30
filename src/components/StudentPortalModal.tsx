@@ -764,7 +764,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     });
 
     return () => { unsubOrders(); unsubMenu(); unsubNotif(); unsubBanners(); unsubCounters(); };
-  }, [isOpen, profile?.institution_id, refreshProfile, user?.id, handleOrderUpdate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, profile?.institution_id, user?.id]);
 
   // Sync cart to Supabase when it changes
   useEffect(() => {

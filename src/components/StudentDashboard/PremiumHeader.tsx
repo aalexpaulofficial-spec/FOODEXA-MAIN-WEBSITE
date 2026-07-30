@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Sparkles, Building2, Clock, Calendar, Wallet } from 'lucide-react';
+import { Bell, Sparkles, Building2, Clock, Calendar } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { UserRole } from '../../types';
 
@@ -131,21 +131,6 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
           >
             <Sparkles className="w-5 h-5 text-white" />
           </motion.button>
-
-          {/* 💳 Wallet – Coming Soon: icon-only on mobile, pill with text on sm+ */}
-          <button
-            disabled
-            title="Wallet — Coming Soon"
-            className="relative w-10 h-10 sm:w-auto sm:h-auto sm:flex sm:items-center sm:gap-2 sm:px-3 sm:py-1.5 flex items-center justify-center rounded-2xl bg-white border border-slate-100 shadow-sm cursor-not-allowed opacity-75"
-          >
-            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-emerald-50 text-emerald-400 flex items-center justify-center sm:border sm:border-emerald-100">
-              <Wallet className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-            </div>
-            <div className="hidden sm:block text-left">
-              <p className="text-[9px] text-slate-400 uppercase tracking-wider font-bold leading-tight">Wallet</p>
-              <p className="text-[10px] font-bold text-slate-400 leading-tight">Soon</p>
-            </div>
-          </button>
 
           {/* 🔔 Notifications Bell */}
           <button

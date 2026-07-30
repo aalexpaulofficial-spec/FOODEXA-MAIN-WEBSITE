@@ -2239,9 +2239,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
         {/* ── CART DRAWER ────────────────────────────────────────────── */}
         {showCart && (
-          <div className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm hidden lg:block" onClick={() => setShowCart(false)} />
+          <div className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowCart(false)} />
         )}
-        <aside className={`fixed bottom-0 right-0 top-0 z-50 w-full max-w-sm border-l border-slate-800 bg-slate-950 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${showCart ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0`}>
+        <aside className={`fixed bottom-0 right-0 top-0 z-50 w-full max-w-sm border-l border-slate-800 bg-slate-950 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${showCart ? 'translate-x-0' : 'translate-x-full'}`}>
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
             <h3 className="text-base font-black text-white flex items-center gap-2">
               <ShoppingCart className="w-4 h-4 text-emerald-400" /> Cart

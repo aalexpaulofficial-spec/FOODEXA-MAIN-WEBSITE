@@ -1820,32 +1820,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         </div>
       )}
 
-      {/* ── BOTTOM NAV (Mobile) ─────────────────────────────────────── */}
-      <nav className="sticky bottom-0 z-30 lg:hidden shrink-0 border-t border-slate-800 bg-slate-950/98 backdrop-blur-2xl">
-        <div className="flex items-stretch justify-around px-2 py-1.5">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`relative flex flex-col items-center gap-0.5 flex-1 py-2 text-[9px] font-bold transition-all ${active ? 'text-emerald-400' : 'text-slate-600 hover:text-slate-400'}`}
-              >
-                <div className={`p-1.5 rounded-xl transition-all ${active ? 'bg-emerald-950/60' : ''}`}>
-                  <Icon className={`w-5 h-5 transition-transform ${active ? 'scale-110' : ''}`} />
-                </div>
-                <span className={active ? 'text-emerald-400' : ''}>{tab.label}</span>
-                {tab.badge && (
-                  <span className="absolute top-1 right-3 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[8px] font-black text-slate-950">
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+      {/* ── BOTTOM NAV ───────────────────────────────────────────────────── */}
+      <PremiumBottomNav
+        activeTab={activeTab as PremiumTab}
+        setActiveTab={(tab) => setActiveTab(tab as PortalTab)}
+        activeOrderCount={activeOrders.length}
+      />
     </div>
   );
 };

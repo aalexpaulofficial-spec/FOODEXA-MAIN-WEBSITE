@@ -61,7 +61,7 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 glass-header px-4 sm:px-8 py-3.5 transition-all">
+    <header className="relative z-10 glass-header px-4 sm:px-8 py-3.5 transition-all">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         
         {/* Left Greeting & Institution Info */}

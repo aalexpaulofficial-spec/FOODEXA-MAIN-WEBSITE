@@ -30,8 +30,8 @@ const BANNERS = [
   },
   {
     id: 'b3',
-    title: 'CHRIST Festival Offers 🎉',
-    subtitle: 'Flat 20% discount across campus food courts with code CHRISTSTUDENT20.',
+    title: 'FOODEXA Festival Offers 🎉',
+    subtitle: 'Flat 20% discount across campus food courts with code AS26.',
     gradient: 'from-purple-600 via-indigo-600 to-purple-700',
     icon: <Gift className="w-6 h-6 text-purple-200" />,
     badge: 'Student Deals',

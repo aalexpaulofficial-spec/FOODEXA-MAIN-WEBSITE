@@ -125,10 +125,9 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
             whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.96 }}
             onClick={onOpenLxAI}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 text-white text-sm font-semibold shadow-md shadow-blue-500/30"
+            className="flex items-center justify-center w-10 h-10 rounded-2xl bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 shadow-md shadow-blue-500/30"
           >
-            <Sparkles className="w-4 h-4 text-white/90" />
-            <span>Ask LX AI</span>
+            <Sparkles className="w-5 h-5 text-white" />
           </motion.button>
 
           {/* Notifications Bell */}

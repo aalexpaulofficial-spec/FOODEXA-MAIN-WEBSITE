@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { X, Building2, Loader2, LogOut, Utensils, ClipboardList, Users, Inbox, ChefHat, QrCode, CheckCircle2, Package, Plus, Minus, Save, XCircle, RefreshCw, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { mapMenuItem, subscribeMenuItems, getItemAvailability, formatINR } from '../lib/supabase-service';
+import { mapMenuItem, subscribeMenuItems, getMenuAvailability, formatINR } from '../lib/supabase-service';
 import type { OrderStatus, MenuItem } from '../types';
 
 type QueueFilter = 'incoming' | 'preparing' | 'ready' | 'completed';
@@ -228,7 +228,7 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                   ) : (
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {menuItems.map((item) => {
-                        const { isSoldOut } = getItemAvailability(item);
+                        const { isSoldOut } = getMenuAvailability(item);
                         return (
                           <div key={item.id} className={`rounded-2xl border p-4 transition-all ${isSoldOut ? 'border-red-500/30 bg-red-950/20' : 'border-slate-800 bg-slate-950 hover:border-slate-700'}`}>
                             <div className="flex items-start justify-between gap-3">

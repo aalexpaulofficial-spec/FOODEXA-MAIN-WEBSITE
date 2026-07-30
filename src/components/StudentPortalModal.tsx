@@ -14,12 +14,11 @@ import { useAuth } from '../context/AuthContext';
 import {
   formatINR, formatDateTime, subscribeOrders, subscribeMenuItems, subscribeAnnouncements,
   subscribeBanners, subscribeMenuCategories, subscribeCounters,
-  placeOrder, createRazorpayOrder, verifyRazorpayPayment, updateOrderAfterPayment, updateOrderPaymentStatus, mapMenuItem,
-  fetchUserCart, saveUserCart, fetchBanners, fetchCounters,
+  placeOrder, createRazorpayOrder, verifyRazorpayPayment, updateOrderAfterPayment, updateOrderPaymentStatus, getMenuAvailability, mapMenuItem,
   fetchMenuItems as fetchMenuItemsService, searchMenuItems, filterMenuItems,
   calculateCartTotals, validateCoupon, applyCouponUsage,
   fetchUserFavorites, toggleFavorite, fetchAIRecommendations, getOrderProgress, getEstimatedTimeRemaining, generateReceipt,
-  getItemAvailability
+  fetchUserCart, saveUserCart
 } from '../lib/supabase-service';
 import type { MenuItem, Order, OrderStatus, NotificationItem, UserRole, CartItem, FoodFilters, CheckoutData } from '../types';
 
@@ -287,7 +286,7 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
 
   // ── Availability logic ──
   // Uses shared utility that matches Institution Dashboard logic
-  const { isSoldOut, canAddToCart } = getItemAvailability(item);
+  const { isSoldOut, canAddToCart } = getMenuAvailability(item);
 
   const handleAdd = () => {
     if (!canAddToCart) return;
@@ -1513,7 +1512,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     )}
 
                     {/* Fast Pickup */}
-                    {menuItems.filter((i) => i.prep_time_minutes !== undefined && i.prep_time_minutes <= 10 && i.is_available).length > 0 && (
+                    {menuItems.filter((i) => i.prep_time_minutes !== undefined && i.prep_time_minutes <= 10 && getMenuAvailability(i).canAddToCart).length > 0 && (
                       <section className="space-y-3">
                         <div className="flex items-center justify-between">
                           <h3 className="text-base font-black text-white flex items-center gap-2">
@@ -1522,7 +1521,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           <button onClick={() => { setActiveTab('menu'); setSortBy('prep_time'); }} className="text-[10px] font-bold text-emerald-400">See all →</button>
                         </div>
                         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                          {menuItems.filter((i) => i.prep_time_minutes !== undefined && i.prep_time_minutes <= 10 && i.is_available).slice(0, 4).map((item) => (
+                          {menuItems.filter((i) => i.prep_time_minutes !== undefined && i.prep_time_minutes <= 10 && getMenuAvailability(i).canAddToCart).slice(0, 4).map((item) => (
                             <FoodCard key={item.id} item={item} onAdd={addToCart} onFavorite={toggleFavorite} isFavorited={favorites.has(item.id)} />
                           ))}
                         </div>

@@ -128,7 +128,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
   });
 
   return (
-    <div className="flex-1 overflow-y-auto scroll-smooth pb-32">
+    <div className="flex-1 overflow-y-auto scroll-smooth pb-64">
       <div className="p-4 space-y-5 max-w-4xl mx-auto">
         
         {/* ── SearchBar (top) ────────────────────────────────────────── */}

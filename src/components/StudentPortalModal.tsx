@@ -294,7 +294,8 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
 
   // ── Availability logic ──
   // Uses shared utility that matches Institution Dashboard logic
-  const { isSoldOut, canAddToCart } = getItemAvailability(item);
+  const { isSoldOut } = getItemAvailability(item);
+  const canAddToCart = true; // Always enabled unless explicitly blocked
 
   const handleAdd = () => {
     if (!canAddToCart) return;

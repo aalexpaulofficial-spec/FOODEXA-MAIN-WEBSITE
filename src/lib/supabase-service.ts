@@ -171,8 +171,9 @@ export function mapMenuItem(row: any): MenuItem {
   // description -> description
   const description = row.description || '';
 
-  // image_url (fallback thumbnail_url) -> image
-  const imageUrl = row.image_url || row.thumbnail_url || null;
+  // image_url (fallback thumbnail_url) -> image — strip blob: URLs since they're cross-origin
+  const rawImageUrl = row.image_url || row.thumbnail_url || null;
+  const imageUrl = rawImageUrl && rawImageUrl.startsWith('blob:') ? null : rawImageUrl;
 
   // prep_time (fallback preparation_time) -> preparation time
   let prepTimeMinutes: number | undefined;

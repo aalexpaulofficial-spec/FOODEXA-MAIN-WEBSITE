@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Search, Mic, Sparkles, QrCode, X,
   Utensils, Coffee, Sun, Moon, Cookie, GlassWater, IceCream, HeartPulse, Package, Flame, Star, Heart,
-  Gift, Zap, ArrowRight, TrendingUp, Clock, Plus, Dumbbell, ShoppingBag, Activity, Users
+  Gift, Zap, ArrowRight, TrendingUp, Clock, Plus, Dumbbell, ShoppingBag, Activity, Users, MapPin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { MenuItem, Order } from '../../types';

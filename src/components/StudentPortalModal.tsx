@@ -586,8 +586,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           const { data: hsData } = await supabase.from('homepage_sections').select('*').eq('is_active', true).order('display_order', { ascending: true });
           setHomepageSections((hsData || []) as any[]);
 
-          // Fetch counters
-          const { data: cData } = await supabase.from('counters').select('*').eq('status', 'open');
+          // Fetch counters for this institution
+          let countersQuery = supabase.from('counters').select('*').eq('status', 'open');
+          if (instId) {
+            countersQuery = countersQuery.eq('institution_id', instId);
+          }
+          const { data: cData } = await countersQuery;
           setCountersList((cData || []) as any[]);
 
           // Fetch user favorites
@@ -596,12 +600,16 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             setFavorites(new Set(favIds));
           }
 
-          // Fetch menu items with enhanced params
-          const menuResult = await supabase
+          // Fetch menu items — only for this student's institution
+          let menuQuery = supabase
             .from('menu_items')
             .select('*')
             .neq('status', 'archived')
             .order('food_name', { ascending: true });
+          if (instId) {
+            menuQuery = menuQuery.eq('institution_id', instId);
+          }
+          const menuResult = await menuQuery;
 
           if (!menuResult.error) {
             setMenuItems((menuResult.data || []).map(mapMenuItem));
@@ -696,7 +704,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       } else if (payload.eventType === 'DELETE') {
         setMenuItems((prev) => prev.filter((i) => i.id !== String(payload.old.id)));
       }
-    });
+    }, profile?.institution_id ? { institution_id: profile.institution_id } : undefined);
     const unsubNotif = subscribeAnnouncements((payload: any) => {
       if (payload.eventType === 'INSERT') {
         setNotifications((prev) => [{

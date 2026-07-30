@@ -167,8 +167,8 @@ export function mapMenuItem(row: any): MenuItem {
     category_id: row.category_id || null,
     image_url: row.image_url || row.thumbnail_url || null,
     description: String(row.description || ''),
-    is_available: row.is_available !== false && row.available !== false,
-    is_published: row.status !== 'archived',
+    is_available: row.is_available !== false,
+    is_published: row.is_published !== false && row.status !== 'archived',
     popular: Boolean(row.is_featured || row.is_today_special || (row.ai_popularity_score > 0)),
     nutrition: row.calories ? JSON.stringify({ calories: row.calories, protein: row.protein, carbs: row.carbs || row.carbohydrates, fat: row.fat }) : null,
     institution_id: row.institution_id || null,
@@ -181,7 +181,7 @@ export function mapMenuItem(row: any): MenuItem {
     is_healthy: false,
     trending: row.is_featured || false,
     today_orders: 0,
-    stock_quantity: row.stock !== undefined ? Number(row.stock) : undefined,
+    stock_quantity: row.stock_quantity !== undefined ? Number(row.stock_quantity) : row.stock !== undefined ? Number(row.stock) : undefined,
     ai_popularity_score: row.ai_popularity_score !== undefined ? Number(row.ai_popularity_score) : row.rating || 0,
     tags: [],
   };
@@ -650,8 +650,10 @@ export function subscribeOrders(
   return subscribeToRealtime(key, [{ table: 'orders', filter: realtimeFilter, callback }]);
 }
 
-export function subscribeMenuItems(callback: RealtimeCallback<any>) {
-  return subscribeToRealtime('menu-items-realtime', [{ table: 'menu_items', callback }]);
+export function subscribeMenuItems(callback: RealtimeCallback<any>, filter?: { institution_id?: string }) {
+  const realtimeFilter = filter?.institution_id ? `institution_id=eq.${filter.institution_id}` : undefined;
+  const key = `menu-items-realtime:${realtimeFilter || 'all'}`;
+  return subscribeToRealtime(key, [{ table: 'menu_items', filter: realtimeFilter, callback }]);
 }
 
 export function subscribeAnnouncements(callback: RealtimeCallback<any>) {

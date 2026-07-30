@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Sparkles, ArrowRight, Download, Building2, Mic, Search, ShoppingBag, Star, Clock, Lock, ExternalLink, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { subscribeMenuItems, subscribeBanners, formatINR } from '../lib/supabase-service';
+import { subscribeMenuItems, subscribeBanners, formatINR, mapMenuItem } from '../lib/supabase-service';
 import type { MenuItem, Banner, MenuCategory } from '../types';
 
 interface HeroProps {
@@ -47,12 +47,7 @@ export const Hero: React.FC<HeroProps> = ({
 
     const loadMenu = async () => {
       const { data } = await supabase.from('menu_items').select('*').neq('status', 'archived').limit(6).order('rating', { ascending: false });
-      setMenuItems((data || []).map((r: any) => ({
-        id: String(r.id), name: String(r.food_name || 'Item'), counter: String(r.food_type || ''), counter_name: String(r.food_type || ''),
-        price: Number(r.price || 0), offer_price: null, offer_label: null, prep_time: r.prep_time != null ? String(r.prep_time) : null, rating: Number(r.rating || 0),
-        category: String(r.food_type || ''), category_id: null, image_url: r.image_url || null, description: String(r.description || ''),
-        is_available: true, is_published: true, popular: Boolean(r.is_featured), nutrition: null, institution_id: null,
-      })));
+      setMenuItems((data || []).map(mapMenuItem));
       const { data: cats } = await supabase.from('menu_categories').select('name').limit(8);
       setCategories((cats || []).map((c: any) => ({ id: c.id, name: c.name, institution_id: null, is_active: true, order: 0 })));
     };
@@ -75,8 +70,8 @@ export const Hero: React.FC<HeroProps> = ({
         if (payload.new?.status !== 'archived') {
           setMenuItems((prev) => {
             const exists = prev.find((i) => i.id === String(payload.new.id));
-            if (exists) return prev.map((i) => i.id === String(payload.new.id) ? { ...i, ...payload.new, price: Number(payload.new.price || 0) } : i);
-            return [...prev, { id: String(payload.new.id), name: String(payload.new.food_name || ''), counter: String(payload.new.food_type || ''), counter_name: String(payload.new.food_type || ''), price: Number(payload.new.price || 0), offer_price: null, offer_label: null, prep_time: payload.new.prep_time != null ? String(payload.new.prep_time) : null, rating: Number(payload.new.rating || 0), category: String(payload.new.food_type || ''), category_id: null, image_url: payload.new.image_url || null, description: String(payload.new.description || ''), is_available: true, is_published: true, popular: Boolean(payload.new.is_featured), nutrition: null, institution_id: null }];
+            if (exists) return prev.map((i) => i.id === String(payload.new.id) ? { ...i, ...mapMenuItem(payload.new), id: i.id } : i);
+            return [...prev, mapMenuItem(payload.new)];
           });
         }
       } else if (payload.eventType === 'DELETE') {

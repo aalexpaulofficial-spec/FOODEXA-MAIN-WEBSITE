@@ -57,7 +57,7 @@ export const FoodCard: React.FC<FoodCardProps> = ({
       <div>
         {/* Image & Badges */}
         <div className="relative rounded-2xl overflow-hidden h-48 mb-3.5 bg-slate-100">
-          {!imgErr && item.image_url ? (
+          {!imgErr && item.image_url && !item.image_url.startsWith('blob:') ? (
             <img
               src={item.image_url}
               alt={item.name}
@@ -216,7 +216,7 @@ export const FoodCard: React.FC<FoodCardProps> = ({
             }`}
           >
             <Plus className="w-4 h-4" />
-            {isSoldOut ? 'Sold Out' : 'Add to Cart'}
+            {!canAddToCart ? 'Sold Out' : 'Add to Cart'}
           </motion.button>
         )}
       </div>

@@ -307,7 +307,7 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
     <article className="group relative overflow-hidden rounded-3xl border border-slate-800/80 bg-slate-900 transition-all duration-300 hover:-translate-y-1 hover:border-slate-700 hover:shadow-xl hover:shadow-slate-950/40">
       {/* Image */}
       <div className="relative h-44 bg-slate-800 overflow-hidden">
-        {item.image_url && !imgErr ? (
+        {item.image_url && !imgErr && !item.image_url.startsWith('blob:') ? (
           <img
             src={item.image_url}
             alt={item.name}
@@ -443,10 +443,8 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
                 : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 hover:from-emerald-400 hover:to-teal-400 hover:shadow-emerald-950/40 hover:shadow-md'
           }`}
         >
-          {isSoldOut ? (
+          {!canAddToCart ? (
             'Sold Out'
-          ) : !item.is_available ? (
-            'Unavailable'
           ) : adding ? (
             <><Check className="w-4 h-4" /> Added!</>
           ) : (

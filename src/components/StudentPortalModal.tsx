@@ -21,11 +21,19 @@ import {
   fetchUserCart, saveUserCart
 } from '../lib/supabase-service';
 import type { MenuItem, Order, OrderStatus, NotificationItem, UserRole, CartItem, FoodFilters, CheckoutData } from '../types';
+import { PremiumHeader } from './StudentDashboard/PremiumHeader';
+import { PremiumBottomNav, PremiumTab } from './StudentDashboard/PremiumBottomNav';
+import { ExploreTab } from './StudentDashboard/ExploreTab';
+import { NutritionTab } from './StudentDashboard/NutritionTab';
+import { AnalyticsTab } from './StudentDashboard/AnalyticsTab';
+import { HistoryTab } from './StudentDashboard/HistoryTab';
+import { ProfileTab } from './StudentDashboard/ProfileTab';
+import { OffersTab } from './StudentDashboard/OffersTab';
 
 declare global { interface Window { Razorpay: any } }
 
 interface StudentPortalModalProps { isOpen: boolean; onClose: () => void; role?: UserRole; triggerToast?: (title: string, description: string, type?: 'success' | 'warning' | 'info' | 'ai') => void }
-type PortalTab = 'home' | 'menu' | 'orders' | 'profile' | 'checkout' | 'payment_success' | 'payment_failed';
+type PortalTab = 'explore' | 'nutrition' | 'analytics' | 'offers' | 'history' | 'profile' | 'checkout' | 'payment_success' | 'payment_failed';
 
 const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready'];
 
@@ -504,7 +512,7 @@ const OrderProgressBar = ({ status }: { status: OrderStatus }) => {
 export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, onClose, role, triggerToast }) => {
   const { user, profile, refreshProfile, signOut, updateProfile, leaveInstitution } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<PortalTab>('home');
+  const [activeTab, setActiveTab] = useState<PortalTab>('explore');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -1190,140 +1198,29 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     setLeavingInstitution(false);
   };
 
-  const tabs = [
-    { id: 'home' as PortalTab, label: 'Discover', icon: Home },
-    { id: 'menu' as PortalTab, label: 'Menu', icon: Utensils },
-    { id: 'orders' as PortalTab, label: 'Orders', icon: Receipt, badge: activeOrders.length ? String(activeOrders.length) : undefined },
-    { id: 'profile' as PortalTab, label: 'Profile', icon: User },
-  ];
-
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 text-slate-100 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 text-slate-900 overflow-hidden">
       <QRModal isOpen={!!qrOrder} onClose={() => setQrOrder(null)} order={qrOrder} />
 
-      {/* ── HEADER ─────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-30 shrink-0 border-b border-slate-800/70 glass-strong">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
-          {/* Logo + Institution */}
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-500 text-xs font-black text-slate-950 shadow-lg shadow-emerald-950/50">
-              FX
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-black tracking-tight text-white">FOODEXA</span>
-                <span className={`hidden sm:inline-flex rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${roleColor(liveRole)}`}>
-                  {roleLabel(liveRole)}
-                </span>
-              </div>
-              <p className="truncate text-[10px] text-slate-500 max-w-[150px] sm:max-w-[280px]">
-                {institutionName || 'Campus Portal'}
-                {institutionCode && <span className="ml-1 text-slate-600"> · {institutionCode}</span>}
-              </p>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Notifications */}
-            <button
-              onClick={() => { setShowNotifications(!showNotifications); setUnreadNotif(0); }}
-              className="relative p-2 rounded-full border border-slate-800 bg-slate-900 text-slate-400 hover:text-white transition-colors"
-            >
-              <Bell className="w-4 h-4" />
-              {unreadNotif > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-black text-white">
-                  {unreadNotif > 9 ? '9+' : unreadNotif}
-                </span>
-              )}
-            </button>
-
-            {/* Cart */}
-            <button
-              onClick={() => setShowCart(!showCart)}
-              className="relative p-2 rounded-full border border-slate-800 bg-slate-900 text-slate-400 hover:text-white transition-colors"
-            >
-              <ShoppingCart className="w-4 h-4" />
-              {cartCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-400 text-[9px] font-black text-slate-950">
-                  {cartCount}
-                </span>
-              )}
-            </button>
-
-            {/* Close */}
-            <button
-              onClick={onClose}
-              className="p-2 rounded-full border border-slate-800 bg-slate-900 text-slate-400 hover:text-white transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Active Order Banner */}
-        {activeOrders.length > 0 && (
-          <div
-            className="border-t border-emerald-500/20 bg-emerald-950/40 px-4 py-2 cursor-pointer hover:bg-emerald-950/60 transition-colors"
-            onClick={() => setActiveTab('orders')}
-          >
-            <div className="mx-auto max-w-7xl flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[10px] font-bold text-emerald-300">
-                  {activeOrders.length} active order{activeOrders.length > 1 ? 's' : ''} — {statusLabel(activeOrders[0].status)}
-                </span>
-              </div>
-              <span className="text-[9px] text-emerald-500 font-semibold">Track →</span>
-            </div>
-          </div>
-        )}
-      </header>
+      <PremiumHeader
+        institutionName={institutionName}
+        institutionCode={institutionCode}
+        liveRole={liveRole}
+        avatarUrl={profile?.avatar_url || user?.user_metadata?.avatar_url}
+        userName={profile?.full_name || user?.email}
+        walletBalance={profile?.wallet_balance}
+        unreadNotif={unreadNotif}
+        cartCount={cartCount}
+        onOpenNotifications={() => { setShowNotifications(!showNotifications); setUnreadNotif(0); }}
+        onOpenCart={() => setShowCart(!showCart)}
+        onOpenLxAI={() => triggerToast && triggerToast('LX AI', 'AI Assistant coming soon!', 'info')}
+        onClose={onClose}
+      />
 
       {/* ── MAIN LAYOUT ─────────────────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-
-        {/* Desktop Sidebar Nav */}
-        <aside className="hidden lg:flex flex-col border-r border-slate-800 glass-strong w-56 shrink-0 p-4 gap-1">
-          <div className="mb-4 px-3">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Navigation</p>
-          </div>
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all ${
-                  active
-                    ? 'bg-emerald-950/60 border border-emerald-500/30 text-emerald-300'
-                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900'
-                }`}
-              >
-                <Icon className={`w-4 h-4 ${active ? 'text-emerald-400' : ''}`} />
-                {tab.label}
-                {tab.badge && (
-                  <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[9px] font-black text-slate-950">
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-
-          <div className="mt-auto pt-4 border-t border-slate-800">
-            <button
-              onClick={handleSignOut}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </button>
-          </div>
-        </aside>
+      <div className="flex flex-1 min-h-0 overflow-hidden relative">
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto min-w-0">
@@ -1376,734 +1273,57 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               </div>
             ) : (
               <>
-                {/* ═══════════════════ HOME TAB ═══════════════════ */}
-                {activeTab === 'home' && (
-                  <div className="space-y-8">
-                    {/* Banner Carousel - Dynamic from Supabase */}
-                    {banners.length > 0 && (
-                      <BannerCarousel banners={banners} />
-                    )}
-
-                    {/* Hero Greeting */}
-                    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/60 border border-slate-800 p-6 sm:p-8">
-                      <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
-                      <div className="absolute -bottom-8 -left-8 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl pointer-events-none" />
-                      <div className="relative z-10">
-                        <div className="flex items-start justify-between gap-4 flex-wrap">
-                          <div className="space-y-2">
-                            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-950/60 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-emerald-400 backdrop-blur-sm">
-                              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                              {roleLabel(liveRole)} Dashboard
-                            </div>
-                            <h2 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
-                              {getGreeting()},<br />
-                              <span className="text-emerald-400">{displayName.split(' ')[0]}</span> 👋
-                            </h2>
-                            {institutionName && (
-                              <div className="flex items-center gap-1.5 text-slate-400">
-                                <Building2 className="w-3.5 h-3.5 text-emerald-500/70" />
-                                <span className="text-xs font-semibold">{institutionName}</span>
-                                {institutionCode && <span className="text-[10px] text-slate-500 ml-1">· {institutionCode}</span>}
-                              </div>
-                            )}
-                            <div className="flex items-center gap-1.5 text-slate-500">
-                              <Clock className="w-3 h-3" />
-                              <span className="text-[10px]">{new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
-                            </div>
-                          </div>
-                          {/* Avatar */}
-                          <div className={`flex-shrink-0 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${roleGradient(liveRole)} text-xl font-black text-white shadow-lg`}>
-                            {firstLetters}
-                          </div>
-                        </div>
-                        <div className="mt-5 flex flex-wrap gap-3">
-                          <button
-                            onClick={() => { setActiveTab('menu'); setTimeout(() => searchRef.current?.focus(), 200); }}
-                            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-emerald-950/30 hover:from-emerald-400 hover:to-teal-400 transition-all active:scale-[0.97]"
-                          >
-                            <Search className="w-3.5 h-3.5" /> Order Food
-                          </button>
-                          <button
-                            onClick={() => setActiveTab('orders')}
-                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900/80 px-5 py-2.5 text-xs font-black text-slate-200 backdrop-blur-sm hover:bg-slate-800 transition-all"
-                          >
-                            <Receipt className="w-3.5 h-3.5 text-emerald-400" /> Track Orders
-                          </button>
-                        </div>
-                      </div>
-                    </section>
-
-                    {/* Stats Row */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-center">
-                        <p className="text-2xl font-black text-white">{orders.length}</p>
-                        <p className="text-[10px] font-semibold text-slate-500 mt-1">Total Orders</p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-center">
-                        <p className="text-2xl font-black text-emerald-400">{activeOrders.length}</p>
-                        <p className="text-[10px] font-semibold text-slate-500 mt-1">Active Now</p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-center">
-                        <p className="text-2xl font-black text-amber-400">{menuItems.length}</p>
-                        <p className="text-[10px] font-semibold text-slate-500 mt-1">Menu Items</p>
-                      </div>
-                    </div>
-
-                    {/* Search Bar */}
-                    <section>
-                      <div className="relative">
-                        <Search className="absolute left-4 top-1/2 w-4 h-4 -translate-y-1/2 text-slate-500" />
-                        <input
-                          value={searchQuery}
-                          onChange={(e) => { setSearchQuery(e.target.value); if (e.target.value) setActiveTab('menu'); }}
-                          placeholder="Search food, counters, categories..."
-                          className="w-full rounded-2xl border border-slate-700 bg-slate-900 py-3.5 pl-11 pr-4 text-sm text-white placeholder-slate-500 outline-none transition-all focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30"
-                        />
-                      </div>
-                    </section>
-
-                    {/* Categories */}
-                    {allCategories.length > 0 && (
-                      <section className="space-y-3">
-                        <h3 className="text-base font-black text-white">Categories</h3>
-                        <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
-                          {allCategories.map((cat, idx) => (
-                            <button
-                              key={cat}
-                              onClick={() => { setSelectedCategory(cat); setActiveTab('menu'); }}
-                              className={`shrink-0 rounded-2xl border bg-gradient-to-br ${getCategoryGradient(idx)} backdrop-blur-sm px-4 py-3 text-center transition-all hover:-translate-y-0.5 hover:shadow-lg min-w-[90px]`}
-                            >
-                              <span className="text-xl block mb-1">{getCategoryEmoji(cat)}</span>
-                              <p className="text-[10px] font-black text-white">{cat}</p>
-                              <p className="text-[9px] text-slate-300/70">{menuItems.filter((i) => i.category === cat).length} items</p>
-                            </button>
-                          ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {/* Campus Counters */}
-                    {counters.length > 0 && (
-                      <section className="space-y-3">
-                        <h3 className="text-base font-black text-white">Campus Counters</h3>
-                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                          {counters.map((c) => (
-                            <button
-                              key={c.name}
-                              onClick={() => { setSelectedCounter(c.name); setActiveTab('menu'); }}
-                              className="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-emerald-500/30 hover:shadow-lg group"
-                            >
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="w-7 h-7 rounded-lg bg-emerald-950/80 flex items-center justify-center">
-                                  <ChefHat className="w-4 h-4 text-emerald-400" />
-                                </div>
-                                <div className="flex items-center gap-1 text-emerald-400">
-                                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                  <span className="text-[9px] font-bold">Open</span>
-                                </div>
-                              </div>
-                              <p className="text-xs font-extrabold text-white line-clamp-1 group-hover:text-emerald-300 transition-colors">{c.name}</p>
-                              <p className="text-[10px] text-slate-500 mt-0.5">{c.count} items</p>
-                              {c.avgRating > 0 && (
-                                <div className="flex items-center gap-1 mt-1">
-                                  <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
-                                  <span className="text-[9px] font-bold text-amber-400">{c.avgRating.toFixed(1)}</span>
-                                </div>
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {/* Active Orders quick view */}
-                    {activeOrders.length > 0 && (
-                      <section className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-base font-black text-white flex items-center gap-2">
-                            <Activity className="w-4 h-4 text-emerald-400" /> Active Orders
-                          </h3>
-                          <button onClick={() => setActiveTab('orders')} className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300">
-                            View all →
-                          </button>
-                        </div>
-                        <div className="space-y-3">
-                          {activeOrders.slice(0, 2).map((order) => (
-                            <div
-                              key={order.id}
-                              className="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-4 cursor-pointer hover:bg-emerald-950/30 transition-colors"
-                              onClick={() => setActiveTab('orders')}
-                            >
-                              <div className="flex items-center justify-between mb-3">
-                                <div>
-                                  <p className="text-[9px] font-mono text-slate-500">{order.order_id}</p>
-                                  <p className="text-xs font-bold text-white">{order.counter}</p>
-                                </div>
-                                <span className={`rounded-full border px-2.5 py-0.5 text-[9px] font-black flex items-center gap-1 ${statusColor(order.status)}`}>
-                                  <span className={`h-1.5 w-1.5 rounded-full ${statusDot(order.status)} animate-pulse`} />
-                                  {statusLabel(order.status)}
-                                </span>
-                              </div>
-                              <OrderProgressBar status={order.status} />
-                              {order.status === 'ready' && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setQrOrder(order); }}
-                                  className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 text-slate-950 py-2 text-xs font-black hover:bg-emerald-400 transition-colors"
-                                >
-                                  <QrCode className="w-3.5 h-3.5" /> Show Pickup Code
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {/* Featured Offers */}
-                    {offerItems.length > 0 && (
-                      <section className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-base font-black text-white flex items-center gap-2">
-                            <Tag className="w-4 h-4 text-amber-400" /> Featured Offers
-                          </h3>
-                          <button onClick={() => setActiveTab('menu')} className="text-[10px] font-bold text-emerald-400">See all →</button>
-                        </div>
-                        <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
-                          {offerItems.map((item) => (
-                            <div key={item.id} className="flex-shrink-0 w-52">
-                              <FoodCard item={item} onAdd={addToCart} onFavorite={toggleFavorite} isFavorited={favorites.has(item.id)} />
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {/* Trending */}
-                    {trendingItems.length > 0 && (
-                      <section className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-base font-black text-white flex items-center gap-2">
-                            <Flame className="w-4 h-4 text-orange-400" /> Trending Now
-                          </h3>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                          {trendingItems.slice(0, 8).map((item) => (
-                            <FoodCard key={item.id} item={item} onAdd={addToCart} onFavorite={toggleFavorite} isFavorited={favorites.has(item.id)} />
-                          ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {/* Quick Reorder */}
-                    {quickReorderItems.length > 0 && (
-                      <section className="space-y-3">
-                        <h3 className="text-base font-black text-white flex items-center gap-2">
-                          <RotateCcw className="w-4 h-4 text-cyan-400" /> Reorder Favourites
-                        </h3>
-                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                          {quickReorderItems.map((item) => (
-                            <FoodCard key={item.id} item={item} onAdd={addToCart} />
-                          ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {/* AI Picks */}
-                    {personalizedItems.length > 0 && (
-                      <section className="space-y-3">
-                        <h3 className="text-base font-black text-white flex items-center gap-2">
-                          <Sparkles className="w-4 h-4 text-violet-400" /> Recommended For You
-                        </h3>
-                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                          {personalizedItems.map((item) => (
-                            <FoodCard key={item.id} item={item} onAdd={addToCart} onFavorite={toggleFavorite} isFavorited={favorites.has(item.id)} />
-                          ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {/* Fast Pickup */}
-                    {menuItems.filter((i) => i.prep_time_minutes !== undefined && i.prep_time_minutes <= 10 && getItemAvailability(i).canAddToCart).length > 0 && (
-                      <section className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-base font-black text-white flex items-center gap-2">
-                            <Zap className="w-4 h-4 text-cyan-400" /> Fast Pickup
-                          </h3>
-                          <button onClick={() => { setActiveTab('menu'); setSortBy('prep_time'); }} className="text-[10px] font-bold text-emerald-400">See all →</button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                          {menuItems.filter((i) => i.prep_time_minutes !== undefined && i.prep_time_minutes <= 10 && getItemAvailability(i).canAddToCart).slice(0, 4).map((item) => (
-                            <FoodCard key={item.id} item={item} onAdd={addToCart} onFavorite={toggleFavorite} isFavorited={favorites.has(item.id)} />
-                          ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {/* Healthy Meals */}
-                    {menuItems.filter((i) => i.is_healthy || (i.calories !== undefined && i.calories < 300)).length > 0 && (
-                      <section className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-base font-black text-white flex items-center gap-2">
-                            <Salad className="w-4 h-4 text-emerald-400" /> Healthy Meals
-                          </h3>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                          {menuItems.filter((i) => i.is_healthy || (i.calories !== undefined && i.calories < 300)).slice(0, 4).map((item) => (
-                            <FoodCard key={item.id} item={item} onAdd={addToCart} onFavorite={toggleFavorite} isFavorited={favorites.has(item.id)} />
-                          ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {/* Recently Added */}
-                    {[...menuItems].sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()).slice(0, 4).length > 0 && (
-                      <section className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-base font-black text-white flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-pink-400" /> Recently Added
-                          </h3>
-                          <button onClick={() => { setActiveTab('menu'); setSortBy('newest'); }} className="text-[10px] font-bold text-emerald-400">See all →</button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                          {[...menuItems].sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()).slice(0, 4).map((item) => (
-                            <FoodCard key={item.id} item={item} onAdd={addToCart} onFavorite={toggleFavorite} isFavorited={favorites.has(item.id)} />
-                          ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {/* Announcements */}
-                    {notifications.length > 0 && (
-                      <section className="rounded-3xl border border-slate-800 bg-slate-900/60 overflow-hidden">
-                        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-                          <h3 className="text-sm font-black text-white flex items-center gap-2">
-                            <Bell className="w-4 h-4 text-emerald-400" /> Campus Updates
-                          </h3>
-                        </div>
-                        <div className="divide-y divide-slate-800">
-                          {notifications.slice(0, 4).map((n) => (
-                            <div key={n.id} className="px-5 py-3.5 hover:bg-slate-800/40 transition-colors">
-                              <div className="flex items-start justify-between gap-3">
-                                <h4 className="text-xs font-bold text-white">{n.title}</h4>
-                                <span className="shrink-0 text-[9px] text-slate-500">{formatDateTime(n.created_at)}</span>
-                              </div>
-                              <p className="mt-0.5 text-[10px] leading-relaxed text-slate-400 line-clamp-2">{n.message}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {/* Empty state */}
-                    {menuItems.length === 0 && notifications.length === 0 && counters.length === 0 && (
-                      <div className="rounded-3xl border border-dashed border-slate-700 bg-slate-900/30 p-12 text-center">
-                        <Utensils className="w-12 h-12 mx-auto text-slate-600 mb-4" />
-                        <h3 className="text-lg font-black text-white">Welcome to FOODEXA!</h3>
-                        <p className="mt-2 text-sm text-slate-400 max-w-md mx-auto">
-                          Your campus portal is live. Menu items and announcements added in Supabase will appear here.
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                {/* ═══════════════════ PREMIUM TABS ═══════════════════ */}
+                {activeTab === 'explore' && (
+                  <ExploreTab
+                    user={user}
+                    profile={profile}
+                    liveRole={liveRole}
+                    institutionName={institutionName}
+                    institutionCode={institutionCode}
+                    searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
+                    selectedCategory={selectedCategory}
+                    setSelectedCategory={setSelectedCategory}
+                    selectedCounter={selectedCounter}
+                    setSelectedCounter={setSelectedCounter}
+                    allCategories={allCategories}
+                    counters={counters}
+                    menuItems={menuItems}
+                    banners={banners}
+                    activeOrders={activeOrders}
+                    orders={orders}
+                    onAddToCart={(item) => setCart([...cart, { ...item, cart_id: Math.random().toString(36).substr(2, 9) }])}
+                    onToggleFavorite={(item) => triggerToast && triggerToast('Favorited', `${item.name} saved!`, 'success')}
+                    onNavigate={(tab) => setActiveTab(tab)}
+                  />
                 )}
 
-                {/* ═══════════════════ MENU TAB ═══════════════════ */}
-                {activeTab === 'menu' && (
-                  <div className="space-y-5">
-                    {/* Search & Filters */}
-                    <div className="sticky top-0 -mt-5 pt-5 pb-3 bg-slate-950 z-10 space-y-3">
-                      <div className="relative">
-                        <Search className="absolute left-4 top-1/2 w-4 h-4 -translate-y-1/2 text-slate-500" />
-                        <input
-                          ref={searchRef}
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="Search meals, counters, or categories..."
-                          className="w-full rounded-2xl border border-slate-700 bg-slate-900 py-3 pl-11 pr-4 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 transition-all"
-                        />
-                      </div>
-                      {/* Category filters */}
-                      <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                        {['ALL', ...allCategories].map((c) => (
-                          <button
-                            key={c}
-                            onClick={() => { setSelectedCategory(c === 'ALL' ? 'ALL' : c); setSelectedCounter('ALL'); }}
-                            className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
-                              selectedCategory === c
-                                ? 'bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-950/30'
-                                : 'border border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600 hover:text-slate-300'
-                            }`}
-                          >
-                            {c === 'ALL' ? `All Items` : `${getCategoryEmoji(c)} ${c}`}
-                          </button>
-                        ))}
-                      </div>
-                      {/* Counter filters */}
-                      {counters.length > 1 && (
-                        <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-                          {['ALL', ...counters.map((c) => c.name)].map((c) => (
-                            <button
-                              key={c}
-                              onClick={() => { setSelectedCounter(c); setSelectedCategory('ALL'); }}
-                              className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
-                                selectedCounter === c
-                                  ? 'bg-slate-200 text-slate-950'
-                                  : 'border border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'
-                              }`}
-                            >
-                              {c === 'ALL' ? 'All Counters' : c}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Veg / Non-Veg Toggle */}
-                      <div className="flex gap-2 items-center">
-                        <button
-                          onClick={() => { setShowVegFilter(!showVegFilter); setShowNonVeg(false); }}
-                          className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
-                            showVegFilter
-                              ? 'bg-emerald-500 text-slate-950'
-                              : 'border border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'
-                          }`}
-                        >
-                          🥗 Veg Only
-                        </button>
-                        <button
-                          onClick={() => { setShowNonVeg(!showNonVeg); setShowVegFilter(false); }}
-                          className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
-                            showNonVeg
-                              ? 'bg-red-500 text-white'
-                              : 'border border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-600'
-                          }`}
-                        >
-                          🍗 Non-Veg
-                        </button>
-                        <select
-                          value={selectedPriceRange}
-                          onChange={(e) => setSelectedPriceRange(e.target.value)}
-                          className="shrink-0 rounded-full px-3 py-1.5 text-xs font-bold border border-slate-700 bg-slate-900 text-slate-400 outline-none"
-                        >
-                          <option value="ALL">Any Price</option>
-                          <option value="0-50">Under ₹50</option>
-                          <option value="50-100">₹50 – ₹100</option>
-                          <option value="100-200">₹100 – ₹200</option>
-                          <option value="200-99999">₹200+</option>
-                        </select>
-                        <select
-                          value={selectedPrepTime}
-                          onChange={(e) => setSelectedPrepTime(e.target.value)}
-                          className="shrink-0 rounded-full px-3 py-1.5 text-xs font-bold border border-slate-700 bg-slate-900 text-slate-400 outline-none"
-                        >
-                          <option value="ALL">Any Prep Time</option>
-                          <option value="5">≤5 min</option>
-                          <option value="10">≤10 min</option>
-                          <option value="15">≤15 min</option>
-                          <option value="20">≤20 min</option>
-                        </select>
-                        <select
-                          value={sortBy}
-                          onChange={(e) => setSortBy(e.target.value as any)}
-                          className="shrink-0 rounded-full px-3 py-1.5 text-xs font-bold border border-slate-700 bg-slate-900 text-slate-400 outline-none"
-                        >
-                          <option value="popular">Popular</option>
-                          <option value="newest">Newest</option>
-                          <option value="price_asc">Price Low→High</option>
-                          <option value="price_desc">Price High→Low</option>
-                          <option value="prep_time">Fastest Prep</option>
-                          <option value="rating">Top Rated</option>
-                        </select>
-                      </div>
-
-                      {/* Results count */}
-                      <p className="text-[10px] font-semibold text-slate-500">
-                        {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
-                        {searchQuery && ` for "${searchQuery}"`}
-                      </p>
-                    </div>
-
-                    {filteredItems.length > 0 ? (
-                      <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
-                        {filteredItems.map((item) => (
-                          <FoodCard
-                            key={item.id}
-                            item={item}
-                            onAdd={addToCart}
-                            onFavorite={toggleFavorite}
-                            isFavorited={favorites.has(item.id)}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <EmptyState
-                        icon={Search}
-                        title="No items found"
-                        message={searchQuery ? `No results for "${searchQuery}". Try different keywords.` : 'No menu items available with selected filters.'}
-                        action={{ label: 'Clear filters', onClick: () => { setSearchQuery(''); setSelectedCategory('ALL'); setSelectedCounter('ALL'); setShowVegFilter(false); setShowNonVeg(false); setSelectedPriceRange('ALL'); setSelectedPrepTime('ALL'); setSortBy('popular'); } }}
-                      />
-                    )}
-                  </div>
+                {activeTab === 'nutrition' && (
+                  <NutritionTab />
                 )}
 
-                {/* ═══════════════════ ORDERS TAB ═══════════════════ */}
-                {activeTab === 'orders' && (
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-xl font-black text-white">Your Orders</h2>
-                      <span className="text-xs font-semibold text-slate-500">{orders.length} total</span>
-                    </div>
-
-                    {/* Active Orders */}
-                    {activeOrders.length > 0 && (
-                      <div className="space-y-4">
-                        <h3 className="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
-                          <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                          Active Orders
-                        </h3>
-                        {activeOrders.map((order) => (
-                          <div key={order.id} className="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-slate-900 to-emerald-950/20 p-5 space-y-4">
-                            {/* Order header */}
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-[9px] font-mono text-slate-500 mb-0.5">{order.order_id}</p>
-                                <h4 className="text-base font-black text-white">{order.counter}</h4>
-                                <p className="text-[10px] text-slate-400">{formatDateTime(order.created_at)}</p>
-                              </div>
-                              <div className="text-right">
-                                <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-black ${statusColor(order.status)}`}>
-                                  <span className={`h-1.5 w-1.5 rounded-full ${statusDot(order.status)} animate-pulse`} />
-                                  {statusLabel(order.status)}
-                                </span>
-                                <p className="text-sm font-black text-emerald-300 mt-2">{formatINR(order.total_amount)}</p>
-                              </div>
-                            </div>
-
-                            {/* Progress */}
-                            <OrderProgressBar status={order.status} />
-
-                            {/* 30-second cancellation window */}
-                            {(() => {
-                              const cancelSecondsLeft = Math.max(0, 30 - Math.floor((currentTime - new Date(order.created_at).getTime()) / 1000));
-                              if (cancelSecondsLeft > 0 && order.status !== 'cancelled') {
-                                return (
-                                  <div className="border border-red-500/20 bg-red-950/20 rounded-2xl p-4 text-center mt-4 space-y-3">
-                                    <p className="text-[10px] text-red-300">You can cancel your order within {cancelSecondsLeft}s</p>
-                                    <button
-                                      onClick={async () => {
-                                        setSubmittingOrder(true);
-                                        const res = await cancelOrder(order.id);
-                                        if (res.success) {
-                                          triggerToast && triggerToast('Order Cancelled', 'Your order was cancelled successfully.', 'success');
-                                        } else {
-                                          triggerToast && triggerToast('Failed', 'Could not cancel order.', 'error');
-                                        }
-                                        setSubmittingOrder(false);
-                                      }}
-                                      disabled={submittingOrder}
-                                      className="w-full py-2 bg-red-500/20 hover:bg-red-500/40 text-red-400 text-xs font-bold rounded-xl transition-colors disabled:opacity-50"
-                                    >
-                                      {submittingOrder ? 'Cancelling...' : `Cancel Order (${cancelSecondsLeft}s)`}
-                                    </button>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            })()}
-
-                            {/* Items */}
-                            <div className="space-y-1.5 border-t border-slate-800 pt-3">
-                              {order.items.map((item, i) => (
-                                <div key={`${order.id}-${i}`} className="flex justify-between text-xs text-slate-300">
-                                  <span className="font-semibold">{item.quantity}× {item.name}</span>
-                                  <span className="text-slate-400">{formatINR(item.price * item.quantity)}</span>
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* QR Pickup */}
-                            {order.status === 'ready' && (
-                              <button
-                                onClick={() => setQrOrder(order)}
-                                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3 text-sm font-black text-slate-950 shadow-lg shadow-emerald-950/30 hover:from-emerald-400 hover:to-teal-400 transition-all animate-pulse"
-                              >
-                                <QrCode className="w-4 h-4" /> Show Pickup QR Code
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Past Orders */}
-                    {pastOrders.length > 0 ? (
-                      <div className="space-y-3">
-                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-500">Order History</h3>
-                        <div className="space-y-2">
-                          {pastOrders.slice(0, 20).map((order) => (
-                            <div key={order.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 hover:bg-slate-900 transition-colors">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="text-[9px] font-mono text-slate-600">{order.order_id}</p>
-                                  <p className="text-xs font-bold text-white mt-0.5 truncate">{order.counter}</p>
-                                  <p className="text-[10px] text-slate-500 mt-0.5 truncate">
-                                    {order.items.map((i) => `${i.quantity}× ${i.name}`).join(', ')}
-                                  </p>
-                                </div>
-                                <div className="text-right shrink-0 space-y-1">
-                                  <p className="text-sm font-black text-white">{formatINR(order.total_amount)}</p>
-                                  <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold inline-block ${statusColor(order.status)}`}>
-                                    {statusLabel(order.status)}
-                                  </span>
-                                  <p className="text-[9px] text-slate-600">{formatDate(order.created_at)}</p>
-                                </div>
-                              </div>
-                              {/* Reorder button */}
-                              <button
-                                onClick={() => {
-                                  order.items.forEach(orderItem => {
-                                    const menuItem = menuItems.find(m => m.name === orderItem.name);
-                                    if (menuItem) for (let q = 0; q < orderItem.quantity; q++) addToCart(menuItem);
-                                  });
-                                  setShowCart(true);
-                                }}
-                                className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800/40 py-2 text-[10px] font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
-                              >
-                                <RotateCcw className="w-3 h-3" /> Reorder
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : activeOrders.length === 0 && (
-                      <EmptyState
-                        icon={Receipt}
-                        title="No orders yet"
-                        message="Start ordering from the campus menu and your orders will appear here."
-                        action={{ label: 'Browse Menu', onClick: () => setActiveTab('menu') }}
-                      />
-                    )}
-                  </div>
+                {activeTab === 'analytics' && (
+                  <AnalyticsTab />
                 )}
 
-                {/* ═══════════════════ PROFILE TAB ═══════════════════ */}
+                {activeTab === 'offers' && (
+                  <OffersTab />
+                )}
+
+                {activeTab === 'history' && (
+                  <HistoryTab />
+                )}
+
                 {activeTab === 'profile' && (
-                  <div className="space-y-5 max-w-2xl mx-auto">
-                    {/* Profile hero */}
-                    <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-6">
-                      <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-emerald-500/8 blur-2xl pointer-events-none" />
-                      <div className="flex items-center gap-4">
-                        <div className={`flex-shrink-0 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br ${roleGradient(liveRole)} text-2xl font-black text-white shadow-lg`}>
-                          {firstLetters}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="text-xl font-black text-white truncate">{displayName}</h3>
-                          <p className="text-xs text-emerald-300 truncate mt-0.5">{profile?.email || user?.email}</p>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            <span className={`rounded-full border px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wide ${roleColor(liveRole)}`}>
-                              {roleLabel(liveRole)}
-                            </span>
-                            {institutionCode && (
-                              <span className="rounded-full border border-slate-700 bg-slate-800 px-2.5 py-0.5 text-[9px] font-mono text-slate-400">
-                                {institutionCode}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Stats */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 text-center">
-                        <p className="text-xl font-black text-white">{orders.length}</p>
-                        <p className="text-[9px] text-slate-500 mt-0.5">Orders</p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 text-center">
-                        <p className="text-xl font-black text-amber-400">0</p>
-                        <p className="text-[9px] text-slate-500 mt-0.5">Points</p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3 text-center">
-                        <p className="text-xl font-black text-emerald-400">{favorites.size}</p>
-                        <p className="text-[9px] text-slate-500 mt-0.5">Favourites</p>
-                      </div>
-                    </div>
-
-                    {/* Profile details */}
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900 divide-y divide-slate-800 overflow-hidden">
-                      {[
-                        { icon: User, label: 'Full Name', value: profile?.full_name || '—' },
-                        { icon: Mail, label: 'Email', value: profile?.email || user?.email || '—' },
-                        { icon: Phone, label: 'Phone', value: profile?.phone || '—' },
-                        { icon: Building2, label: 'Institution', value: institutionName || '—' },
-                        { icon: BookOpen, label: 'Department', value: profile?.department || '—' },
-                        { icon: Calendar, label: 'Semester', value: profile?.semester || '—' },
-                        { icon: Award, label: 'Programme', value: profile?.programme || '—' },
-                        { icon: MapPin, label: 'Campus Block', value: profile?.campus_block || '—' },
-                      ].map(({ icon: Icon, label, value }) => (
-                        <div key={label} className="flex items-center gap-3 px-4 py-3">
-                          <Icon className="w-4 h-4 text-slate-500 shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[9px] font-semibold text-slate-600 uppercase">{label}</p>
-                            <p className="text-xs font-semibold text-white truncate">{value}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="space-y-2">
-                      <button
-                        onClick={handleEditProfile}
-                        className="flex w-full items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors"
-                      >
-                        <Edit3 className="w-4 h-4 text-emerald-400" />
-                        Edit Profile
-                        <ChevronRight className="w-4 h-4 text-slate-500 ml-auto" />
-                      </button>
-                      <button
-                        onClick={() => setActiveTab('orders')}
-                        className="flex w-full items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors"
-                      >
-                        <Receipt className="w-4 h-4 text-cyan-400" />
-                        Order History
-                        <ChevronRight className="w-4 h-4 text-slate-500 ml-auto" />
-                      </button>
-                      <button
-                        onClick={() => setActiveTab('menu')}
-                        className="flex w-full items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors"
-                      >
-                        <Heart className="w-4 h-4 text-rose-400" />
-                        My Favourites
-                        <ChevronRight className="w-4 h-4 text-slate-500 ml-auto" />
-                      </button>
-                    </div>
-
-                    {/* Leave Institution */}
-                    {institutionCode && (
-                      <button
-                        onClick={() => setShowLeaveInstitution(true)}
-                        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-950/20 py-3.5 text-sm font-black text-amber-300 hover:bg-amber-950/40 hover:border-amber-500/50 transition-all"
-                      >
-                        <Building2 className="w-4 h-4" /> Leave Institution
-                      </button>
-                    )}
-
-                    {/* Sign Out */}
-                    <button
-                      onClick={handleSignOut}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-950/20 py-3.5 text-sm font-black text-red-300 hover:bg-red-950/40 hover:border-red-500/50 transition-all"
-                    >
-                      <LogOut className="w-4 h-4" /> Sign Out Account
-                    </button>
-
-                    <p className="text-center text-[9px] text-slate-700">FOODEXA v3.0 · Powered by Supabase · {new Date().getFullYear()}</p>
-                  </div>
+                  <ProfileTab />
                 )}
+
                 {/* ═══════════════════ CHECKOUT TAB ═══════════════════ */}
                 {activeTab === 'checkout' && (
                   <div className="max-w-3xl mx-auto space-y-6">
                     <div className="flex items-center gap-3">
-                      <button onClick={() => setActiveTab('menu')} className="p-2 -ml-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors">
+                      <button onClick={() => setActiveTab('explore')} className="p-2 -ml-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors">
                         <ChevronLeft className="w-5 h-5" />
                       </button>
                       <h2 className="text-2xl font-black text-white">Checkout</h2>
@@ -2297,7 +1517,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                                     const res = await cancelOrder(o.id);
                                     if (res.success) {
                                       triggerToast && triggerToast('Order Cancelled', 'Your order was cancelled successfully.', 'success');
-                                      setActiveTab('orders');
+                                      setActiveTab('history');
                                     } else {
                                       triggerToast && triggerToast('Failed', 'Could not cancel order.', 'error');
                                     }
@@ -2342,7 +1562,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     {/* Action buttons */}
                     <div className="space-y-3">
                       <button
-                        onClick={() => setActiveTab('orders')}
+                        onClick={() => setActiveTab('history')}
                         className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 text-sm font-black text-slate-950 shadow-lg hover:from-emerald-400 hover:to-teal-400 transition-all"
                       >
                         <Activity className="w-4 h-4" /> Track Order Live
@@ -2392,7 +1612,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                         Try Again
                       </button>
                       <button
-                        onClick={() => { setError(null); setActiveTab('home'); }}
+                        onClick={() => { setError(null); setActiveTab('explore'); }}
                         className="flex-1 rounded-2xl border border-slate-800 bg-transparent py-4 text-sm font-black text-slate-400 hover:bg-slate-900 hover:text-white transition-all"
                       >
                         Cancel

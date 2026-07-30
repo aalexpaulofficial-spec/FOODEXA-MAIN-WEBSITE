@@ -42,7 +42,7 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
     : 'S';
 
   return (
-    <header className="sticky top-0 z-40 shrink-0 bg-white/70 backdrop-blur-md border-b border-slate-200/60 shadow-sm">
+    <header className="sticky top-0 z-40 shrink-0 bg-white border-b border-[#E2E8F0] shadow-sm">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
 
         {/* Left — User Greeting + Avatar */}
@@ -56,7 +56,7 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
                 className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow-sm"
               />
             ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-black text-white ring-2 ring-white shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-sm font-black text-white ring-2 ring-white shadow-sm">
                 {initials}
               </div>
             )}
@@ -77,13 +77,13 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
 
         {/* Center — Institution Badge */}
         <div className="hidden sm:flex flex-col items-center gap-1 shrink-0">
-          <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-100 px-3 py-1 rounded-full text-[10px] font-bold shadow-sm">
-            <div className="w-4 h-4 rounded-full bg-white border border-blue-200 flex items-center justify-center text-[9px]">
-              <School className="w-2.5 h-2.5 text-blue-500" />
+          <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 px-3 py-1 rounded-full text-[10px] font-bold shadow-sm">
+            <div className="w-4 h-4 rounded-full bg-white border border-emerald-200 flex items-center justify-center text-[9px]">
+              <School className="w-2.5 h-2.5 text-emerald-600" />
             </div>
             <span className="truncate max-w-[140px]">{institutionName || 'Campus Portal'}</span>
             {institutionCode && (
-              <span className="text-blue-400 font-mono text-[9px]">· {institutionCode}</span>
+              <span className="text-emerald-500 font-mono text-[9px]">· {institutionCode}</span>
             )}
           </div>
           <span className="text-[9px] text-slate-400 font-medium">
@@ -99,8 +99,8 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
           {/* Ask LX AI — vibrant gradient + glow */}
           <button
             onClick={onOpenLxAI}
-            className="hidden sm:flex items-center gap-1.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:from-blue-400 hover:to-cyan-400 transition-all active:scale-[0.97]"
-            style={{ boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)' }}
+            className="hidden sm:flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:from-emerald-400 hover:to-teal-500 transition-all active:scale-[0.97]"
+            style={{ boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)' }}
           >
             <Sparkles className="w-3.5 h-3.5" />
             Ask LX AI
@@ -134,7 +134,7 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
           >
             <ShoppingCart className="w-4 h-4" />
             {cartCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[9px] font-black text-white ring-1 ring-white">
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-black text-white ring-1 ring-white">
                 {cartCount}
               </span>
             )}

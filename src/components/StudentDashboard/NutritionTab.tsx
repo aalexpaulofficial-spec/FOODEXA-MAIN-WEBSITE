@@ -42,14 +42,14 @@ const NutritionBar: React.FC<ProgressBarProps> = ({
           <div className={`w-7 h-7 rounded-lg ${color} bg-opacity-20 flex items-center justify-center`}>
             {icon}
           </div>
-          <span className="text-sm font-semibold text-white">{label}</span>
+          <span className="text-sm font-semibold text-slate-900">{label}</span>
         </div>
         <div className="text-right">
-          <span className="text-sm font-black text-white">{current}</span>
-          <span className="text-[10px] text-slate-400 ml-1">/ {goal} {unit}</span>
+          <span className="text-sm font-black text-slate-900">{current}</span>
+          <span className="text-[10px] text-slate-500 ml-1">/ {goal} {unit}</span>
         </div>
       </div>
-      <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+      <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-1000 ease-out ${color}`}
           style={{
@@ -91,27 +91,27 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
             </p>
           </div>
           {/* Health Score badge */}
-          <div className="flex flex-col items-center bg-gradient-to-br from-[#1a1b3a] to-slate-800 rounded-2xl px-4 py-2.5 border border-blue-500/20 shadow-lg">
+          <div className="flex flex-col items-center bg-white rounded-2xl px-4 py-2.5 border border-slate-200 shadow-sm">
             <span className={`text-2xl font-black ${healthColor}`}>{healthScore}</span>
-            <span className="text-[9px] text-slate-400 uppercase tracking-wider">{healthLabel}</span>
-            <span className="text-[8px] text-slate-500">Health Score</span>
+            <span className="text-[9px] text-slate-500 uppercase tracking-wider">{healthLabel}</span>
+            <span className="text-[8px] text-slate-400">Health Score</span>
           </div>
         </div>
 
-        {/* AI Nutrition Tracker Card — dark navy */}
-        <div className="relative overflow-hidden rounded-3xl border border-blue-500/20 shadow-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-[#1a1b3a] via-[#1e2050] to-slate-900" />
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-cyan-500/5 pointer-events-none" />
+        {/* AI Nutrition Tracker Card — light emerald gradient */}
+        <div className="relative overflow-hidden rounded-3xl border border-emerald-500/20 shadow-xl bg-white">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-teal-50/50 to-white" />
+          <div className="absolute inset-0 bg-gradient-to-r from-emerald-100/20 via-transparent to-teal-100/20 pointer-events-none" />
 
           <div className="relative z-10 p-5 space-y-6">
             {/* Tracker Header */}
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-                <Brain className="w-4.5 h-4.5 text-blue-400 w-5 h-5" />
+              <div className="w-9 h-9 rounded-xl bg-emerald-100/50 border border-emerald-200 flex items-center justify-center">
+                <Brain className="text-emerald-600 w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-white">AI Nutrition Tracker</h3>
-                <p className="text-[10px] text-slate-400">Daily intake based on your orders</p>
+                <h3 className="text-sm font-black text-slate-900">AI Nutrition Tracker</h3>
+                <p className="text-[10px] text-slate-500">Daily intake based on your orders</p>
               </div>
             </div>
 

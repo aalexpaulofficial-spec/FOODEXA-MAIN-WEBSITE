@@ -263,16 +263,20 @@ export default function App() {
     }
   };
 
-  return (
-    <div className="min-h-screen max-w-full overflow-x-hidden bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500 selection:text-slate-950">
-      
-      {/* Scroll Progress Indicator */}
-      <ScrollProgress />
+  const isDashboardOpen = isStudentPortalOpen || isInstitutionDashboardOpen || isKitchenDashboardOpen || isSuperAdminDashboardOpen;
 
+  return (
+    <div className={`min-h-screen max-w-full overflow-x-hidden bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500 selection:text-slate-950 ${isDashboardOpen ? 'overflow-hidden' : ''}`}>
+      
       {/* Toast Notifications Container */}
       <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
 
-      {/* Sticky Navigation Bar */}
+      {/* Main Website Wrapper - Hidden when dashboard is open */}
+      <div className={isDashboardOpen ? 'hidden' : 'block'}>
+        {/* Scroll Progress Indicator */}
+        <ScrollProgress />
+
+        {/* Sticky Navigation Bar */}
       <Navbar
         onOpenBookDemo={() => setIsBookDemoOpen(true)}
         onOpenLxDrawer={() => setIsLxDrawerOpen(true)}
@@ -363,6 +367,7 @@ export default function App() {
           <Sparkles className="w-4 h-4 text-slate-950 animate-bounce" />
           <span>Ask LX</span>
         </button>
+      </div>
       </div>
 
       {/* Modals & Slide-over Drawers */}

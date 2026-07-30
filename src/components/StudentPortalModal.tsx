@@ -1242,17 +1242,17 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
             {/* Notification Dropdown */}
             {showNotifications && (
-              <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden shadow-2xl">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-                  <h3 className="text-sm font-black text-white flex items-center gap-2"><Bell className="w-4 h-4 text-emerald-400" /> Notifications</h3>
-                  <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-white"><X className="w-4 h-4" /></button>
+              <div className="rounded-2xl border border-[#E2E8F0] bg-white overflow-hidden shadow-sm">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Bell className="w-4 h-4 text-emerald-600" /> Notifications</h3>
+                  <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-700"><X className="w-4 h-4" /></button>
                 </div>
-                <div className="divide-y divide-slate-800 max-h-72 overflow-y-auto">
+                <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto bg-white">
                   {notifications.length ? notifications.slice(0, 8).map(n => (
-                    <div key={n.id} className="px-4 py-3 hover:bg-slate-800/40 transition-colors">
-                      <p className="text-xs font-bold text-white">{n.title}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{n.message}</p>
-                      <p className="text-[9px] text-slate-600 mt-1">{formatDateTime(n.created_at)}</p>
+                    <div key={n.id} className="px-4 py-3 hover:bg-slate-50 transition-colors">
+                      <p className="text-xs font-bold text-slate-900">{n.title}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
+                      <p className="text-[9px] text-slate-400 mt-1">{formatDateTime(n.created_at)}</p>
                     </div>
                   )) : (
                     <div className="px-4 py-8 text-center text-xs text-slate-500">No notifications yet</div>
@@ -1347,51 +1347,51 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-6">
                         {/* Order Details */}
-                        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-                          <h3 className="text-sm font-black text-white flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-emerald-400" /> Pickup Details
+                        <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 space-y-4 shadow-sm">
+                          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-emerald-600" /> Pickup Details
                           </h3>
-                          <div className="rounded-2xl bg-slate-950 p-4 border border-slate-800">
-                            <p className="text-xs font-bold text-slate-300">{institutionName}</p>
-                            <p className="text-[10px] text-slate-500 mt-1">Counter: <span className="font-bold text-white">{firstItemCounter}</span></p>
-                            <div className="mt-3 flex items-center gap-2 text-[10px] text-amber-400 font-semibold bg-amber-950/30 w-max px-3 py-1.5 rounded-full border border-amber-500/20">
+                          <div className="rounded-xl bg-slate-50 p-4 border border-slate-200">
+                            <p className="text-xs font-bold text-slate-900">{institutionName}</p>
+                            <p className="text-[10px] text-slate-500 mt-1">Counter: <span className="font-bold text-slate-900">{firstItemCounter}</span></p>
+                            <div className="mt-3 flex items-center gap-2 text-[10px] text-amber-700 font-semibold bg-amber-50 w-max px-3 py-1.5 rounded-full border border-amber-200">
                               <Clock className="w-3 h-3" /> Ready in ~{estimatedPrepTime} mins
                             </div>
                           </div>
                         </div>
 
                         {/* Order Summary */}
-                        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-                          <h3 className="text-sm font-black text-white flex items-center gap-2">
-                            <Receipt className="w-4 h-4 text-emerald-400" /> Order Summary
+                        <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 space-y-4 shadow-sm">
+                          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                            <Receipt className="w-4 h-4 text-emerald-600" /> Order Summary
                           </h3>
                           <div className="space-y-3">
                             {cart.map((entry) => (
                               <div key={entry.item.id} className="flex justify-between text-xs">
-                                <span className="text-slate-300 font-semibold">{entry.quantity}x {entry.item.name}</span>
-                                <span className="text-white font-black">{formatINR((entry.item.offer_price || entry.item.price) * entry.quantity)}</span>
+                                <span className="text-slate-700 font-semibold">{entry.quantity}x {entry.item.name}</span>
+                                <span className="text-slate-900 font-bold">{formatINR((entry.item.offer_price || entry.item.price) * entry.quantity)}</span>
                               </div>
                             ))}
                           </div>
                           
-                           <div className="pt-4 border-t border-slate-800 space-y-2">
-<div className="flex justify-between text-xs text-slate-400">
+                           <div className="pt-4 border-t border-slate-100 space-y-2">
+                              <div className="flex justify-between text-xs text-slate-500">
                                 <span>Subtotal</span>
                                 <span>{formatINR(cartSubtotal)}</span>
                               </div>
-                               <div className="flex justify-between text-xs text-slate-400">
+                               <div className="flex justify-between text-xs text-slate-500">
                                  <span>Convenience Fee</span>
                                  <span>{formatINR(cartConvenienceFee)}</span>
                                </div>
                                {cartDiscount > 0 && (
-                                <div className="flex justify-between text-xs text-emerald-400">
+                                <div className="flex justify-between text-xs text-emerald-600 font-medium">
                                   <span>Discount</span>
                                   <span>-{formatINR(cartDiscount)}</span>
                                 </div>
                               )}
-                              <div className="pt-2 flex justify-between text-lg font-black text-white">
+                              <div className="pt-2 flex justify-between text-lg font-black text-slate-900">
                                 <span>Grand Total</span>
-                                <span className="text-emerald-400">{formatINR(cartGrandTotal)}</span>
+                                <span className="text-emerald-600">{formatINR(cartGrandTotal)}</span>
                               </div>
                            </div>
                         </div>
@@ -1403,57 +1403,57 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                             placeholder="Coupon Code"
                             value={couponCode}
                             onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                            className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-xs text-white placeholder-slate-500 focus:border-emerald-500/50 outline-none"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-emerald-400 outline-none shadow-sm transition-colors"
                           />
                           <textarea
                             placeholder="Notes for Kitchen (Optional)"
                             value={kitchenNotes}
                             onChange={(e) => setKitchenNotes(e.target.value)}
                             rows={2}
-                            className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-xs text-white placeholder-slate-500 focus:border-emerald-500/50 outline-none resize-none"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-900 placeholder-slate-400 focus:border-emerald-400 outline-none resize-none shadow-sm transition-colors"
                           />
                         </div>
                       </div>
 
                       {/* Payment Methods */}
                       <div className="space-y-6">
-                        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 space-y-4">
-                          <h3 className="text-sm font-black text-white flex items-center gap-2">
-                            <CreditCard className="w-4 h-4 text-emerald-400" /> Payment Method
+                        <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 space-y-4 shadow-sm">
+                          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                            <CreditCard className="w-4 h-4 text-emerald-600" /> Payment Method
                           </h3>
                           <div className="space-y-3">
                             <button
                               onClick={() => setPaymentMethod('razorpay')}
-                              className={`w-full flex items-center justify-between p-4 rounded-2xl border ${paymentMethod === 'razorpay' ? 'border-emerald-500 bg-emerald-950/20' : 'border-slate-800 bg-slate-950 hover:bg-slate-900'} transition-all`}
+                              className={`w-full flex items-center justify-between p-4 rounded-xl border ${paymentMethod === 'razorpay' ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'} transition-all`}
                             >
                               <div className="flex items-center gap-3">
-                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'razorpay' ? 'border-emerald-500' : 'border-slate-600'}`}>
+                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'razorpay' ? 'border-emerald-500' : 'border-slate-300'}`}>
                                   {paymentMethod === 'razorpay' && <div className="w-2 h-2 rounded-full bg-emerald-500" />}
                                 </div>
-                                <span className="text-sm font-bold text-white">Razorpay (UPI, Cards)</span>
+                                <span className="text-sm font-bold text-slate-900">Razorpay (UPI, Cards)</span>
                               </div>
                             </button>
                             
                             <button
                               onClick={() => setPaymentMethod('wallet')}
                               disabled
-                              className={`w-full flex items-center justify-between p-4 rounded-2xl border border-slate-800 bg-slate-950 opacity-50 cursor-not-allowed`}
+                              className={`w-full flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed`}
                             >
                               <div className="flex items-center gap-3">
-                                <div className="w-4 h-4 rounded-full border-2 border-slate-700" />
-                                <span className="text-sm font-bold text-slate-400">Campus Wallet (Coming Soon)</span>
+                                <div className="w-4 h-4 rounded-full border-2 border-slate-300" />
+                                <span className="text-sm font-bold text-slate-500">Campus Wallet (Coming Soon)</span>
                               </div>
                             </button>
 
                             <button
                               onClick={() => setPaymentMethod('cash')}
-                              className={`w-full flex items-center justify-between p-4 rounded-2xl border ${paymentMethod === 'cash' ? 'border-emerald-500 bg-emerald-950/20' : 'border-slate-800 bg-slate-950 hover:bg-slate-900'} transition-all`}
+                              className={`w-full flex items-center justify-between p-4 rounded-xl border ${paymentMethod === 'cash' ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'} transition-all`}
                             >
                               <div className="flex items-center gap-3">
-                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'cash' ? 'border-emerald-500' : 'border-slate-600'}`}>
+                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'cash' ? 'border-emerald-500' : 'border-slate-300'}`}>
                                   {paymentMethod === 'cash' && <div className="w-2 h-2 rounded-full bg-emerald-500" />}
                                 </div>
-                                <span className="text-sm font-bold text-white">Pay at Counter (Cash)</span>
+                                <span className="text-sm font-bold text-slate-900">Pay at Counter (Cash)</span>
                               </div>
                             </button>
                           </div>
@@ -1463,7 +1463,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                         <button
                           onClick={handlePlaceOrder}
                           disabled={submittingOrder}
-                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-4 text-base font-black text-slate-950 shadow-lg shadow-emerald-500/20 disabled:opacity-50 hover:scale-[1.02] hover:shadow-emerald-500/40 transition-all"
+                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-4 text-base font-black text-white shadow-lg shadow-emerald-500/30 disabled:opacity-50 hover:scale-[1.02] hover:shadow-emerald-500/40 transition-all"
                         >
                           {submittingOrder ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
                           {submittingOrder ? 'Processing...' : `Pay ${formatINR(cartGrandTotal)}`}
@@ -1481,40 +1481,40 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                   const o = orders[0];
                   return (
                   <div className="max-w-md mx-auto space-y-6 text-center py-6">
-                    <div className="w-24 h-24 mx-auto bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/30 animate-bounce-once">
-                      <CheckCircle className="w-12 h-12 text-slate-950" />
+                    <div className="w-24 h-24 mx-auto bg-gradient-to-br from-emerald-100 to-teal-100 border border-emerald-200 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/10 animate-bounce-once">
+                      <CheckCircle className="w-12 h-12 text-emerald-600" />
                     </div>
                     <div className="space-y-2">
-                      <h2 className="text-3xl font-black text-white">Order Confirmed!</h2>
-                      <p className="text-sm text-emerald-400 font-semibold">Your order has been sent to the kitchen.</p>
+                      <h2 className="text-3xl font-black text-slate-900">Order Confirmed!</h2>
+                      <p className="text-sm text-emerald-600 font-semibold">Your order has been sent to the kitchen.</p>
                     </div>
 
                     {/* Order Details Card */}
                     {o && (
-                      <div className="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-slate-900 to-emerald-950/20 p-6 space-y-4 text-left">
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-6 space-y-4 text-left shadow-sm">
                         <div className="flex flex-wrap items-center justify-between text-xs gap-2">
                           <span className="text-slate-500 font-bold">Order ID</span>
-                          <span className="text-white font-mono font-black text-[10px]">{o.order_id}</span>
+                          <span className="text-slate-900 font-mono font-black text-[10px]">{o.order_id}</span>
                         </div>
                         <div className="flex flex-wrap items-center justify-between text-xs gap-2">
                           <span className="text-slate-500 font-bold">Token Number</span>
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-950/60 px-3 py-1 text-xs font-black text-amber-300">
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">
                             🎟️ {o.token_number || o.pickup_token || 'Generating...'}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center justify-between text-xs gap-2">
                           <span className="text-slate-500 font-bold">Counter</span>
-                          <span className="text-white font-bold">{o.counter || 'Campus Counter'}</span>
+                          <span className="text-slate-900 font-bold">{o.counter || 'Campus Counter'}</span>
                         </div>
                         <div className="flex flex-wrap items-center justify-between text-xs gap-2">
                           <span className="text-slate-500 font-bold">Pickup PIN</span>
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/40 bg-cyan-950/60 px-3 py-1 text-xs font-black text-cyan-300">
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
                             🔐 {o.pickup_code || o.pickup_pin || 'N/A'}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center justify-between text-xs gap-2">
                           <span className="text-slate-500 font-bold">Est. Wait Time</span>
-                          <span className="text-amber-400 font-bold">
+                          <span className="text-amber-600 font-bold">
                             ~{o.estimated_ready_at ? Math.max(1, Math.ceil((new Date(o.estimated_ready_at).getTime() - Date.now()) / 60000)) : 15} mins
                           </span>
                         </div>
@@ -1524,8 +1524,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           const cancelSecondsLeft = Math.max(0, 30 - Math.floor((currentTime - new Date(o.created_at).getTime()) / 1000));
                           if (cancelSecondsLeft > 0 && o.status !== 'cancelled') {
                             return (
-                              <div className="border border-red-500/20 bg-red-950/20 rounded-2xl p-4 text-center mt-4 space-y-3">
-                                <p className="text-[10px] text-red-300">You can cancel your order within {cancelSecondsLeft}s</p>
+                              <div className="border border-red-200 bg-red-50 rounded-2xl p-4 text-center mt-4 space-y-3">
+                                <p className="text-[10px] text-red-600">You can cancel your order within {cancelSecondsLeft}s</p>
                                 <button
                                   onClick={async () => {
                                     setSubmittingOrder(true);
@@ -1539,7 +1539,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                                     setSubmittingOrder(false);
                                   }}
                                   disabled={submittingOrder}
-                                  className="w-full py-2 bg-red-500/20 hover:bg-red-500/40 text-red-400 text-xs font-bold rounded-xl transition-colors disabled:opacity-50"
+                                  className="w-full py-2 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-bold rounded-xl transition-colors disabled:opacity-50 border border-red-200"
                                 >
                                   {submittingOrder ? 'Cancelling...' : `Cancel Order (${cancelSecondsLeft}s)`}
                                 </button>
@@ -1551,23 +1551,23 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
                         {/* Bill breakdown */}
                         {o.items?.length > 0 && (
-                          <div className="border-t border-slate-800 pt-4 space-y-2">
+                          <div className="border-t border-slate-200 pt-4 space-y-2">
                             <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Your Order</p>
                             {o.items.map((item, i) => (
-                              <div key={i} className="flex justify-between text-xs text-slate-300">
+                              <div key={i} className="flex justify-between text-xs text-slate-700">
                                 <span className="font-semibold">{item.quantity}× {item.name}</span>
-                                <span className="text-slate-400">{formatINR(item.price * item.quantity)}</span>
+                                <span className="text-slate-900">{formatINR(item.price * item.quantity)}</span>
                               </div>
                             ))}
-                            <div className="flex justify-between text-sm font-black text-white pt-2 border-t border-slate-800">
+                            <div className="flex justify-between text-sm font-black text-slate-900 pt-2 border-t border-slate-200">
                               <span>Total</span>
-                              <span className="text-emerald-400">{formatINR(o.total_amount)}</span>
+                              <span className="text-emerald-600">{formatINR(o.total_amount)}</span>
                             </div>
                           </div>
                         )}
 
                         {/* Live progress bar */}
-                        <div className="border-t border-slate-800 pt-4">
+                        <div className="border-t border-slate-200 pt-4">
                           <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-3">Live Status</p>
                           <OrderProgressBar status={o.status} />
                         </div>
@@ -1578,13 +1578,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     <div className="space-y-3">
                       <button
                         onClick={() => setActiveTab('payment_success')}
-                        className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 text-sm font-black text-slate-950 shadow-lg hover:from-emerald-400 hover:to-teal-400 transition-all"
+                        className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3.5 text-sm font-black text-white shadow-lg hover:from-emerald-400 hover:to-teal-500 transition-all shadow-emerald-500/30"
                       >
                         <Activity className="w-4 h-4" /> Track Order Live
                       </button>
                       {o && (
                         <>
-                          <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-white hover:bg-slate-700 transition-colors">
+                          <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-100 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors border border-slate-200">
                             <QrCode className="w-3.5 h-3.5" /> Show Pickup QR Code
                           </button>
                           <button onClick={() => {
@@ -1597,7 +1597,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                             a.click();
                             URL.revokeObjectURL(url);
                             if (triggerToast) triggerToast('Receipt Downloaded', `Receipt for ${o.order_id} saved.`, 'success');
-                          }} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors">
+                          }} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-100 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors border border-slate-200">
                             <Receipt className="w-3.5 h-3.5" /> Download Receipt
                           </button>
                         </>
@@ -1611,24 +1611,24 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 {/* ═══════════════════ PAYMENT FAILED TAB ═══════════════════ */}
                 {activeTab === 'payment_failed' && (
                   <div className="max-w-md mx-auto space-y-6 text-center py-10">
-                    <div className="w-24 h-24 mx-auto bg-gradient-to-br from-red-500 to-rose-600 rounded-full flex items-center justify-center shadow-2xl shadow-red-500/30">
-                      <XCircle className="w-12 h-12 text-slate-950" />
+                    <div className="w-24 h-24 mx-auto bg-red-50 border border-red-200 rounded-full flex items-center justify-center shadow-lg shadow-red-500/10">
+                      <XCircle className="w-12 h-12 text-red-500" />
                     </div>
                     <div className="space-y-2">
-                      <h2 className="text-3xl font-black text-white">Payment Failed</h2>
-                      <p className="text-sm text-red-400 font-semibold">{error || 'Something went wrong during payment.'}</p>
+                      <h2 className="text-3xl font-black text-slate-900">Payment Failed</h2>
+                      <p className="text-sm text-red-600 font-semibold">{error || 'Something went wrong during payment.'}</p>
                     </div>
 
                     <div className="flex gap-4">
                       <button
                         onClick={() => { setError(null); setActiveTab('checkout'); }}
-                        className="flex-1 rounded-2xl border border-slate-700 bg-slate-800 py-4 text-sm font-black text-white hover:bg-slate-700 transition-all"
+                        className="flex-1 rounded-2xl border border-slate-300 bg-slate-100 py-4 text-sm font-black text-slate-900 hover:bg-slate-200 transition-all"
                       >
                         Try Again
                       </button>
                       <button
                         onClick={() => { setError(null); setActiveTab('explore'); }}
-                        className="flex-1 rounded-2xl border border-slate-800 bg-transparent py-4 text-sm font-black text-slate-400 hover:bg-slate-900 hover:text-white transition-all"
+                        className="flex-1 rounded-2xl border border-slate-200 bg-white py-4 text-sm font-black text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-all shadow-sm"
                       >
                         Cancel
                       </button>
@@ -1642,51 +1642,51 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
         {/* ── CART DRAWER ────────────────────────────────────────────── */}
         {showCart && (
-          <div className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowCart(false)} />
+          <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowCart(false)} />
         )}
-        <aside className={`fixed bottom-0 right-0 top-0 z-50 w-full max-w-sm border-l border-slate-800 bg-slate-950 flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${showCart ? 'translate-x-0' : 'translate-x-full'}`}>
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-            <h3 className="text-base font-black text-white flex items-center gap-2">
-              <ShoppingCart className="w-4 h-4 text-emerald-400" /> Cart
-              {cartCount > 0 && <span className="text-emerald-400">({cartCount})</span>}
+        <aside className={`fixed bottom-0 right-0 top-0 z-50 w-full max-w-sm border-l border-slate-200 bg-white flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${showCart ? 'translate-x-0' : 'translate-x-full'}`}>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-slate-50/50">
+            <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+              <ShoppingCart className="w-4 h-4 text-emerald-600" /> Cart
+              {cartCount > 0 && <span className="text-emerald-600">({cartCount})</span>}
             </h3>
-            <button onClick={() => setShowCart(false)} className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors">
+            <button onClick={() => setShowCart(false)} className="p-1.5 text-slate-400 hover:text-slate-800 rounded-full hover:bg-slate-100 transition-colors">
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 bg-[#F8FAFC]">
             {cart.length ? cart.map((entry) => {
               const itemTotal = (entry.item.offer_price || entry.item.price) * entry.quantity;
               return (
-              <div key={entry.item.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-3 flex gap-3">
-                <div className="w-16 h-16 shrink-0 rounded-xl bg-slate-800 overflow-hidden flex items-center justify-center">
+              <div key={entry.item.id} className="rounded-2xl border border-[#E2E8F0] bg-white p-3 flex gap-3 shadow-sm">
+                <div className="w-16 h-16 shrink-0 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center border border-slate-200">
                   {entry.item.image_url ? (
                     <img src={entry.item.image_url} alt={entry.item.name} className="w-full h-full object-cover" onError={() => {}} />
                   ) : (
-                    <Utensils className="w-6 h-6 text-slate-700" />
+                    <Utensils className="w-6 h-6 text-slate-300" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-xs font-extrabold text-white truncate">{entry.item.name}</p>
+                      <p className="text-xs font-bold text-slate-900 truncate">{entry.item.name}</p>
                       <p className="text-[9px] text-slate-500 truncate">{entry.item.counter_name}</p>
                     </div>
-                    <p className="shrink-0 text-xs font-black text-emerald-300">{formatINR(itemTotal)}</p>
+                    <p className="shrink-0 text-xs font-black text-emerald-600">{formatINR(itemTotal)}</p>
                   </div>
                   <p className="text-[9px] text-slate-500 mt-0.5">{formatINR(entry.item.offer_price || entry.item.price)} each</p>
                   <div className="flex items-center gap-2 mt-2">
                     <button
                       onClick={() => updateQuantity(entry.item.id, -1)}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors"
                     >
                       <Minus className="w-3 h-3" />
                     </button>
-                    <span className="text-xs font-bold text-white w-6 text-center">{entry.quantity}</span>
+                    <span className="text-xs font-bold text-slate-900 w-6 text-center">{entry.quantity}</span>
                     <button
                       onClick={() => updateQuantity(entry.item.id, 1)}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors"
                     >
                       <Plus className="w-3 h-3" />
                     </button>
@@ -1700,28 +1700,28 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           </div>
 
           {cart.length > 0 && (
-            <div className="border-t border-slate-800 px-5 py-4 space-y-2 bg-slate-950">
-              <div className="flex justify-between text-xs text-slate-400">
+            <div className="border-t border-slate-200 px-5 py-4 space-y-2 bg-white">
+              <div className="flex justify-between text-xs text-slate-500">
                 <span>Subtotal</span>
                 <span>{formatINR(cartSubtotal)}</span>
               </div>
-              <div className="flex justify-between text-xs text-slate-400">
+              <div className="flex justify-between text-xs text-slate-500">
                 <span>Counter</span>
-                <span className="font-semibold text-white truncate max-w-32 ml-2 text-right">{firstItemCounter || 'Multiple'}</span>
+                <span className="font-semibold text-slate-900 truncate max-w-32 ml-2 text-right">{firstItemCounter || 'Multiple'}</span>
               </div>
               {cartDiscount > 0 && (
-                <div className="flex justify-between text-xs text-emerald-400">
+                <div className="flex justify-between text-xs text-emerald-600 font-medium">
                   <span>Discount</span>
                   <span>-{formatINR(cartDiscount)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-sm font-black text-white pt-1">
+              <div className="flex justify-between text-sm font-black text-slate-900 pt-1">
                 <span>Total</span>
-                <span className="text-emerald-400">{formatINR(cartGrandTotal)}</span>
+                <span className="text-emerald-600">{formatINR(cartGrandTotal)}</span>
               </div>
               <button
                 onClick={() => { setShowCart(false); setActiveTab('checkout'); }}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 text-sm font-black text-slate-950 shadow-lg hover:from-emerald-400 hover:to-teal-400 transition-all"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3.5 text-sm font-black text-white shadow-lg hover:from-emerald-400 hover:to-teal-500 transition-all shadow-emerald-500/30 mt-2"
               >
                 Proceed to Checkout
               </button>
@@ -1732,16 +1732,16 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
       {/* ── EDIT PROFILE MODAL ─────────────────────────────────────── */}
       {editingProfile && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-slate-950/85 backdrop-blur-xl p-4" onClick={() => setEditingProfile(false)}>
-          <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" onClick={() => setEditingProfile(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-white">Edit Profile</h3>
-              <button onClick={() => setEditingProfile(false)} className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors">
+              <h3 className="text-lg font-black text-slate-900">Edit Profile</h3>
+              <button onClick={() => setEditingProfile(false)} className="p-1.5 text-slate-400 hover:text-slate-800 rounded-full hover:bg-slate-100 transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>
             {profileMessage && (
-              <div className={`rounded-xl p-3 text-xs font-bold ${profileMessage.includes('success') ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300' : 'bg-red-950/60 border border-red-500/40 text-red-300'}`}>
+              <div className={`rounded-xl p-3 text-xs font-bold ${profileMessage.includes('success') ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
                 {profileMessage}
               </div>
             )}
@@ -1755,12 +1755,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 { label: 'Campus Block', key: 'campus_block' as const, placeholder: 'e.g. Block A' },
               ].map(({ label, key, placeholder }) => (
                 <div key={key}>
-                  <label className="text-[10px] font-black text-slate-400 mb-1.5 block uppercase tracking-wide">{label}</label>
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block uppercase tracking-wide">{label}</label>
                   <input
                     value={profileForm[key]}
                     onChange={(e) => setProfileForm({ ...profileForm, [key]: e.target.value })}
                     placeholder={placeholder}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-emerald-500/60 transition-colors"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500/60 transition-colors"
                   />
                 </div>
               ))}
@@ -1768,7 +1768,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             <button
               onClick={handleSaveProfile}
               disabled={savingProfile}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3 text-sm font-black text-slate-950 shadow-lg disabled:opacity-50 transition-all"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/30 disabled:opacity-50 transition-all hover:scale-[1.02]"
             >
               {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {savingProfile ? 'Saving...' : 'Save Changes'}
@@ -1779,35 +1779,35 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
       {/* ── LEAVE INSTITUTION MODAL ──────────────────────────────── */}
       {showLeaveInstitution && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-slate-950/85 backdrop-blur-xl p-4" onClick={() => { setShowLeaveInstitution(false); setLeaveInstitutionMessage(null); }}>
-          <div className="w-full max-w-md rounded-3xl border border-amber-500/30 bg-slate-900 p-6 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" onClick={() => { setShowLeaveInstitution(false); setLeaveInstitutionMessage(null); }}>
+          <div className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-6 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-amber-950 border border-amber-500/40 flex items-center justify-center">
-                  <Building2 className="w-4 h-4 text-amber-400" />
+                <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+                  <Building2 className="w-4 h-4 text-amber-600" />
                 </div>
-                <h3 className="text-lg font-black text-white">Leave Institution</h3>
+                <h3 className="text-lg font-black text-slate-900">Leave Institution</h3>
               </div>
-              <button onClick={() => { setShowLeaveInstitution(false); setLeaveInstitutionMessage(null); }} className="p-1.5 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors">
+              <button onClick={() => { setShowLeaveInstitution(false); setLeaveInstitutionMessage(null); }} className="p-1.5 text-slate-400 hover:text-slate-800 rounded-full hover:bg-slate-100 transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {leaveInstitutionMessage ? (
-              <div className={`rounded-xl p-4 text-xs font-bold text-center ${leaveInstitutionMessage.includes('Success') ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300' : 'bg-red-950/60 border border-red-500/40 text-red-300'}`}>
+              <div className={`rounded-xl p-4 text-xs font-bold text-center ${leaveInstitutionMessage.includes('Success') ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
                 {leaveInstitutionMessage}
               </div>
             ) : (
               <>
-                <div className="rounded-xl bg-amber-950/30 border border-amber-500/20 p-4 space-y-2">
-                  <p className="text-xs text-amber-200 font-semibold">This will:</p>
-                  <ul className="text-[11px] text-amber-300/80 space-y-1.5 ml-4 list-disc">
+                <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 space-y-2">
+                  <p className="text-xs text-amber-700 font-semibold">This will:</p>
+                  <ul className="text-[11px] text-amber-900/80 space-y-1.5 ml-4 list-disc">
                     <li>Remove your current institution membership</li>
                     <li>Keep your account active and unchanged</li>
                     <li>Allow you to join another institution with a new code</li>
                   </ul>
                 </div>
-                <p className="text-[11px] text-slate-400 text-center">
+                <p className="text-[11px] text-slate-500 text-center">
                   Your account, orders, and profile data will be preserved.
                 </p>
               </>
@@ -1817,14 +1817,14 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               <div className="flex gap-3">
                 <button
                   onClick={() => { setShowLeaveInstitution(false); setLeaveInstitutionMessage(null); }}
-                  className="flex-1 py-3 rounded-2xl border border-slate-700 bg-slate-800 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors"
+                  className="flex-1 py-3 rounded-xl border border-slate-300 bg-slate-100 text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleLeaveInstitution}
                   disabled={leavingInstitution}
-                  className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 text-xs font-black hover:from-amber-400 hover:to-orange-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-black hover:from-amber-400 hover:to-orange-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-md shadow-amber-500/20"
                 >
                   {leavingInstitution ? <Loader2 className="w-4 h-4 animate-spin" /> : <Building2 className="w-4 h-4" />}
                   {leavingInstitution ? 'Leaving...' : 'Leave Institution'}

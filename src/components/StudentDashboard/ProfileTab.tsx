@@ -71,11 +71,11 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
     <div className="flex-1 overflow-y-auto pb-32">
       <div className="p-4 space-y-4 max-w-2xl mx-auto">
 
-        {/* Hero card — dark gradient */}
-        <div className="relative overflow-hidden rounded-3xl shadow-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-[#1a1b3a] via-[#1e2050] to-slate-900" />
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/8 via-transparent to-indigo-500/8" />
-          <div className="absolute -top-12 -right-12 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl" />
+        {/* Hero card — Emerald gradient */}
+        <div className="relative overflow-hidden rounded-3xl shadow-xl border border-emerald-500/20">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-900" />
+          <div className="absolute inset-0 bg-gradient-to-r from-emerald-400/20 via-transparent to-teal-400/20" />
+          <div className="absolute -top-12 -right-12 w-40 h-40 bg-emerald-400/20 rounded-full blur-3xl" />
 
           <div className="relative z-10 p-6">
             <div className="flex items-center gap-4">
@@ -84,26 +84,26 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
                 <img
                   src={avatarUrl}
                   alt="Avatar"
-                  className="w-20 h-20 rounded-2xl object-cover ring-4 ring-white/10 shadow-xl shrink-0"
+                  className="w-20 h-20 rounded-2xl object-cover ring-4 ring-white/20 shadow-xl shrink-0"
                 />
               ) : (
-                <div className={`flex-shrink-0 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br ${roleGradient(liveRole)} text-2xl font-black text-white shadow-xl ring-4 ring-white/10`}>
+                <div className={`flex-shrink-0 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 text-2xl font-black text-white shadow-xl ring-4 ring-white/20`}>
                   {initials}
                 </div>
               )}
 
               <div className="min-w-0 flex-1">
                 <h3 className="text-xl font-black text-white truncate leading-tight">{displayName}</h3>
-                <p className="text-xs text-blue-300 truncate mt-1">{email}</p>
+                <p className="text-xs text-emerald-100 truncate mt-1">{email}</p>
 
                 {/* Role + institution badges */}
                 <div className="flex flex-wrap gap-1.5 mt-2.5">
-                  <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-blue-300">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300/30 bg-emerald-400/20 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-emerald-100">
                     <Shield className="w-2.5 h-2.5" />
                     {roleLabel(liveRole)}
                   </span>
                   {institutionCode && (
-                    <span className="rounded-full border border-slate-700 bg-slate-800 px-2.5 py-0.5 text-[9px] font-mono text-slate-400">
+                    <span className="rounded-full border border-teal-500/30 bg-teal-800/40 px-2.5 py-0.5 text-[9px] font-mono text-teal-100">
                       {institutionCode}
                     </span>
                   )}

@@ -284,7 +284,14 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
   const isVeg = item.is_veg !== false;
   const aiScore = item.ai_popularity_score || item.rating || 0;
 
+  // ── Availability logic ──
+  // Sold Out when stock = 0 (regardless of other flags)
+  const isSoldOut = item.stock_quantity !== undefined && item.stock_quantity <= 0;
+  // Add to Cart only when all availability flags are true AND stock > 0
+  const canAddToCart = item.is_available && !isSoldOut;
+
   const handleAdd = () => {
+    if (!canAddToCart) return;
     setAdding(true);
     onAdd(item);
     setTimeout(() => setAdding(false), 600);
@@ -409,26 +416,35 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
           )}
         </div>
 
+        {/* Sold Out overlay badge */}
+        {isSoldOut && (
+          <div className="absolute top-0 left-0 right-0 flex items-center justify-center h-44 bg-slate-950/70 backdrop-blur-sm z-10">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/50 bg-red-950/90 px-3 py-1 text-[10px] font-black text-red-300">
+              <XCircle className="w-3 h-3" /> Sold Out
+            </span>
+          </div>
+        )}
+
         {/* Add button */}
         <button
           onClick={handleAdd}
-          disabled={!item.is_available || (item.stock_quantity !== undefined && item.stock_quantity <= 0)}
+          disabled={!canAddToCart}
           className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-extrabold shadow-sm transition-all active:scale-[0.97] ${
-            !item.is_available || (item.stock_quantity !== undefined && item.stock_quantity <= 0)
+            !canAddToCart
               ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
               : adding
                 ? 'bg-emerald-500 text-slate-950 scale-[0.98]'
                 : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 hover:from-emerald-400 hover:to-teal-400 hover:shadow-emerald-950/40 hover:shadow-md'
           }`}
         >
-          {!item.is_available ? (
+          {isSoldOut ? (
             'Sold Out'
-          ) : (item.stock_quantity !== undefined && item.stock_quantity <= 0) ? (
-            'Out of Stock'
+          ) : !item.is_available ? (
+            'Unavailable'
           ) : adding ? (
             <><Check className="w-4 h-4" /> Added!</>
           ) : (
-            <><Plus className="w-4 h-4" /> Add to Order</>
+            <><Plus className="w-4 h-4" /> Add to Cart</>
           )}
         </button>
       </div>

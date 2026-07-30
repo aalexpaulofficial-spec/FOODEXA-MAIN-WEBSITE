@@ -145,20 +145,83 @@ export async function fetchMenuItems(params?: {
 }
 
 export function mapMenuItem(row: any): MenuItem {
+  // ── Field mapping: Supabase menu_items -> MenuItem ──
+  // food_name -> item name
+  const name = row.food_name || row.item_name || row.name || null;
+
+  // price -> item price
+  const price = Number(row.price || 0);
+
+  // description -> description
+  const description = row.description || '';
+
+  // image_url (fallback thumbnail_url) -> image
+  const imageUrl = row.image_url || row.thumbnail_url || null;
+
+  // prep_time (fallback preparation_time) -> preparation time
   let prepTimeMinutes: number | undefined;
-  if (row.preparation_time !== undefined && row.preparation_time !== null) {
-    prepTimeMinutes = Number(row.preparation_time);
-  } else if (row.prep_time !== undefined && row.prep_time !== null) {
+  let prepTimeDisplay: string | null = null;
+  if (row.prep_time !== undefined && row.prep_time !== null) {
+    prepTimeDisplay = String(row.prep_time);
     prepTimeMinutes = Number(row.prep_time);
+  } else if (row.preparation_time !== undefined && row.preparation_time !== null) {
+    prepTimeDisplay = String(row.preparation_time);
+    prepTimeMinutes = Number(row.preparation_time);
   }
 
-  const name = row.item_name || row.food_name || row.name || null;
+  // Counter & category mapping
   const counterName = row.counter_name || row.food_type || row.counter || null;
   const category = row.category || row.food_type || row.category_name || null;
-  const isAvailable = row.is_available !== undefined ? row.is_available : (row.is_published !== undefined ? row.is_published : true);
-  const isArchived = row.status === 'archived' || row.is_published === false;
-  const stockRaw = row.stock_quantity !== undefined ? row.stock_quantity : (row.stock !== undefined ? row.stock : undefined);
+
+  // ── Stock quantity ──
+  const stockRaw = row.stock_quantity !== undefined ? row.stock_quantity
+    : row.stock !== undefined ? row.stock
+    : row.inventory_count !== undefined ? row.inventory_count
+    : undefined;
   const stockQuantity = stockRaw !== undefined && stockRaw !== null ? Number(stockRaw) : undefined;
+
+  // ── Strict availability logic ──
+  // Available ONLY when ALL conditions are true:
+  //   1. status = 'published' (or not 'archived')
+  //   2. available = true (if column exists)
+  //   3. availability = true (if column exists)
+  //   4. is_available = true (or defaults true)
+  //   5. is_archived = false
+  //   6. stock > 0 (or no stock column = unlimited)
+
+  const isArchived =
+    row.is_archived === true ||
+    row.status === 'archived' ||
+    row.is_published === false;
+
+  const isStatusPublished =
+    row.status === 'published' || row.status === undefined || row.status === null;
+
+  const isAvailableFlag =
+    row.is_available !== undefined ? Boolean(row.is_available) : true;
+
+  const isAvailableAlt =
+    row.available !== undefined ? Boolean(row.available) : true;
+
+  const isAvailabilityAlt =
+    row.availability !== undefined ? Boolean(row.availability) : true;
+
+  const isPublished =
+    row.is_published !== undefined ? Boolean(row.is_published) : true;
+
+  const stock = stockQuantity !== undefined ? stockQuantity : null;
+  const hasStock = stock === null || stock > 0;
+
+  const isFullyAvailable =
+    !isArchived &&
+    isStatusPublished &&
+    isAvailableFlag &&
+    isAvailableAlt &&
+    isAvailabilityAlt &&
+    isPublished &&
+    hasStock;
+
+  const isSoldOut = stock !== null && stock <= 0;
 
   return {
     id: String(row.id),
@@ -166,17 +229,17 @@ export function mapMenuItem(row: any): MenuItem {
     counter: counterName ? String(counterName) : 'Counter',
     counter_name: counterName ? String(counterName) : 'Counter',
     counter_id: row.canteen_id || row.counter_id || null,
-    price: Number(row.price || 0),
+    price,
     offer_price: row.offer_price || null,
     offer_label: row.offer_label || null,
-    prep_time: row.prep_time != null ? String(row.prep_time) : null,
+    prep_time: prepTimeDisplay,
     rating: Number(row.rating || 0),
     category: category ? String(category) : 'Menu',
     category_id: row.category_id || null,
-    image_url: row.image_url || row.thumbnail_url || null,
-    description: row.description || '',
-    is_available: isAvailable && !isArchived,
-    is_published: row.is_published !== false && !isArchived,
+    image_url: imageUrl,
+    description,
+    is_available: isFullyAvailable,
+    is_published: isPublished && !isArchived,
     popular: Boolean(row.is_featured || row.is_today_special || (row.ai_popularity_score > 0)),
     nutrition: row.calories ? JSON.stringify({ calories: row.calories, protein: row.protein, carbs: row.carbs || row.carbohydrates, fat: row.fat }) : null,
     institution_id: row.institution_id || null,

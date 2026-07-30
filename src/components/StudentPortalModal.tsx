@@ -640,8 +640,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               role: ['student', 'faculty', 'guest', 'institution_admin', 'kitchen_staff', 'canteen_manager', 'super_admin'].includes(r.role) ? r.role : null,
               institution_id: r.institution_id || null, institution_code: null,
               canteen_id: r.canteen_id || null, counter_id: null, category_id: null,
-              order_id: String(r.id), counter: String(r.canteen_id || ''),
-              items: Array.isArray(r.items) ? r.items.map((i: any) => ({ name: String(i.name || 'Item'), quantity: Number(i.quantity || 1), price: Number(i.price || 0) })) : [],
+              order_id: String(r.id),
+              // Derive counter display name: food_type on items, or fallback to 'Campus Counter'
+              counter: r.counter_name || (Array.isArray(r.items) && r.items[0]?.food_type) || (Array.isArray(r.items) && r.items[0]?.counter_name) || 'Campus Counter',
+              items: Array.isArray(r.items) ? r.items.map((i: any) => ({ name: String(i.item_name || i.name || 'Item'), quantity: Number(i.quantity || 1), price: Number(i.price || 0) })) : [],
               total_amount: Number(r.total_amount || 0), transaction_amount: Number(r.transaction_amount || r.total_amount || 0),
               status: (r.status || 'pending').toLowerCase() as OrderStatus,
               order_status: r.order_status || r.status || 'pending',
@@ -991,6 +993,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               status: 'accepted',
               order_status: 'Accepted',
               payment_method: 'razorpay',
+              // Attach human-readable counter name from the cart for the success page
+              counter: cart[0]?.item?.counter_name || cart[0]?.item?.counter || orderResult.data.counter || 'Campus Counter',
               razorpay_order_id,
               razorpay_payment_id,
               razorpay_signature,
@@ -2102,9 +2106,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 )}
 
                 {/* PAYMENT SUCCESS TAB */}
-                {activeTab === 'payment_success' && orders[0] && (
-                  <div className="max-w-md mx-auto space-y-6 text-center py-10">
-                    <div className="w-24 h-24 mx-auto bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/30">
+                {activeTab === 'payment_success' && (() => {
+                  const o = orders[0];
+                  return (
+                  <div className="max-w-md mx-auto space-y-6 text-center py-6">
+                    <div className="w-24 h-24 mx-auto bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/30 animate-bounce-once">
                       <CheckCircle className="w-12 h-12 text-slate-950" />
                     </div>
                     <div className="space-y-2">
@@ -2112,58 +2118,92 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                       <p className="text-sm text-emerald-400 font-semibold">Your order has been sent to the kitchen.</p>
                     </div>
 
-                    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4 text-left">
-                      <div className="flex flex-wrap items-center justify-between text-xs gap-2">
-                        <span className="text-slate-500 font-bold">Order Number</span>
-                        <span className="text-white font-mono font-black">{orders[0].order_id}</span>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-between text-xs gap-2">
-                        <span className="text-slate-500 font-bold">Token Number</span>
-                        <span className="text-amber-300 font-black">{orders[0].token_number || 'PENDING'}</span>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-between text-xs gap-2">
-                        <span className="text-slate-500 font-bold">Counter</span>
-                        <span className="text-white font-bold">{orders[0].counter}</span>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-between text-xs gap-2">
-                        <span className="text-slate-500 font-bold">Pickup PIN</span>
-                        <span className="text-cyan-300 font-black">{orders[0].pickup_code || orders[0].pickup_pin || 'N/A'}</span>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-between text-xs gap-2">
-                        <span className="text-slate-500 font-bold">Est. Wait Time</span>
-                        <span className="text-amber-400 font-bold">~{orders[0].estimated_prep_time || 15} mins</span>
-                      </div>
-                      <div className="pt-4 border-t border-slate-800 space-y-2">
-                        <button onClick={() => setActiveTab('orders')} className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500 text-slate-950 py-2.5 text-xs font-black hover:bg-emerald-400 transition-colors">
-                          <Activity className="w-3.5 h-3.5" /> Live Order Tracking
-                        </button>
-                        <button onClick={() => setQrOrder(orders[0])} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-white hover:bg-slate-700 transition-colors">
-                          <QrCode className="w-3.5 h-3.5" /> Show Pickup QR Code
-                        </button>
-                        <button onClick={() => {
-                          const receipt = generateReceipt(orders[0]);
-                          const blob = new Blob([receipt], { type: 'text/plain' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `receipt-${orders[0].order_id}.txt`;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                          if (triggerToast) triggerToast('Receipt Downloaded', `Receipt for ${orders[0].order_id} saved.`, 'success');
-                        }} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors">
-                          <Receipt className="w-3.5 h-3.5" /> Download Payment Receipt
-                        </button>
-                      </div>
-                    </div>
+                    {/* Order Details Card */}
+                    {o && (
+                      <div className="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-slate-900 to-emerald-950/20 p-6 space-y-4 text-left">
+                        <div className="flex flex-wrap items-center justify-between text-xs gap-2">
+                          <span className="text-slate-500 font-bold">Order ID</span>
+                          <span className="text-white font-mono font-black text-[10px]">{o.order_id}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between text-xs gap-2">
+                          <span className="text-slate-500 font-bold">Token Number</span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-950/60 px-3 py-1 text-xs font-black text-amber-300">
+                            🎟️ {o.token_number || o.pickup_token || 'Generating...'}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between text-xs gap-2">
+                          <span className="text-slate-500 font-bold">Counter</span>
+                          <span className="text-white font-bold">{o.counter || 'Campus Counter'}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between text-xs gap-2">
+                          <span className="text-slate-500 font-bold">Pickup PIN</span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/40 bg-cyan-950/60 px-3 py-1 text-xs font-black text-cyan-300">
+                            🔐 {o.pickup_code || o.pickup_pin || 'N/A'}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between text-xs gap-2">
+                          <span className="text-slate-500 font-bold">Est. Wait Time</span>
+                          <span className="text-amber-400 font-bold">~15 mins</span>
+                        </div>
 
-                    <button
-                      onClick={() => setActiveTab('orders')}
-                      className="w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-4 text-sm font-black text-slate-950 shadow-lg hover:from-emerald-400 hover:to-teal-400 transition-all"
-                    >
-                      Track Order Live
-                    </button>
+                        {/* Bill breakdown */}
+                        {o.items?.length > 0 && (
+                          <div className="border-t border-slate-800 pt-4 space-y-2">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Your Order</p>
+                            {o.items.map((item, i) => (
+                              <div key={i} className="flex justify-between text-xs text-slate-300">
+                                <span className="font-semibold">{item.quantity}× {item.name}</span>
+                                <span className="text-slate-400">{formatINR(item.price * item.quantity)}</span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between text-sm font-black text-white pt-2 border-t border-slate-800">
+                              <span>Total</span>
+                              <span className="text-emerald-400">{formatINR(o.total_amount)}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Live progress bar */}
+                        <div className="border-t border-slate-800 pt-4">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-3">Live Status</p>
+                          <OrderProgressBar status={o.status} />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="space-y-3">
+                      <button
+                        onClick={() => setActiveTab('orders')}
+                        className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 text-sm font-black text-slate-950 shadow-lg hover:from-emerald-400 hover:to-teal-400 transition-all"
+                      >
+                        <Activity className="w-4 h-4" /> Track Order Live
+                      </button>
+                      {o && (
+                        <>
+                          <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-white hover:bg-slate-700 transition-colors">
+                            <QrCode className="w-3.5 h-3.5" /> Show Pickup QR Code
+                          </button>
+                          <button onClick={() => {
+                            const receipt = generateReceipt(o);
+                            const blob = new Blob([receipt], { type: 'text/plain' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `receipt-${o.order_id}.txt`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                            if (triggerToast) triggerToast('Receipt Downloaded', `Receipt for ${o.order_id} saved.`, 'success');
+                          }} className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors">
+                            <Receipt className="w-3.5 h-3.5" /> Download Receipt
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                )}
+                  );
+                })()}
+
 
                 {/* ═══════════════════ PAYMENT FAILED TAB ═══════════════════ */}
                 {activeTab === 'payment_failed' && (

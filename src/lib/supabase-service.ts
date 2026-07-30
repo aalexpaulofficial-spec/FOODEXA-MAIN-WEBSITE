@@ -355,19 +355,46 @@ export async function placeOrder(params: {
 }): Promise<{ data: Order | null; error: string | null }> {
   const now = new Date();
   const nowISO = now.toISOString();
+  const dateStr = nowISO.slice(0, 10).replace(/-/g, '');
+  const seq = String(Math.floor(Math.random() * 999999) + 1).padStart(6, '0');
+  
   const tokenNumber = `TKN-${Math.floor(1000 + Math.random() * 9000)}`;
   const pickupCode = `PC-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  const qrPickupCode = `QR-FDX-${dateStr}-${seq}`;
+  
   const isPaid = Boolean(params.razorpay_payment_id && params.razorpay_signature);
   const customerName = params.customer_name || params.email?.split('@')[0] || 'Customer';
   const phone = params.phone || '0000000000';
+
+  // CRITICAL FIX: Fetch institution_id and canteen_id directly from the first menu item to guarantee they are never NULL
+  let actualInstitutionId = params.institution_id;
+  let actualCanteenId = params.canteen_id;
+
+  if (params.itemsFull && params.itemsFull.length > 0) {
+    const firstItemId = params.itemsFull[0].id;
+    const { data: itemData, error: itemError } = await supabase
+      .from('menu_items')
+      .select('institution_id, canteen_id')
+      .eq('id', firstItemId)
+      .single();
+      
+    if (!itemError && itemData) {
+      actualInstitutionId = itemData.institution_id || actualInstitutionId;
+      actualCanteenId = itemData.canteen_id || actualCanteenId;
+    }
+  }
+
+  if (!actualInstitutionId || !actualCanteenId) {
+    return { data: null, error: 'Failed to create order: missing institution_id or canteen_id from menu item.' };
+  }
 
   const payload: Record<string, any> = {
     student_id: params.user_id,
     email: params.email,
     customer_name: customerName,
     phone: phone,
-    institution_id: params.institution_id,
-    canteen_id: params.canteen_id || null,
+    institution_id: actualInstitutionId,
+    canteen_id: actualCanteenId,
     total_amount: params.total_amount,
     transaction_amount: params.total_amount,
     status: isPaid ? 'accepted' : 'pending',
@@ -376,6 +403,7 @@ export async function placeOrder(params: {
     payment_method: isPaid ? (params.payment_method === 'cash' ? 'cash' : 'razorpay') : 'razorpay',
     pickup_token: tokenNumber,
     pickup_code: pickupCode,
+    qr_pickup_code: qrPickupCode,
     token_number: tokenNumber,
     notes: params.notes || null,
     kitchen_status: 'Pending',
@@ -397,6 +425,11 @@ export async function placeOrder(params: {
   const { data: orderData, error: orderError } = await supabase.from('orders').insert([payload]).select().single();
   if (orderError || !orderData) {
     return { data: null, error: orderError?.message || 'Failed to create order.' };
+  }
+
+  // Double check the inserted data as requested
+  if (!orderData.institution_id || !orderData.canteen_id || !orderData.student_id || !orderData.qr_pickup_code) {
+    console.error('[Supabase] CRITICAL: Inserted order has missing required fields!', orderData);
   }
 
   const orderItemsPayload = params.itemsFull.map((item) => ({

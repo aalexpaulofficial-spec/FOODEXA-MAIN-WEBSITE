@@ -1457,10 +1457,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                             <input
                               type="text"
                               disabled
-                              value="AS26"
-                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 pr-28 text-xs font-bold text-slate-900 cursor-not-allowed outline-none shadow-sm"
+                              placeholder="COUPON CODE (E.G. AS26)"
+                              className="w-full rounded-full border border-blue-500 bg-white py-4 pl-5 pr-28 text-xs font-bold text-slate-900 placeholder-slate-400 cursor-not-allowed outline-none shadow-sm"
                             />
-                            <div className="absolute right-2 top-2 bottom-2 rounded-lg bg-slate-200 px-3 flex items-center text-[10px] font-black text-slate-500 cursor-not-allowed">
+                            <div className="absolute right-2 top-2 bottom-2 rounded-full bg-slate-900 px-4 flex items-center text-xs font-black text-white cursor-not-allowed shadow-md">
                               Coming Soon
                             </div>
                           </div>
@@ -1772,10 +1772,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                   <input
                     type="text"
                     disabled
-                    value="AS26"
-                    className="w-full rounded-2xl border-none bg-white py-4 pl-5 pr-28 text-xs font-bold text-slate-900 focus:ring-0 shadow-sm outline-none cursor-not-allowed"
+                    placeholder="COUPON CODE (E.G. AS26)"
+                    className="w-full rounded-full border border-blue-500 bg-white py-4 pl-5 pr-28 text-xs font-bold text-slate-900 placeholder-slate-400 cursor-not-allowed outline-none shadow-sm"
                   />
-                  <button disabled className="absolute right-2 top-2 bottom-2 rounded-xl bg-slate-900 px-4 text-xs font-black text-white cursor-not-allowed shadow-md opacity-80">
+                  <button disabled className="absolute right-2 top-2 bottom-2 rounded-full bg-slate-900 px-4 text-xs font-black text-white cursor-not-allowed shadow-md">
                     Coming Soon
                   </button>
                 </div>

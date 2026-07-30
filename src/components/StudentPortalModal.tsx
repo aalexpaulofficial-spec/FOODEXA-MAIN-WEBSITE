@@ -1224,7 +1224,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto min-w-0">
+        <main className="flex-1 overflow-y-auto scroll-smooth min-w-0">
           <div className="mx-auto max-w-7xl px-4 py-5 pb-28 lg:pb-8 space-y-6">
 
             {/* Error Banner */}

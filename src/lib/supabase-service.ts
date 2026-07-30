@@ -258,6 +258,17 @@ export function mapMenuItem(row: any): MenuItem {
   };
 }
 
+// ==================== SHARED AVAILABILITY LOGIC ====================
+// Both Student Dashboard and Institution Dashboard MUST use this.
+export function getItemAvailability(item: MenuItem): {
+  isSoldOut: boolean;
+  canAddToCart: boolean;
+} {
+  const isSoldOut = item.stock_quantity !== undefined && item.stock_quantity <= 0;
+  const canAddToCart = item.is_available && !isSoldOut;
+  return { isSoldOut, canAddToCart };
+}
+
 // ==================== MENU CATEGORIES ====================
 export async function fetchMenuCategories(params?: { institution_id?: string }): Promise<MenuCategory[]> {
   let query = supabase.from('menu_categories').select('*').order('name', { ascending: true });

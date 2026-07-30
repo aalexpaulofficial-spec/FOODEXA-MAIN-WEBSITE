@@ -18,7 +18,8 @@ import {
   fetchUserCart, saveUserCart, fetchBanners, fetchHomepageSections, fetchCounters,
   fetchMenuItems as fetchMenuItemsService, searchMenuItems, filterMenuItems,
   calculateCartTotals, validateCoupon, applyCouponUsage,
-  fetchUserFavorites, toggleFavorite, fetchAIRecommendations, getOrderProgress, getEstimatedTimeRemaining, generateReceipt
+  fetchUserFavorites, toggleFavorite, fetchAIRecommendations, getOrderProgress, getEstimatedTimeRemaining, generateReceipt,
+  getItemAvailability
 } from '../lib/supabase-service';
 import type { MenuItem, Order, OrderStatus, NotificationItem, UserRole, CartItem, FoodFilters, CheckoutData } from '../types';
 
@@ -285,10 +286,8 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
   const aiScore = item.ai_popularity_score || item.rating || 0;
 
   // ── Availability logic ──
-  // Sold Out when stock = 0 (regardless of other flags)
-  const isSoldOut = item.stock_quantity !== undefined && item.stock_quantity <= 0;
-  // Add to Cart only when all availability flags are true AND stock > 0
-  const canAddToCart = item.is_available && !isSoldOut;
+  // Uses shared utility that matches Institution Dashboard logic
+  const { isSoldOut, canAddToCart } = getItemAvailability(item);
 
   const handleAdd = () => {
     if (!canAddToCart) return;

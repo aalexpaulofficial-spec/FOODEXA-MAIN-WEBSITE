@@ -110,7 +110,7 @@ export default async function handler(req, res) {
     const inst = rows[0];
     return res.status(200).json({
       institution_id: inst.id,
-      institution_name: inst.name || inst.institution_name || '',
+      institution_name: inst.name || '',
       campus: inst.campus || '',
       city: inst.city || '',
       state: inst.state || '',

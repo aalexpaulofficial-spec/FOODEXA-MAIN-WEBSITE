@@ -29,14 +29,14 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
     if (!isOpen || !profile?.institution_id) return;
     setLoading(true);
     try {
-      const [{ count: orderCount }, { count: itemCount }, { data: menuItems }, { data: recentOrders }] = await Promise.all([
+      const [{ count: orderCount }, { count: itemCount }, { data: counters }, { data: recentOrders }] = await Promise.all([
         supabase.from('orders').select('*', { count: 'exact', head: true }).eq('institution_id', profile.institution_id),
         supabase.from('menu_items').select('*', { count: 'exact', head: true }).eq('institution_id', profile.institution_id),
-        supabase.from('menu_items').select('counter').eq('institution_id', profile.institution_id),
+        supabase.from('counters').select('name').eq('institution_id', profile.institution_id).eq('status', 'open'),
         supabase.from('orders').select('*').eq('institution_id', profile.institution_id).order('created_at', { ascending: false }),
       ]);
 
-      const uniqueCounters = new Set((menuItems || []).map((m: any) => m.counter).filter(Boolean)).size;
+      const uniqueCounters = new Set((counters || []).map((m: any) => m.name).filter(Boolean)).size;
       setStats({ orders: orderCount || 0, menuItems: itemCount || 0, counters: uniqueCounters });
       setOrders(recentOrders || []);
     } catch (err) {

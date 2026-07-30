@@ -61,7 +61,7 @@ export interface Profile {
   programme: string | null;
   campus_block: string | null;
   designation: string | null;
-  avatar_url?: string | null;
+  profile_image?: string | null;
   wallet_balance?: number;
   total_orders?: number;
   favorite_counters?: string[];
@@ -248,13 +248,11 @@ export interface Order {
   phone: string | null;
   role: UserRole | null;
   institution_id: string | null;
-  institution_code: string | null;
   canteen_id: string | null;
   counter_id: string | null;
   category_id: string | null;
   order_id: string;
   order_number?: string;
-  counter: string;
   items: OrderItem[];
   total_amount: number;
   transaction_amount: number;
@@ -278,7 +276,6 @@ export interface Order {
   completed_at: string | null;
   paid_at?: string | null;
   updated_at: string;
-  estimated_prep_time?: number;
   estimated_ready_at: string | null;
   token_number?: string;
   pickup_pin?: string;
@@ -286,6 +283,8 @@ export interface Order {
   razorpay_order_id?: string | null;
   razorpay_payment_id?: string | null;
   razorpay_signature?: string | null;
+  counter?: string;
+  institution_code?: string | null;
 }
 
 export interface NotificationItem {

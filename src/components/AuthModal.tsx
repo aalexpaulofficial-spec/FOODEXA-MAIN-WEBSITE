@@ -178,16 +178,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
          return;
        }
        const { data: counterRows, error: counterError } = await supabase
-         .from('menu_items')
-         .select('counter')
-         .eq('institution_id', profile.institution_id)
-         .ilike('counter', trimmed);
-       if (counterError || !counterRows || counterRows.length === 0) {
-         setCounterError('Invalid Counter Code');
-       } else {
-         setCounterError(null);
-       }
-       setValidatingCounter(false);
+          .from('counters')
+          .select('code')
+          .eq('institution_id', profile.institution_id)
+          .ilike('code', trimmed);
+        if (counterError || !counterRows || counterRows.length === 0) {
+          setCounterError('Invalid Counter Code');
+        } else {
+          setCounterError(null);
+        }
+        setValidatingCounter(false);
     }, 500);
   };
 
@@ -208,7 +208,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
          setValidatingCounter(false);
          return;
        }
-       supabase.from('menu_items').select('counter').eq('institution_id', profile.institution_id).ilike('counter', trimmed).then(({ data: counterRows, error: counterError }) => {
+       supabase.from('counters').select('code').eq('institution_id', profile.institution_id).ilike('code', trimmed).then(({ data: counterRows, error: counterError }) => {
          if (counterError || !counterRows || counterRows.length === 0) {
            setCounterError('Invalid Counter Code');
          } else {

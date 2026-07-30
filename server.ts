@@ -122,7 +122,7 @@ Important rules:
       const trimmed = code.trim();
 
       // Use the service role key so RLS is bypassed for this public lookup
-      const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/institutions?institution_code=ilike.${encodeURIComponent(trimmed)}&select=id,name,institution_name,campus,city,state,country,institution_code&limit=1`;
+      const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/institutions?institution_code=ilike.${encodeURIComponent(trimmed)}&select=id,name,campus,city,state,country,institution_code&limit=1`;
       const resp = await fetch(url, {
         headers: {
           'apikey': supabaseServerKey,
@@ -163,7 +163,7 @@ Important rules:
       const inst = rows[0];
       return res.json({
         institution_id: inst.id,
-        institution_name: inst.name || inst.institution_name || '',
+        institution_name: inst.name || '',
         campus: inst.campus || '',
         city: inst.city || '',
         state: inst.state || '',
@@ -399,7 +399,7 @@ notes: {
          counter_status: 'Incoming',
        };
 
-      const { error: orderUpdateError } = await supabaseQuery('orders', 'PATCH', orderUpdate, { order_id: order_id });
+      const { error: orderUpdateError } = await supabaseQuery('orders', 'PATCH', orderUpdate, { id: order_id });
       if (orderUpdateError) {
         console.error("[Razorpay] Failed to update order:", orderUpdateError);
       }
@@ -497,7 +497,7 @@ notes: {
           status: 'accepted',
           order_status: 'Accepted',
           updated_at: new Date().toISOString(),
-        }, { order_id: orderEntity.id || '' });
+        }, { id: orderEntity.id || '' });
 
           await supabaseQuery('payments', 'PATCH', {
             payment_status: 'captured',

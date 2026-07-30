@@ -46,14 +46,14 @@ export const Hero: React.FC<HeroProps> = ({
     load();
 
     const loadMenu = async () => {
-      const { data } = await supabase.from('menu_items').select('*').eq('is_published', true).limit(6).order('rating', { ascending: false });
+      const { data } = await supabase.from('menu_items').select('*').neq('status', 'archived').limit(6).order('rating', { ascending: false });
       setMenuItems((data || []).map((r: any) => ({
-        id: String(r.id), name: String(r.item_name || 'Item'), counter: String(r.counter || r.counter_name || ''), counter_name: String(r.counter_name || r.counter || ''),
-        price: Number(r.price || 0), offer_price: null, offer_label: null, prep_time: r.prep_time || null, rating: Number(r.rating || 0),
-        category: String(r.category || ''), category_id: null, image_url: r.image_url || r.image || null, description: String(r.description || ''),
-        is_available: true, is_published: true, popular: Boolean(r.popular), nutrition: null, institution_id: null,
+        id: String(r.id), name: String(r.food_name || 'Item'), counter: String(r.food_type || ''), counter_name: String(r.food_type || ''),
+        price: Number(r.price || 0), offer_price: null, offer_label: null, prep_time: r.prep_time != null ? String(r.prep_time) : null, rating: Number(r.rating || 0),
+        category: String(r.food_type || ''), category_id: null, image_url: r.image_url || null, description: String(r.description || ''),
+        is_available: true, is_published: true, popular: Boolean(r.is_featured), nutrition: null, institution_id: null,
       })));
-      const { data: cats } = await supabase.from('menu_categories').select('name').eq('is_active', true).limit(8);
+      const { data: cats } = await supabase.from('menu_categories').select('name').limit(8);
       setCategories((cats || []).map((c: any) => ({ id: c.id, name: c.name, institution_id: null, is_active: true, order: 0 })));
     };
     loadMenu();
@@ -72,11 +72,11 @@ export const Hero: React.FC<HeroProps> = ({
 
     const unsubMenu = subscribeMenuItems((payload) => {
       if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-        if (payload.new?.is_published !== false) {
+        if (payload.new?.status !== 'archived') {
           setMenuItems((prev) => {
             const exists = prev.find((i) => i.id === String(payload.new.id));
             if (exists) return prev.map((i) => i.id === String(payload.new.id) ? { ...i, ...payload.new, price: Number(payload.new.price || 0) } : i);
-            return [...prev, { id: String(payload.new.id), name: String(payload.new.name || ''), counter: String(payload.new.counter || ''), counter_name: String(payload.new.counter_name || ''), price: Number(payload.new.price || 0), offer_price: null, offer_label: null, prep_time: payload.new.prep_time || null, rating: Number(payload.new.rating || 0), category: String(payload.new.category || ''), category_id: null, image_url: payload.new.image_url || null, description: String(payload.new.description || ''), is_available: true, is_published: true, popular: Boolean(payload.new.popular), nutrition: null, institution_id: null }];
+            return [...prev, { id: String(payload.new.id), name: String(payload.new.food_name || ''), counter: String(payload.new.food_type || ''), counter_name: String(payload.new.food_type || ''), price: Number(payload.new.price || 0), offer_price: null, offer_label: null, prep_time: payload.new.prep_time != null ? String(payload.new.prep_time) : null, rating: Number(payload.new.rating || 0), category: String(payload.new.food_type || ''), category_id: null, image_url: payload.new.image_url || null, description: String(payload.new.description || ''), is_available: true, is_published: true, popular: Boolean(payload.new.is_featured), nutrition: null, institution_id: null }];
           });
         }
       } else if (payload.eventType === 'DELETE') {

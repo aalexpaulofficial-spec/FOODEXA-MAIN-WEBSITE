@@ -37,16 +37,7 @@ export const ForInstitutions: React.FC<ForInstitutionsProps> = ({ onOpenBookDemo
       const { count } = await supabase.from('orders').select('*', { count: 'exact', head: true });
       if (count !== null) setOrderCount(count);
     })().catch(() => {});
-    (async () => {
-      const { data } = await supabase.from('campus_features').select('*').eq('is_active', true).order('order', { ascending: true });
-      if (data && data.length > 0) {
-        setFeatures(data.map((f: any) => ({
-          id: f.id, category: f.category, title: f.title, icon: f.icon_name || 'Building2',
-          badge: f.badge || '', description: f.description || '', previewType: f.preview_type || 'campus_blocks',
-          highlights: typeof f.highlights === 'string' ? JSON.parse(f.highlights) : (f.highlights || []),
-        })));
-      }
-    })().catch(() => {});
+    // campus_features table is not available; using default features
   }, []);
 
   const filteredFeatures = features.filter((f) => activeCategory === 'all' || f.category === activeCategory);

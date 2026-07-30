@@ -121,7 +121,7 @@ export default async function handler(req, res) {
       estimated_ready_at: new Date(now.getTime() + 15 * 60000).toISOString(),
       kitchen_status: 'Pending',
       counter_status: 'Incoming',
-    }, { order_id: order_id });
+    }, { id: order_id });
 
     return res.json({
       success: true,

@@ -17,10 +17,10 @@ export const AnalyticsDashboard: React.FC = () => {
       const [{ count: totalOrders }, { data: recentOrders }, { data: counters }] = await Promise.all([
         supabase.from('orders').select('*', { count: 'exact', head: true }),
         supabase.from('orders').select('*').gte('created_at', today.toISOString()).order('created_at', { ascending: false }),
-        supabase.from('menu_items').select('counter')
+        supabase.from('counters').select('name')
       ]);
 
-      const uniqueCounters = [...new Set((counters || []).map((c: any) => c.counter))];
+      const uniqueCounters = [...new Set((counters || []).map((c: any) => c.name))];
       const counterOrderCounts = (recentOrders || []).reduce((acc: any, o: any) => { acc[o.counter] = (acc[o.counter] || 0) + 1; return acc; }, {});
 
       const itemCounts: Record<string, { name: string; count: number; price: number }> = {};

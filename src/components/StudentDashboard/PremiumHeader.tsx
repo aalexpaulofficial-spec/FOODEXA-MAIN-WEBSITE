@@ -18,10 +18,7 @@ interface PremiumHeaderProps {
 }
 
 const getGreeting = () => {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good Morning';
-  if (h < 17) return 'Good Afternoon';
-  return 'Good Evening';
+  return 'Hello';
 };
 
 export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
@@ -66,11 +63,8 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
 
           {/* Greeting Text */}
           <div className="min-w-0">
-            <p className="text-[10px] text-slate-500 font-medium leading-none mb-0.5">
-              {getGreeting()},
-            </p>
             <p className="text-sm font-extrabold text-slate-900 truncate max-w-[110px] sm:max-w-[180px] leading-tight">
-              {name} 👋
+              Hello, {name}!
             </p>
           </div>
         </div>
@@ -96,6 +90,12 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
         {/* Right — Action Buttons */}
         <div className="flex items-center gap-2 shrink-0">
 
+          {/* Wallet Balance Badge */}
+          <div className="hidden sm:flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-full text-xs font-bold text-emerald-700 shadow-sm cursor-pointer hover:bg-emerald-100 transition-colors">
+            <Wallet className="w-3.5 h-3.5 text-emerald-600" />
+            <span>₹{walletBalance !== undefined ? walletBalance : 1240}</span>
+          </div>
+
           {/* Ask LX AI — vibrant gradient + glow */}
           <button
             onClick={onOpenLxAI}
@@ -106,7 +106,6 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
             Ask LX AI
           </button>
 
-          {/* Wallet Balance Pill */}
           {walletBalance !== undefined && (
             <div className="flex items-center gap-1 bg-white border border-slate-200 shadow-sm px-2.5 py-1.5 rounded-full text-xs font-black text-slate-700">
               <Wallet className="w-3.5 h-3.5 text-emerald-500" />

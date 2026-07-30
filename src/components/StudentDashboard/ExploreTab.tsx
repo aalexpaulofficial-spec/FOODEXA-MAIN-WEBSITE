@@ -249,20 +249,55 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
         {/* ── Quick Action Grid ────────────────────────────────────────── */}
         <QuickActions />
 
-        {/* ── Live Order Status ─────────────────────────────────────────── */}
-        {activeOrders.length > 0 && (
-          <div className="bg-white border border-[#E2E8F0] rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Zap className="w-4 h-4 text-emerald-600" /> Live Order Status
-              </h2>
-              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">In Progress</span>
-            </div>
-            <div className="p-4">
+        {/* ── Live Order Status & Recent Transactions ───────────────────── */}
+        <div className="bg-white border border-[#E2E8F0] rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-emerald-600" /> Live Order & Transactions
+            </h2>
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Activity</span>
+          </div>
+          <div className="p-4 space-y-4">
+            {activeOrders.length > 0 ? (
               <ActiveLiveOrder orders={activeOrders} onTrack={onTrackOrder} onQrOpen={onQrOpen} />
+            ) : (
+              <div className="text-center py-4 border border-slate-100 rounded-xl bg-slate-50">
+                <p className="text-xs text-slate-500 font-medium">No active orders right now.</p>
+              </div>
+            )}
+            
+            {/* Recent Transactions Timeline */}
+            <div className="pt-2 border-t border-slate-100">
+              <p className="text-xs font-bold text-slate-900 mb-3">Recent Transactions</p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                      <Wallet className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-900">Added to Wallet</p>
+                      <p className="text-[10px] text-slate-500">Today, 09:41 AM</p>
+                    </div>
+                  </div>
+                  <span className="font-black text-emerald-600">+₹500</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center">
+                      <Ticket className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-900">Meal Pass Renewed</p>
+                      <p className="text-[10px] text-slate-500">Yesterday, 08:30 PM</p>
+                    </div>
+                  </div>
+                  <span className="font-black text-slate-900">-₹2,500</span>
+                </div>
+              </div>
             </div>
           </div>
-        )}
+        </div>
 
         {/* ── Trending Today ───────────────────────────────────────────── */}
         {trendingItems.length > 0 && (

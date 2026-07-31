@@ -277,7 +277,7 @@ export function mapOrder(row: any): Order {
     canteen_id: row.canteen_id || null,
     counter_id: null,
     category_id: null,
-    order_id: String(row.id),
+    order_id: row.order_number ? `#FX-${String(row.order_number).padStart(4, '0')}` : `#FX-${String(row.id).slice(-4).toUpperCase()}`,
     order_number: row.order_number || undefined,
     items: normalizeOrderItems(row.items),
     total_amount: Number(row.total_amount || 0),
@@ -357,11 +357,17 @@ export async function placeOrder(params: {
   const now = new Date();
   const nowISO = now.toISOString();
   const dateStr = nowISO.slice(0, 10).replace(/-/g, '');
-  const seq = String(Math.floor(Math.random() * 999999) + 1).padStart(6, '0');
-  
-  const tokenNumber = `TKN-${Math.floor(1000 + Math.random() * 9000)}`;
-  const pickupCode = `PC-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-  const qrPickupCode = `QR-FDX-${dateStr}-${seq}`;
+
+  // Fetch current order count to generate sequential IDs
+  const { count: orderCount } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true });
+  const nextSeq = (orderCount || 0) + 1;
+  const seqPadded = String(nextSeq).padStart(4, '0');
+
+  const tokenNumber = `TKN-${seqPadded}`;
+  const pickupCode = `PICKUP-${seqPadded}`;
+  const qrPickupCode = `QR-FDX-${dateStr}-${seqPadded}`;
   
   const isPaid = Boolean(params.razorpay_payment_id && params.razorpay_signature);
   const customerName = params.customer_name || params.email?.split('@')[0] || 'Customer';
@@ -405,6 +411,7 @@ export async function placeOrder(params: {
     order_status: isPaid ? 'Accepted' : 'Pending Payment',
     payment_status: isPaid ? 'paid' : 'pending',
     payment_method: isPaid ? (params.payment_method === 'cash' ? 'cash' : 'razorpay') : 'razorpay',
+    order_number: nextSeq,
     pickup_token: tokenNumber,
     pickup_code: pickupCode,
     qr_pickup_code: qrPickupCode,

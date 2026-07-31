@@ -11,7 +11,7 @@ const formatDate = (d: string) => {
 
 const statusLabel = (s: OrderStatus): string => {
   const m: Record<OrderStatus, string> = {
-    pending: 'Pending', accepted: 'Accepted', preparing: 'Preparing',
+    pending: 'Pending', accepted: 'Accepted', preparing: 'Preparing', cooking: 'Cooking', quality_check: 'Quality Check', packed: 'Packed',
     ready: 'Ready', completed: 'Completed', cancelled: 'Refunded',
   };
   return m[s] || s;
@@ -22,6 +22,9 @@ const statusStyle = (s: OrderStatus): string => {
     pending: 'bg-amber-50 text-amber-700 border-amber-200',
     accepted: 'bg-blue-50 text-blue-700 border-blue-200',
     preparing: 'bg-violet-50 text-violet-700 border-violet-200',
+    cooking: 'bg-orange-50 text-orange-700 border-orange-200',
+    quality_check: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    packed: 'bg-teal-50 text-teal-700 border-teal-200',
     ready: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     completed: 'bg-blue-50 text-blue-600 border-blue-200',
     cancelled: 'bg-red-50 text-red-600 border-red-200',

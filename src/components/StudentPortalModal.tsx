@@ -36,13 +36,13 @@ declare global { interface Window { Razorpay: any } }
 interface StudentPortalModalProps { isOpen: boolean; onClose: () => void; role?: UserRole; triggerToast?: (title: string, description: string, type?: 'success' | 'warning' | 'info' | 'ai') => void }
 type PortalTab = 'explore' | 'nutrition' | 'analytics' | 'offers' | 'history' | 'profile' | 'checkout' | 'payment_success' | 'payment_failed';
 
-const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready'];
+const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'cooking', 'quality_check', 'packed', 'ready'];
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
 const statusLabel = (s: OrderStatus) => {
   const map: Record<OrderStatus, string> = {
-    pending: 'Pending', accepted: 'Accepted', preparing: 'Preparing',
+    pending: 'Pending', accepted: 'Accepted', preparing: 'Preparing', cooking: 'Cooking', quality_check: 'Quality Check', packed: 'Packed',
     ready: 'Ready for Pickup', completed: 'Completed', cancelled: 'Cancelled',
   };
   return map[s] || s;
@@ -53,6 +53,9 @@ const statusColor = (s: OrderStatus) => {
     pending: 'text-amber-300 border-amber-500/40 bg-amber-950/50',
     accepted: 'text-blue-300 border-blue-500/40 bg-blue-950/50',
     preparing: 'text-violet-300 border-violet-500/40 bg-violet-950/50',
+    cooking: 'text-orange-300 border-orange-500/40 bg-orange-950/50',
+    quality_check: 'text-indigo-300 border-indigo-500/40 bg-indigo-950/50',
+    packed: 'text-teal-300 border-teal-500/40 bg-teal-950/50',
     ready: 'text-emerald-300 border-emerald-500/40 bg-emerald-950/60',
     completed: 'text-slate-400 border-slate-700 bg-slate-900',
     cancelled: 'text-red-300 border-red-500/40 bg-red-950/50',
@@ -63,6 +66,7 @@ const statusColor = (s: OrderStatus) => {
 const statusDot = (s: OrderStatus) => {
   const map: Record<OrderStatus, string> = {
     pending: 'bg-amber-400', accepted: 'bg-blue-400', preparing: 'bg-violet-400',
+    cooking: 'bg-orange-400', quality_check: 'bg-indigo-400', packed: 'bg-teal-400',
     ready: 'bg-emerald-400', completed: 'bg-slate-400', cancelled: 'bg-red-400',
   };
   return map[s] || 'bg-slate-400';
@@ -1022,10 +1026,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           accepted_at: new Date().toISOString(),
         };
 
-        setOrders((prev) => {
-          const withoutPending = prev.filter((o) => o.id !== supabaseOrderId);
-          return [paidOrder, ...withoutPending];
-        });
+        // Refresh orders from Supabase (hook manages state)
+        await refreshOrders();
         setCart([]);
         setActiveTab('payment_success');
         setSubmittingOrder(false);
@@ -1067,35 +1069,16 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               return;
             }
 
-            // ── STEP 5: Finalize order — update DB, insert payments row,
-            //            insert notifications, return confirmed order ──────
-            const finalizeResult = await updateOrderAfterPayment({
-              order_id: supabaseOrderId,
-              razorpay_order_id,
-              razorpay_payment_id,
-              razorpay_signature,
-              institution_id: pendingOrder.institution_id,
-              canteen_id: pendingOrder.canteen_id,
-              student_id: user.id,
-              total_amount: cartGrandTotal,
-              prep_time_minutes: estimatedPrepTime,
-            });
-
-            if (!finalizeResult.success) {
-              setError(finalizeResult.error || 'Payment received but order update failed. Contact support.');
-              setActiveTab('payment_failed');
-              setSubmittingOrder(false);
-              if (triggerToast) triggerToast('Order Update Failed', finalizeResult.error || 'Contact support.', 'warning');
-              return;
-            }
-
-            // ── STEP 6: Fetch the confirmed order fresh from DB ──────────
-            const confirmedOrder = finalizeResult.data ?? await fetchOrderById(supabaseOrderId);
+            // ── STEP 5: Fetch the confirmed order fresh from DB (API already updated it) ──
+            // NOTE: We do NOT call updateOrderAfterPayment here because:
+            //   1. verify-payment.js (server-side, service key) already updates the order.
+            //   2. Client-side update would be blocked by RLS and throw errors.
+            const confirmedOrder = await fetchOrderById(supabaseOrderId);
 
             const paidOrder: Order = {
               ...(confirmedOrder || pendingOrder),
               payment_status: 'paid',
-              status: 'confirmed' as any,
+              status: 'pending' as any,
               order_status: 'Confirmed',
               payment_method: 'razorpay',
               counter: cart[0]?.item?.counter_name || cart[0]?.item?.counter || pendingOrder.counter || 'Campus Counter',
@@ -1103,14 +1086,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               razorpay_payment_id,
               razorpay_signature,
               paid_at: new Date().toISOString(),
-              accepted_at: new Date().toISOString(),
             };
 
-            // ── STEP 7: Update local state and clear cart ───────────────
-            setOrders((prev) => {
-              const withoutPending = prev.filter((o) => o.id !== supabaseOrderId);
-              return [paidOrder, ...withoutPending];
-            });
+            // ── STEP 6: Refresh from DB (hook manages state) ───────────
+            await refreshOrders();
             setCart([]);
             setShowCart(false);
             setCouponDiscount(0);
@@ -1300,8 +1279,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     filteredItems={filteredItems}
                     activeOrders={activeOrders}
                     onAddCart={(item) => setCart((prev) => { const idx = prev.findIndex(e => e.item.id === item.id); return idx >= 0 ? prev.map((e, i) => i === idx ? { ...e, quantity: e.quantity + 1 } : e) : [...prev, { item, quantity: 1 }]; })}
-                    onTrackOrder={() => {}} // Not implemented yet
-                    onQrOpen={() => {}} // Not implemented yet
+                    onTrackOrder={() => setActiveTab('payment_success')}
+                    onQrOpen={(o) => setQrOrder(o)}
                     onFavorite={(item) => { toggleFavorite(item); triggerToast && triggerToast('Favorited', `${item.name} saved!`, 'success') }}
                     favoritedIds={favorites}
                     searchQuery={searchQuery}

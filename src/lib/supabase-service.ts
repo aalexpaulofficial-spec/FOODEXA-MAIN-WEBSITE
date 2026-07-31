@@ -477,8 +477,8 @@ export async function updateOrderAfterPayment(params: {
     .from('orders')
     .update({
       payment_status: 'paid',
-      status: 'confirmed',
-      order_status: 'Confirmed',
+      status: 'accepted',
+      order_status: 'Accepted',
       payment_method: 'razorpay',
       razorpay_order_id: params.razorpay_order_id,
       razorpay_payment_id: params.razorpay_payment_id,

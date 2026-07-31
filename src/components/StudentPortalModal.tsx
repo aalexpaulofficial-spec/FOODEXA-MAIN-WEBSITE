@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSupabaseOrders } from '../hooks/useSupabaseOrders';
 import {
   formatINR, formatDateTime, subscribeMenuItems, subscribeAnnouncements,
-  subscribeBanners, subscribeMenuCategories, subscribeCounters,
+  subscribeBanners, subscribeMenuCategories, subscribeCounters, subscribeOrders,
   placeOrder, createRazorpayOrder, verifyRazorpayPayment, updateOrderAfterPayment, updateOrderPaymentStatus, getItemAvailability, mapMenuItem, cancelOrder, fetchOrderById,
   fetchMenuItems as fetchMenuItemsService, searchMenuItems, filterMenuItems,
   calculateCartTotals, validateCoupon, applyCouponUsage,
@@ -31,6 +31,10 @@ import { AnalyticsTab } from './StudentDashboard/AnalyticsTab';
 import { HistoryTab } from './StudentDashboard/HistoryTab';
 import { ProfileTab } from './StudentDashboard/ProfileTab';
 import { OffersTab } from './StudentDashboard/OffersTab';
+import { OrderCompletionScreen } from './StudentDashboard/OrderCompletionScreen';
+import { OrderDetailsModal } from './StudentDashboard/OrderDetailsModal';
+import { TaxInvoiceModal } from './StudentDashboard/TaxInvoiceModal';
+import { OrderRatingModal } from './StudentDashboard/OrderRatingModal';
 
 declare global { interface Window { Razorpay: any } }
 
@@ -511,6 +515,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'wallet' | 'cash'>('razorpay');
   const [kitchenNotes, setKitchenNotes] = useState('');
 
+  // Completion & Detail States
+  const [completionOrder, setCompletionOrder] = useState<Order | null>(null);
+  const [detailsOrder, setDetailsOrder] = useState<Order | null>(null);
+  const [invoiceOrder, setInvoiceOrder] = useState<Order | null>(null);
+  const [ratingOrder, setRatingOrder] = useState<Order | null>(null);
+
   // Live Time for countdowns
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
@@ -669,7 +679,45 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       }
     });
 
-    return () => { unsubMenu(); unsubNotif(); unsubBanners(); unsubCounters(); };
+    // Live notification subscription for order status updates
+    const unsubOrderNotifs = subscribeOrders((payload: any) => {
+      if (!payload?.new || !user?.id) return;
+      const record = payload.new;
+      if (record.student_id && record.student_id !== user.id) return;
+
+      const statusMap: Record<string, string> = {
+        accepted: 'Order Accepted',
+        preparing: 'Preparing Your Order',
+        cooking: 'Cooking in Progress',
+        ready: 'Ready for Pickup',
+        completed: 'Order Collected',
+        cancelled: 'Order Cancelled',
+      };
+
+      const notifTitle = statusMap[record.status] || 'Order Update';
+      const notifMsg = record.status === 'ready'
+        ? 'Your order is ready! Show your pickup code at the counter.'
+        : record.status === 'completed'
+          ? 'Your order has been collected. Thank you!'
+          : `Order status changed to ${record.status || record.order_status || 'updated'}`;
+
+      setNotifications((prev) => [{
+        id: `notif-${Date.now()}`,
+        title: notifTitle,
+        message: notifMsg,
+        created_at: new Date().toISOString(),
+        type: 'order_update',
+        read: false,
+      }, ...prev]);
+      setUnreadNotif(c => c + 1);
+
+      // Show toast for real-time order updates
+      if (triggerToast && ['accepted', 'preparing', 'ready', 'completed'].includes(record.status)) {
+        triggerToast(notifTitle, notifMsg, record.status === 'completed' ? 'success' : 'info');
+      }
+    }, { user_id: user?.id });
+
+    return () => { unsubMenu(); unsubNotif(); unsubBanners(); unsubCounters(); unsubOrderNotifs(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, profile?.institution_id, user?.id]);
 
@@ -1156,6 +1204,17 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     <div className="fixed inset-0 z-50 flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 text-slate-900 overflow-hidden">
       <QRModal isOpen={!!qrOrder} onClose={() => setQrOrder(null)} order={qrOrder} />
 
+      {/* Order Detail Modals */}
+      {detailsOrder && (
+        <OrderDetailsModal isOpen={true} onClose={() => setDetailsOrder(null)} order={detailsOrder} institutionName={institutionName} />
+      )}
+      {invoiceOrder && (
+        <TaxInvoiceModal isOpen={true} onClose={() => setInvoiceOrder(null)} order={invoiceOrder} institutionName={institutionName} />
+      )}
+      {ratingOrder && (
+        <OrderRatingModal isOpen={true} onClose={() => setRatingOrder(null)} order={ratingOrder} userId={user?.id || ''} triggerToast={triggerToast} />
+      )}
+
       {/* ── MAIN LAYOUT ─────────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
 
@@ -1272,22 +1331,33 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 {activeTab === 'history' && (
                   <HistoryTab 
                     pastOrders={pastOrders}
+                    institutionName={institutionName}
+                    userId={user?.id || ''}
+                    triggerToast={triggerToast}
                     onReorder={(order) => {
                       order.items.forEach((item) => {
-                        setCart((prev) => {
-                          const existing = prev.find((e) => e.item.name === item.name);
-                          if (existing) {
-                            return prev.map((e) => e.item.name === item.name ? { ...e, quantity: e.quantity + item.quantity } : e);
+                        // Check if item exists in current menu
+                        const menuItem = menuItems.find((m) => m.name === item.name);
+                        if (menuItem) {
+                          // Check availability
+                          const { isSoldOut } = getItemAvailability(menuItem);
+                          if (isSoldOut) {
+                            triggerToast && triggerToast('Unavailable', `${item.name} is currently unavailable.`, 'warning');
+                            return;
                           }
-                          const menuItem = menuItems.find((m) => m.name === item.name);
-                          if (menuItem) {
+                          setCart((prev) => {
+                            const existing = prev.find((e) => e.item.name === item.name);
+                            if (existing) {
+                              return prev.map((e) => e.item.name === item.name ? { ...e, quantity: e.quantity + item.quantity } : e);
+                            }
                             return [...prev, { item: menuItem, quantity: item.quantity }];
-                          }
-                          return prev;
-                        });
+                          });
+                        } else {
+                          triggerToast && triggerToast('Unavailable', `${item.name} is not on the current menu.`, 'warning');
+                        }
                       });
                       setActiveTab('explore');
-                      triggerToast && triggerToast('Reorder', 'Items added to cart', 'success');
+                      triggerToast && triggerToast('Reorder', 'Available items added to cart', 'success');
                     }}
                     onGoExplore={() => setActiveTab('explore')}
                   />
@@ -1463,6 +1533,20 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                    const label = o ? getTimelineLabel(o.status) : 'Order Confirmed';
                    const completed = isOrderCompleted(o?.status);
                    const cancelled = isOrderCancelled(o?.status);
+
+                   // Show premium completion screen when order is collected
+                   if (completed && o) {
+                     return (
+                       <OrderCompletionScreen
+                         key={`completion-${o.id}`}
+                         order={o}
+                         institutionName={institutionName}
+                         onViewReceipt={(ord) => { setInvoiceOrder(ord); }}
+                         onRateOrder={(ord) => { setRatingOrder(ord); }}
+                         onBackToMenu={() => { setActiveTab('explore'); }}
+                       />
+                     );
+                   }
 
                    // Read pickup code, estimated time, QR from Supabase order (never generate locally)
                    const pickupCode = o?.pickup_code || o?.pickup_token || '';

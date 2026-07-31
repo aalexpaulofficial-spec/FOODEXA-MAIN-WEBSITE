@@ -393,54 +393,6 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
           ) : null;
         })()}
 
-        {/* ── Live Kitchen Monitor ──────────────────────────────── */}
-        <div className="w-full my-6 glass-card rounded-3xl p-5 sm:p-6 shadow-lg relative overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
-            <div>
-              <div className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-blue-600 animate-pulse" />
-                <h3 className="text-lg font-bold text-slate-900 tracking-tight">Live Kitchen Monitor</h3>
-              </div>
-              <p className="text-xs text-slate-500">{institutionName} Food Pavilion</p>
-            </div>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1.5 w-fit">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-              Green — Fast Express
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Kitchen Load</p>
-              <p className="text-xl font-extrabold text-slate-900 mt-0.5">58%</p>
-              <div className="w-full bg-slate-200 rounded-full h-1.5 mt-2 overflow-hidden">
-                <div className="h-full bg-emerald-500 rounded-full" style={{ width: '58%' }}></div>
-              </div>
-            </div>
-            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Avg Wait Time</p>
-              <p className="text-xl font-extrabold text-blue-600 mt-0.5 flex items-center justify-center gap-1">
-                <Clock className="w-4 h-4" />7 mins
-              </p>
-              <p className="text-[10px] text-slate-400 mt-1">Express Counters Active</p>
-            </div>
-            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Orders Preparing</p>
-              <p className="text-xl font-extrabold text-amber-600 mt-0.5 flex items-center justify-center gap-1">
-                <Flame className="w-4 h-4" />35
-              </p>
-              <p className="text-[10px] text-slate-400 mt-1">In Cooking Pipeline</p>
-            </div>
-            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Chefs Active</p>
-              <p className="text-xl font-extrabold text-slate-900 mt-0.5 flex items-center justify-center gap-1">
-                <Users className="w-4 h-4 text-slate-600" />9
-              </p>
-              <p className="text-[10px] text-slate-400 mt-1">Full Staff Capacity</p>
-            </div>
-          </div>
-        </div>
-
         {/* ── Trending Today ─────────────────────────────────────── */}
         {menuItems.length > 0 && (
           <div className="w-full my-6">

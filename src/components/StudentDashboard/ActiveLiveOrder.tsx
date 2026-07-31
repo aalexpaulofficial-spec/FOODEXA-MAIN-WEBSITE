@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Clock, QrCode, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
-import type { Order, OrderStatus } from '../../types';
+import type { Order } from '../../types';
 
 const STAGES_ORDER = [
   'pending',
@@ -25,7 +25,8 @@ const statusLabel = (s: string): string => {
   return m[s] || 'Order Confirmed';
 };
 
-const getPrimaryStage = (s: string) => {
+const getPrimaryStage = (kitchenStatus: string | undefined, fallbackStatus: string) => {
+  const s = (kitchenStatus || fallbackStatus || '').toLowerCase();
   if (['pending', 'accepted'].includes(s)) return 'pending';
   if (['preparing', 'cooking', 'quality_check', 'packed'].includes(s)) return 'preparing';
   if (s === 'ready') return 'ready';
@@ -44,39 +45,20 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
   onTrack,
   onQrOpen,
 }) => {
-  const [elapsed, setElapsed] = useState(0);
   const order = orders[0];
-
-  useEffect(() => {
-    if (!order) return;
-    const base = order.paid_at
-      ? new Date(order.paid_at).getTime()
-      : new Date(order.created_at).getTime();
-    setElapsed(Date.now() - base);
-    const timer = setInterval(() => setElapsed(Date.now() - base), 1000);
-    return () => clearInterval(timer);
-  }, [order?.paid_at, order?.created_at]);
 
   if (!order) return null;
 
-  const currentPrimary = getPrimaryStage(order.status);
+  const currentPrimary = getPrimaryStage(order.kitchen_status, order.status);
   const currentStageIndex = STAGES_ORDER.indexOf(currentPrimary) >= 0 ? STAGES_ORDER.indexOf(currentPrimary) : 0;
   const progressPct = Math.round(((currentStageIndex + 1) / STAGES_ORDER.length) * 100);
 
-  const prepMinutes = (order as any).estimated_prep_time_minutes || 15;
-  const remainingMs = Math.max(0, prepMinutes * 60 * 1000 - elapsed);
-  const mins = Math.floor(remainingMs / 60000);
-  const secs = Math.floor((remainingMs % 60000) / 1000);
+  const orderNum = order.order_number || order.order_id?.replace('#FX-', '') || String(order.id).slice(-8).toUpperCase();
 
-  const formatRemaining = () => {
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  const orderNum = (order as any).order_number || order.order_id?.slice(-8).toUpperCase();
+  const estimatedReadyTime = order.estimated_ready_at;
 
   return (
     <div className="w-full my-6 bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-xl relative overflow-hidden border border-blue-500/30">
-      {/* Background Glow */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-white/10">
@@ -102,15 +84,16 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
         {order.status !== 'ready' && order.status !== 'completed' && (
           <div className="bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border border-white/10 flex items-center gap-2 w-fit">
             <Clock className="w-4 h-4 text-cyan-300 animate-spin" />
-            <span className="text-xs text-slate-300">Est. Time:</span>
+            <span className="text-xs text-slate-300">Est. Ready:</span>
             <span className="text-sm font-extrabold text-white">
-              {formatRemaining()}
+              {estimatedReadyTime
+                ? new Date(estimatedReadyTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                : 'Calculating...'}
             </span>
           </div>
         )}
       </div>
 
-      {/* Items Summary */}
       <div className="my-4">
         <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Items Ordered</p>
         <p className="text-sm font-semibold text-white line-clamp-1">
@@ -123,12 +106,11 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
         )}
       </div>
 
-      {/* Animated Stage Progress */}
       <div className="my-4">
         <div className="flex items-center justify-between text-xs mb-1.5">
           <span className="font-bold text-cyan-300 flex items-center gap-1">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            Stage: {statusLabel(order.status)}
+            Stage: {statusLabel(order.kitchen_status || order.status)}
           </span>
           <span className="text-slate-400 font-semibold">{progressPct}% Complete</span>
         </div>
@@ -143,7 +125,6 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
         </div>
       </div>
 
-      {/* Actions */}
       <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 pt-3 border-t border-white/10 relative z-10">
         <button
           onClick={() => onQrOpen(order)}

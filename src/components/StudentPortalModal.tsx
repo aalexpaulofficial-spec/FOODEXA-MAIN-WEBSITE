@@ -11,8 +11,9 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { useSupabaseOrders } from '../hooks/useSupabaseOrders';
 import {
-  formatINR, formatDateTime, subscribeOrders, subscribeMenuItems, subscribeAnnouncements,
+  formatINR, formatDateTime, subscribeMenuItems, subscribeAnnouncements,
   subscribeBanners, subscribeMenuCategories, subscribeCounters,
   placeOrder, createRazorpayOrder, verifyRazorpayPayment, updateOrderAfterPayment, updateOrderPaymentStatus, getItemAvailability, mapMenuItem, cancelOrder, fetchOrderById,
   fetchMenuItems as fetchMenuItemsService, searchMenuItems, filterMenuItems,
@@ -150,12 +151,17 @@ const SkeletonCard = () => (
 
 const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => void; order: Order | null }) => {
   if (!isOpen || !order) return null;
-  const qrValue = order.qr_pickup_code || order.qr_code_data || order.pickup_code || order.order_number || order.order_id;
+  // Read all QR/pickup values directly from Supabase order record
+  const qrValue = order.qr_pickup_code || order.qr_code_data || order.pickup_code || order.pickup_token || order.order_number || order.order_id;
   const counterName = order.counter || 'Campus Counter';
 
   const downloadQR = () => {
-    // Generate and download QR logic placeholder
-    alert('QR Code Downloaded!');
+    const img = document.querySelector('#qr-modal-img') as HTMLImageElement;
+    if (!img) return;
+    const a = document.createElement('a');
+    a.href = img.src;
+    a.download = `qr-${qrValue}.png`;
+    a.click();
   };
 
   const copyCode = () => {
@@ -177,13 +183,13 @@ const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => v
         </div>
 
         <h3 className="text-2xl font-black text-slate-800 mb-1">Express QR Pickup</h3>
-        <p className="text-sm font-medium text-slate-500 mb-6">{(order as any).institution_name || 'Central Mess Food Court'}</p>
+        <p className="text-sm font-medium text-slate-500 mb-6">{counterName}</p>
 
-        {/* QR Code display */}
         <div className="bg-white rounded-2xl p-4 mx-auto max-w-[220px] shadow-lg flex flex-col items-center border-[3px] border-blue-400/50 relative">
           <div className="absolute inset-0 rounded-2xl ring-4 ring-blue-400/20 shadow-[0_0_20px_rgba(59,130,246,0.3)] pointer-events-none" />
           <img 
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrValue)}`} 
+            id="qr-modal-img"
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrValue || '')}`} 
             alt="QR Code" 
             className="w-full h-auto object-contain rounded-lg relative z-10"
           />
@@ -504,9 +510,14 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<PortalTab>('explore');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
+
+  // Supabase Realtime orders — single source of truth
+  const { orders, activeOrders, pastOrders, loading: ordersLoading, error: ordersError, refresh: refreshOrders } = useSupabaseOrders({
+    userId: user?.id,
+    enabled: isOpen && !!user?.id,
+  });
 
   const [countersList, setCountersList] = useState<any[]>([]);
   const [institutionName, setInstitutionName] = useState('');
@@ -573,30 +584,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const firstItemCounter = cart.length > 0 ? cart[0].item.counter_name : '';
   const estimatedPrepTime = cart.length > 0 ? Math.max(...cart.map(c => c.item.prep_time_minutes || 15)) : 15;
 
-  const handleOrderUpdate = useCallback((payload: any) => {
-    const newStatus = payload.new?.status;
-    const orderUserId = payload.new?.student_id || payload.new?.user_id;
-    if (newStatus && orderUserId === user?.id) {
-      setOrders((prev) => {
-        const exists = prev.find((o) => o.id === String(payload.new.id));
-        if (exists) {
-          return prev.map((o) => o.id === String(payload.new.id) ? {
-            ...o,
-            status: newStatus.toLowerCase() as OrderStatus,
-            order_status: payload.new.order_status || o.order_status,
-            ready_at: payload.new.ready_at || o.ready_at,
-            completed_at: payload.new.completed_at || o.completed_at,
-            qr_pickup_code: payload.new.qr_pickup_code || o.qr_pickup_code,
-            pickup_code: payload.new.pickup_code || o.pickup_code,
-            estimated_ready_at: payload.new.estimated_ready_at || o.estimated_ready_at,
-          } : o);
-        }
-        // New order inserted — re-fetch to stay in sync
-        return prev;
-      });
-    }
-  }, [user?.id]);
-
   useEffect(() => {
     if (!isOpen) return;
     if (!user || !profile) return;
@@ -638,44 +625,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           if (!menuResult.error) {
             setMenuItems((menuResult.data || []).map(mapMenuItem));
           }
-
-        // Fetch orders only for this user
-        if (user?.id) {
-          const orderResult = await supabase
-            .from('orders')
-            .select('*')
-            .eq('student_id', user.id)
-            .order('created_at', { ascending: false });
-          if (!orderResult.error) {
-            setOrders((orderResult.data || []).map((r: any) => ({
-              id: String(r.id), student_id: String(r.student_id || ''), user_id: String(r.student_id || ''), email: String(r.email || ''),
-              customer_name: r.customer_name || null, phone: r.phone || null,
-              role: ['student', 'faculty', 'guest', 'institution_admin', 'kitchen_staff', 'canteen_manager', 'super_admin'].includes(r.role) ? r.role : null,
-              institution_id: r.institution_id || null, institution_code: null,
-              canteen_id: r.canteen_id || null, counter_id: null, category_id: null,
-              order_id: r.order_number ? `#FX-${String(r.order_number).padStart(4, '0')}` : `#FX-${String(r.id).slice(-4).toUpperCase()}`,
-              order_number: r.order_number || undefined,
-              // Derive counter display name: food_type on items, or fallback to 'Campus Counter'
-              counter: r.counter_name || (Array.isArray(r.items) && r.items[0]?.food_type) || (Array.isArray(r.items) && r.items[0]?.counter_name) || 'Campus Counter',
-              items: Array.isArray(r.items) ? r.items.map((i: any) => ({ name: String(i.item_name || i.name || 'Item'), quantity: Number(i.quantity || 1), price: Number(i.price || 0) })) : [],
-              total_amount: Number(r.total_amount || 0), transaction_amount: Number(r.transaction_amount || r.total_amount || 0),
-              status: (r.status || 'pending').toLowerCase() as OrderStatus,
-              order_status: r.order_status || r.status || 'pending',
-              payment_status: r.payment_status || 'pending',
-              kitchen_status: r.kitchen_status || undefined, counter_status: r.counter_status || undefined,
-              pickup_code: r.pickup_code || null, pickup_token: r.pickup_token || undefined,
-              qr_pickup_code: r.qr_pickup_code || null, qr_code: r.qr_code || null, qr_code_data: null,
-              locker_number: null, notes: r.notes || null,
-              created_at: r.created_at || '',
-              accepted_at: r.accepted_at || null, preparing_at: r.preparing_at || null,
-              ready_at: r.ready_at || null, completed_at: r.completed_at || null, updated_at: r.updated_at || '',
-              estimated_ready_at: r.estimated_ready_at || null,
-              token_number: r.token_number || r.pickup_token || undefined,
-              pickup_pin: null,
-              kitchen_queue_status: r.kitchen_status || undefined,
-            })));
-          }
-        }
 
         // Fetch notifications — silently ignore RLS errors
         const notifResult = await supabase
@@ -724,7 +673,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     };
     load();
 
-    const unsubOrders = user?.id ? subscribeOrders(handleOrderUpdate, { user_id: user.id }) : () => {};
     const unsubMenu = subscribeMenuItems((payload: any) => {
       if (payload.eventType === 'INSERT') {
         setMenuItems((prev) => { const exists = prev.find((i) => i.id === String(payload.new.id)); return exists ? prev : [...prev, mapMenuItem(payload.new)]; });
@@ -763,7 +711,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       }
     });
 
-    return () => { unsubOrders(); unsubMenu(); unsubNotif(); unsubBanners(); unsubCounters(); };
+    return () => { unsubMenu(); unsubNotif(); unsubBanners(); unsubCounters(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, profile?.institution_id, user?.id]);
 
@@ -776,51 +724,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       return () => clearTimeout(timer);
     }
   }, [cart, user?.id, loading]);
-
-  // LIVE POLLING: Re-fetch active orders every 10 seconds so tracking stays up-to-date
-  // even if Supabase realtime is not firing (e.g. behind RLS or network issues)
-  useEffect(() => {
-    if (!user?.id || !isOpen) return;
-    const pollOrders = async () => {
-      const { data } = await supabase
-        .from('orders')
-        .select('id, status, order_status, order_number, pickup_code, pickup_token, qr_pickup_code, estimated_ready_at, ready_at, completed_at, updated_at')
-        .eq('student_id', user.id)
-        .in('status', ['pending', 'accepted', 'preparing', 'cooking', 'quality_check', 'packed', 'ready'])
-        .order('created_at', { ascending: false });
-
-      if (data && data.length > 0) {
-        setOrders((prev) => {
-          let changed = false;
-          const next = prev.map((o) => {
-            const fresh = data.find((d: any) => String(d.id) === o.id);
-            if (!fresh) return o;
-            const newStatus = (fresh.status || '').toLowerCase() as OrderStatus;
-            if (newStatus !== o.status || fresh.updated_at !== o.updated_at) {
-              changed = true;
-              return {
-                ...o,
-                status: newStatus,
-                order_status: fresh.order_status || o.order_status,
-                pickup_code: fresh.pickup_code || o.pickup_code,
-                pickup_token: fresh.pickup_token || o.pickup_token,
-                qr_pickup_code: fresh.qr_pickup_code || o.qr_pickup_code,
-                estimated_ready_at: fresh.estimated_ready_at || o.estimated_ready_at,
-                ready_at: fresh.ready_at || o.ready_at,
-                completed_at: fresh.completed_at || o.completed_at,
-                updated_at: fresh.updated_at || o.updated_at,
-              };
-            }
-            return o;
-          });
-          return changed ? next : prev;
-        });
-      }
-    };
-
-    const interval = setInterval(pollOrders, 10000); // every 10 seconds
-    return () => clearInterval(interval);
-  }, [user?.id, isOpen]);
 
   // Derived data
   const allCategories = useMemo(() => {
@@ -842,8 +745,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const orderItemNames = useMemo(() => new Set(orders.flatMap((o) => o.items.map((i) => i.name))), [orders]);
   const orderedCategories = useMemo(() => new Set(menuItems.filter((i) => orderItemNames.has(i.name)).map((i) => i.category)), [menuItems, orderItemNames]);
 
-  const activeOrders = orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
-  const pastOrders = orders.filter((o) => !ACTIVE_STATUSES.includes(o.status));
   const offerItems = menuItems.filter((i) => i.offer_label).slice(0, 8);
   const trendingItems = [...menuItems].sort((a, b) => Number(b.popular) - Number(a.popular) || b.rating - a.rating).slice(0, 10);
   const quickReorderItems = menuItems.filter((i) => orderItemNames.has(i.name)).slice(0, 8);
@@ -1437,9 +1338,24 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
                 {activeTab === 'history' && (
                   <HistoryTab 
-                    pastOrders={pastOrders}
-                    menuItems={menuItems}
-                    onReorder={() => {}} // Reorder logic
+                    userId={user?.id}
+                    onReorder={(order) => {
+                      order.items.forEach((item) => {
+                        setCart((prev) => {
+                          const existing = prev.find((e) => e.item.name === item.name);
+                          if (existing) {
+                            return prev.map((e) => e.item.name === item.name ? { ...e, quantity: e.quantity + item.quantity } : e);
+                          }
+                          const menuItem = menuItems.find((m) => m.name === item.name);
+                          if (menuItem) {
+                            return [...prev, { item: menuItem, quantity: item.quantity }];
+                          }
+                          return prev;
+                        });
+                      });
+                      setActiveTab('explore');
+                      triggerToast && triggerToast('Reorder', 'Items added to cart', 'success');
+                    }}
                     onGoExplore={() => setActiveTab('explore')}
                   />
                 )}
@@ -1621,15 +1537,20 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     pending: 0, accepted: 0, preparing: 1, cooking: 1,
                     quality_check: 1, packed: 1, ready: 2, completed: 3,
                   };
-                  const orderStatus = o?.status || 'pending';
-                  const liveStepIdx = statusToStep[orderStatus] ?? 0;
-                  const isCompleted = orderStatus === 'completed';
+                  // Use kitchen_status as the primary source for timeline position
+                  const kitchenStatus = (o?.kitchen_status || o?.status || 'pending').toLowerCase();
+                  const liveStepIdx = statusToStep[kitchenStatus] ?? 0;
+                  const isCompleted = kitchenStatus === 'completed';
+
+                  // Read pickup code, estimated time, QR from Supabase order (never generate locally)
+                  const pickupCode = o?.pickup_code || o?.pickup_token || '';
+                  const estimatedReadyAt = o?.estimated_ready_at || null;
+                  const orderNumber = o?.order_number || o?.order_id || '';
 
                   return (
                     <div className="max-w-md mx-auto space-y-4 pb-20">
                       {/* Top Status Card */}
                       <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
-                        {/* Background subtle elements */}
                         <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
                         <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none"></div>
                         
@@ -1637,12 +1558,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           <div className="flex items-start justify-between mb-4">
                             <div>
                               <p className="text-blue-300 text-xs font-bold uppercase tracking-wider mb-1">Order Confirmed</p>
-                              <h2 className="text-3xl font-black">{o?.order_number || o?.order_id || '#FX-0001'}</h2>
+                              <h2 className="text-3xl font-black">{orderNumber}</h2>
                             </div>
                             <div className="text-right">
                               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">Pickup Code</p>
                               <p className="text-xl font-black text-emerald-400 tracking-wider">
-                                {o?.pickup_code || o?.pickup_token || `PICKUP-${String(o?.id || '').slice(-4).toUpperCase() || '0001'}`}
+                                {pickupCode || 'Generating...'}
                               </p>
                             </div>
                           </div>
@@ -1654,15 +1575,16 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                             <div>
                               <p className="text-slate-300 text-xs">Estimated Ready Time</p>
                               <p className="font-bold text-white">
-                                {o?.estimated_ready_at ? new Date(o.estimated_ready_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 
-                                 new Date(Date.now() + ((o as any)?.estimated_prep_time_minutes || 15) * 60000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                {estimatedReadyAt 
+                                  ? new Date(estimatedReadyAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                                  : 'Calculating...'}
                               </p>
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      {/* 8-Step Vertical Tracker */}
+                      {/* 4-Step Vertical Tracker driven by kitchen_status */}
                       <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
                         <div className="flex items-center justify-between mb-5">
                           <h3 className="font-bold text-slate-900">Live Timeline</h3>
@@ -1703,8 +1625,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
                       {/* Actions */}
                       <div className="pt-2 space-y-3">
-                        {/* Always Show QR */}
-                        {o && (
+                        {/* Show QR only when order is ready at counter */}
+                        {o && (kitchenStatus === 'ready' || kitchenStatus === 'completed') && (
                           <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-blue-600 text-white font-bold text-sm shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition-colors">
                             <QrCode className="w-5 h-5" /> Show Pickup QR
                           </button>

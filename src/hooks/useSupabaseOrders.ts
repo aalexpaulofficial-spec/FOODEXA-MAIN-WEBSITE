@@ -143,32 +143,8 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
         },
         (payload) => {
           if (!mountedRef.current) return;
-
-          const eventType = payload.eventType;
-          const newRow = payload.new as any;
-          const oldRow = payload.old as any;
-
-          if (eventType === 'INSERT') {
-            const newOrder = mapOrderRow(newRow);
-            setOrders((prev) => {
-              const exists = prev.find((o) => o.id === newOrder.id);
-              if (exists) return prev;
-              return [newOrder, ...prev];
-            });
-          } else if (eventType === 'UPDATE') {
-            const updatedOrder = mapOrderRow(newRow);
-            setOrders((prev) => {
-              const idx = prev.findIndex((o) => o.id === updatedOrder.id);
-              if (idx >= 0) {
-                const next = [...prev];
-                next[idx] = updatedOrder;
-                return next;
-              }
-              return [updatedOrder, ...prev];
-            });
-          } else if (eventType === 'DELETE') {
-            setOrders((prev) => prev.filter((o) => o.id !== String(oldRow.id)));
-          }
+          // Fetch orders again to ensure all relations (like items) are preserved
+          fetchOrders();
         }
       )
       .subscribe((status) => {

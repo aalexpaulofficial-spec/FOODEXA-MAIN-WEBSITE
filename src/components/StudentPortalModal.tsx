@@ -19,8 +19,9 @@ import {
   fetchMenuItems as fetchMenuItemsService, searchMenuItems, filterMenuItems,
   calculateCartTotals, validateCoupon, applyCouponUsage,
   fetchUserFavorites, toggleFavorite, fetchAIRecommendations, getOrderProgress, getEstimatedTimeRemaining, generateReceipt,
-  fetchUserCart, saveUserCart
+  fetchUserCart, saveUserCart,
 } from '../lib/supabase-service';
+import { getTimelineLabel, getTimelineStage, isOrderCancelled, isOrderCompleted, STUDENT_TIMELINE_LABELS, STUDENT_TIMELINE_DESCRIPTIONS } from '../lib/orderTimeline';
 import type { MenuItem, Order, OrderStatus, NotificationItem, UserRole, CartItem, FoodFilters, CheckoutData } from '../types';
 import { PremiumHeader } from './StudentDashboard/PremiumHeader';
 import { PremiumBottomNav, PremiumTab } from './StudentDashboard/PremiumBottomNav';
@@ -136,11 +137,7 @@ const getCategoryGradient = (idx: number) => {
   return gradients[idx % gradients.length];
 };
 
-const ORDER_STEPS = ['pending', 'accepted', 'preparing', 'ready', 'completed'] as const;
-const ORDER_STEP_LABELS = ['Placed', 'Accepted', 'Preparing', 'Ready', 'Done'];
-const ORDER_STEP_ICONS = [Package, Check, ChefHat, QrCode, CheckCircle2];
-
-// ── Sub-components ──────────────────────────────────────────────────────────
+declare global { interface Window { Razorpay: any } }
 
 const SkeletonCard = () => (
   <div className="rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden animate-pulse">
@@ -455,55 +452,6 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
         </button>
       </div>
     </article>
-  );
-};
-
-const OrderProgressBar = ({ status }: { status: OrderStatus }) => {
-  const currentIdx = ORDER_STEPS.indexOf(status as typeof ORDER_STEPS[number]);
-  const isCancelled = status === 'cancelled';
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-1">
-        {ORDER_STEPS.map((step, i) => {
-          const isCompleted = !isCancelled && i < currentIdx;
-          const isActive = !isCancelled && i === currentIdx;
-          const StepIcon = ORDER_STEP_ICONS[i];
-          return (
-            <React.Fragment key={step}>
-              <div className={`flex items-center justify-center w-7 h-7 rounded-full border-2 transition-all duration-500 shrink-0 ${
-                isCancelled ? 'border-red-500/40 bg-red-950/30' :
-                isCompleted ? 'border-emerald-500 bg-emerald-500' :
-                isActive ? 'border-emerald-400 bg-emerald-950 shadow-lg shadow-emerald-500/30' :
-                'border-slate-700 bg-slate-900'
-              }`}>
-                <StepIcon className={`w-3 h-3 ${
-                  isCancelled ? 'text-red-500' :
-                  isCompleted ? 'text-slate-950' :
-                  isActive ? 'text-emerald-400' :
-                  'text-slate-600'
-                }`} />
-              </div>
-              {i < ORDER_STEPS.length - 1 && (
-                <div className={`h-0.5 flex-1 rounded-full transition-all duration-700 ${
-                  isCancelled ? 'bg-red-500/20' :
-                  i < currentIdx ? 'bg-emerald-500' : 'bg-slate-700'
-                }`} />
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
-      <div className="flex justify-between">
-        {ORDER_STEP_LABELS.map((label, i) => (
-          <span key={label} className={`text-[8px] font-bold text-center ${
-            i === currentIdx && !isCancelled ? 'text-emerald-400' : 'text-slate-600'
-          }`} style={{ width: i === 0 || i === ORDER_STEP_LABELS.length - 1 ? 'auto' : '14%', textAlign: 'center' }}>
-            {label}
-          </span>
-        ))}
-      </div>
-    </div>
   );
 };
 
@@ -1317,7 +1265,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
                 {activeTab === 'history' && (
                   <HistoryTab 
-                    userId={user?.id}
+                    pastOrders={pastOrders}
                     onReorder={(order) => {
                       order.items.forEach((item) => {
                         setCart((prev) => {
@@ -1503,140 +1451,161 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
                 {/* PAYMENT SUCCESS TAB */}
                 {/* ═══════════════════ LIVE CANTEEN TRACKING ═══════════════════ */}
-                {activeTab === 'payment_success' && (() => {
-                  // Always use the latest active order; fall back to the most recent order overall
-                  const o = activeOrders[0] || orders.find(ord => ['pending','accepted','preparing','cooking','quality_check','packed','ready','completed'].includes(ord.status)) || orders[0];
-                  const LIVE_STEPS = [
-                    { label: 'Order Confirmed',       desc: 'Received at campus kitchen server'   },
-                    { label: 'Preparing',             desc: 'Kitchen is preparing your order'     },
-                    { label: 'Ready at Counter',      desc: 'Scan QR at counter screen'           },
-                    { label: 'Order Collected',       desc: 'Enjoy your meal!'                    },
-                  ];
-                  const statusToStep: Record<string, number> = {
-                    pending: 0, accepted: 0, preparing: 1, cooking: 1,
-                    quality_check: 1, packed: 1, ready: 2, completed: 3,
-                  };
-                  // Use kitchen_status as the primary source for timeline position
-                  const kitchenStatus = (o?.kitchen_status || o?.status || 'pending').toLowerCase();
-                  const liveStepIdx = statusToStep[kitchenStatus] ?? 0;
-                  const isCompleted = kitchenStatus === 'completed';
+                 {activeTab === 'payment_success' && (() => {
+                   const o = activeOrders[0] || orders.find(ord => ['pending','accepted','preparing','cooking','quality_check','packed','ready','completed'].includes(ord.status)) || orders[0];
+                   const stage = getTimelineStage(o?.status);
+                   const label = o ? getTimelineLabel(o.status) : 'Order Confirmed';
+                   const completed = isOrderCompleted(o?.status);
+                   const cancelled = isOrderCancelled(o?.status);
 
-                  // Read pickup code, estimated time, QR from Supabase order (never generate locally)
-                  const pickupCode = o?.pickup_code || o?.pickup_token || '';
-                  const estimatedReadyAt = o?.estimated_ready_at || null;
-                  const orderNumber = o?.order_number || o?.order_id || '';
+                   // Read pickup code, estimated time, QR from Supabase order (never generate locally)
+                   const pickupCode = o?.pickup_code || o?.pickup_token || '';
+                   const estimatedReadyAt = o?.estimated_ready_at || null;
+                   const orderNumber = o?.order_number || o?.order_id || '';
 
-                  return (
-                    <div className="max-w-md mx-auto space-y-4 pb-20">
-                      {/* Top Status Card */}
-                      <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
-                        <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none"></div>
-                        
-                        <div className="relative z-10">
-                          <div className="flex items-start justify-between mb-4">
-                            <div>
-                              <p className="text-blue-300 text-xs font-bold uppercase tracking-wider mb-1">{LIVE_STEPS[liveStepIdx]?.label || 'Order Confirmed'}</p>
-                              <h2 className="text-3xl font-black">{orderNumber}</h2>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">Pickup Code</p>
-                              <p className="text-xl font-black text-emerald-400 tracking-wider">
-                                {pickupCode || 'Generating...'}
-                              </p>
-                            </div>
-                          </div>
+                   return (
+                     <div className="max-w-md mx-auto space-y-4 pb-20">
+                       {/* Top Status Card */}
+                       <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
+                         <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                         <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                         
+                         <div className="relative z-10">
+                           <div className="flex items-start justify-between mb-4">
+                             <div>
+                               <p className="text-blue-300 text-xs font-bold uppercase tracking-wider mb-1">{label}</p>
+                               <h2 className="text-3xl font-black">{orderNumber}</h2>
+                             </div>
+                             <div className="text-right">
+                               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">Pickup Code</p>
+                               <p className="text-xl font-black text-emerald-400 tracking-wider">
+                                 {pickupCode || 'Generating...'}
+                               </p>
+                             </div>
+                           </div>
 
-                          <div className="flex items-center gap-3 bg-white/10 rounded-2xl p-3 border border-white/10">
-                            <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center border border-blue-400/30">
-                              <Clock className="w-5 h-5 text-blue-300" />
-                            </div>
-                            <div>
-                              <p className="text-slate-300 text-xs">Estimated Ready Time</p>
-                              <p className="font-bold text-white">
-                                {estimatedReadyAt 
-                                  ? new Date(estimatedReadyAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                                  : 'Calculating...'}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                           <div className="flex items-center gap-3 bg-white/10 rounded-2xl p-3 border border-white/10">
+                             <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center border border-blue-400/30">
+                               <Clock className="w-5 h-5 text-blue-300" />
+                             </div>
+                             <div>
+                               <p className="text-slate-300 text-xs">Estimated Ready Time</p>
+                               <p className="font-bold text-white">
+                                 {estimatedReadyAt 
+                                   ? new Date(estimatedReadyAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                                   : 'Calculating...'}
+                               </p>
+                             </div>
+                           </div>
+                         </div>
+                       </div>
 
-                      {/* 4-Step Vertical Tracker driven by kitchen_status */}
-                      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-                        <div className="flex items-center justify-between mb-5">
-                          <h3 className="font-bold text-slate-900">Live Timeline</h3>
-                          <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold border border-emerald-100 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            Live
-                          </span>
-                        </div>
-                        <div className="space-y-0">
-                          {LIVE_STEPS.map((step, i) => {
-                            const isDone = i < liveStepIdx;
-                            const isActive = i === liveStepIdx;
-                            return (
-                              <div key={i} className="flex gap-4">
-                                <div className="flex flex-col items-center">
-                                  <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 font-bold text-xs transition-all duration-500 z-10 ${
-                                    isDone ? 'bg-blue-600 border-blue-600 text-white' :
-                                    isActive ? 'bg-white border-blue-600 text-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.3)]' :
-                                    'bg-white border-slate-200 text-slate-300'
-                                  }`}>
-                                    {isDone ? <Check className="w-4 h-4" /> : i + 1}
-                                  </div>
-                                  {i < LIVE_STEPS.length - 1 && (
-                                    <div className={`w-0.5 h-8 my-0.5 rounded-full transition-all duration-700 ${isDone ? 'bg-blue-600' : 'bg-slate-100'}`} />
-                                  )}
-                                </div>
-                                <div className={`pt-1 flex-1 min-w-0 ${i < LIVE_STEPS.length - 1 ? 'pb-3' : 'pb-0'}`}>
-                                  <div className="flex items-center gap-2">
-                                    <p className={`text-sm font-bold ${isActive ? 'text-blue-600' : isDone ? 'text-slate-800' : 'text-slate-400'}`}>{step.label}</p>
-                                  </div>
-                                  <p className={`text-[11px] mt-0.5 ${isActive || isDone ? 'text-slate-500' : 'text-slate-300'}`}>{step.desc}</p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
+                       {/* Live Detail Grid */}
+                       <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
+                         <h3 className="font-bold text-slate-900 mb-4">Order Details</h3>
+                         <div className="grid grid-cols-2 gap-3 text-xs">
+                           <div className="bg-slate-50 rounded-xl p-3">
+                             <p className="text-[10px] text-slate-400 font-bold uppercase">Token Number</p>
+                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.token_number || o?.pickup_token || '—'}</p>
+                           </div>
+                           <div className="bg-slate-50 rounded-xl p-3">
+                             <p className="text-[10px] text-slate-400 font-bold uppercase">Kitchen Status</p>
+                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.kitchen_status || '—'}</p>
+                           </div>
+                           <div className="bg-slate-50 rounded-xl p-3">
+                             <p className="text-[10px] text-slate-400 font-bold uppercase">Counter Status</p>
+                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.counter_status || '—'}</p>
+                           </div>
+                           <div className="bg-slate-50 rounded-xl p-3">
+                             <p className="text-[10px] text-slate-400 font-bold uppercase">Order Status</p>
+                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.order_status || o?.status || '—'}</p>
+                           </div>
+                           <div className="bg-slate-50 rounded-xl p-3">
+                             <p className="text-[10px] text-slate-400 font-bold uppercase">Completion Time</p>
+                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.completed_at ? new Date(o.completed_at).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'}</p>
+                           </div>
+                           <div className="bg-slate-50 rounded-xl p-3">
+                             <p className="text-[10px] text-slate-400 font-bold uppercase">Items</p>
+                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.items?.length ?? 0} item(s)</p>
+                           </div>
+                         </div>
+                       </div>
 
-                      {/* Actions */}
-                      <div className="pt-2 space-y-3">
-                        {/* Show QR only when order is ready at counter */}
-                        {o && (kitchenStatus === 'ready' || kitchenStatus === 'completed') && (
-                          <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-blue-600 text-white font-bold text-sm shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition-colors">
-                            <QrCode className="w-5 h-5" /> Show Pickup QR
-                          </button>
-                        )}
-                        
-                        {/* Cancel within 30 seconds */}
-                        {(() => {
-                          const secs = Math.max(0, 30 - Math.floor((currentTime - new Date(o?.created_at || Date.now()).getTime()) / 1000));
-                          if (secs > 0 && o?.status !== 'cancelled') return (
-                            <div className="text-center mt-2">
-                              <button
-                                onClick={async () => {
-                                  setSubmittingOrder(true);
-                                  const res = await cancelOrder(o!.id);
-                                  if (res.success) { triggerToast && triggerToast('Cancelled', 'Order cancelled and refunded.', 'success'); setActiveTab('history'); }
-                                  else { triggerToast && triggerToast('Failed', 'Could not cancel.', 'error'); }
-                                  setSubmittingOrder(false);
-                                }}
-                                disabled={submittingOrder}
-                                className="text-red-500 font-bold text-xs hover:text-red-600 hover:underline transition-all disabled:opacity-50"
-                              >
-                                Cancel Order within {secs} seconds timing
-                              </button>
-                            </div>
-                          );
-                          return null;
-                        })()}
-                      </div>
-                    </div>
-                  );
-                })()}
+                       {/* 4-Step Vertical Tracker driven by DB status (single source of truth) */}
+                       <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
+                         <div className="flex items-center justify-between mb-5">
+                           <h3 className="font-bold text-slate-900">Live Timeline</h3>
+                           <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold border border-emerald-100 flex items-center gap-1">
+                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                             Live
+                           </span>
+                         </div>
+                         <div className="space-y-0">
+                           {STUDENT_TIMELINE_LABELS.map((stepLabel, i) => {
+                             const isDone = i < stage;
+                             const isActive = i === stage;
+                             const isPast = stage === -1;
+                             return (
+                               <div key={i} className="flex gap-4">
+                                 <div className="flex flex-col items-center">
+                                   <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 font-bold text-xs transition-all duration-500 z-10 ${
+                                     isPast ? 'border-red-500/40 bg-red-950/30' :
+                                     isDone ? 'bg-blue-600 border-blue-600 text-white' :
+                                     isActive ? 'bg-white border-blue-600 text-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.3)]' :
+                                     'bg-white border-slate-200 text-slate-300'
+                                   }`}>
+                                     {isPast ? <XCircle className="w-4 h-4 text-red-500" /> : isDone ? <Check className="w-4 h-4" /> : i + 1}
+                                   </div>
+                                   {i < STUDENT_TIMELINE_LABELS.length - 1 && (
+                                     <div className={`w-0.5 h-8 my-0.5 rounded-full transition-all duration-700 ${isDone ? 'bg-blue-600' : 'bg-slate-100'}`} />
+                                   )}
+                                 </div>
+                                 <div className={`pt-1 flex-1 min-w-0 ${i < STUDENT_TIMELINE_LABELS.length - 1 ? 'pb-3' : 'pb-0'}`}>
+                                   <div className="flex items-center gap-2">
+                                     <p className={`text-sm font-bold ${isActive ? 'text-blue-600' : isDone || isPast ? 'text-slate-800' : 'text-slate-400'}`}>{stepLabel}</p>
+                                   </div>
+                                   <p className={`text-[11px] mt-0.5 ${isActive || isDone ? 'text-slate-500' : 'text-slate-300'}`}>{STUDENT_TIMELINE_DESCRIPTIONS[i]}</p>
+                                 </div>
+                               </div>
+                             );
+                           })}
+                         </div>
+                       </div>
+
+                       {/* Actions */}
+                       <div className="pt-2 space-y-3">
+                         {o && (stage >= 2) && (
+                           <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-blue-600 text-white font-bold text-sm shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition-colors">
+                             <QrCode className="w-5 h-5" /> Show Pickup QR
+                           </button>
+                         )}
+                         
+                         {/* Cancel within 30 seconds */}
+                         {(() => {
+                           const secs = Math.max(0, 30 - Math.floor((currentTime - new Date(o?.created_at || Date.now()).getTime()) / 1000));
+                           if (secs > 0 && !cancelled) return (
+                             <div className="text-center mt-2">
+                               <button
+                                 onClick={async () => {
+                                   setSubmittingOrder(true);
+                                   const res = await cancelOrder(o!.id);
+                                   if (res.success) { triggerToast && triggerToast('Cancelled', 'Order cancelled and refunded.', 'success'); setActiveTab('history'); }
+                                   else { triggerToast && triggerToast('Failed', 'Could not cancel.', 'error'); }
+                                   setSubmittingOrder(false);
+                                 }}
+                                 disabled={submittingOrder}
+                                 className="text-red-500 font-bold text-xs hover:text-red-600 hover:underline transition-all disabled:opacity-50"
+                               >
+                                 Cancel Order within {secs} seconds timing
+                               </button>
+                             </div>
+                           );
+                           return null;
+                         })()}
+                       </div>
+                     </div>
+                   );
+                 })()}
 
 
 

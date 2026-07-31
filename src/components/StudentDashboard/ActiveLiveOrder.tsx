@@ -1,38 +1,8 @@
 import React from 'react';
-import { Clock, QrCode, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
+import { Clock, QrCode, CheckCircle2, XCircle, ChevronRight, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { Order } from '../../types';
-
-const STAGES_ORDER = [
-  'pending',
-  'preparing',
-  'ready',
-  'completed'
-];
-
-const statusLabel = (s: string): string => {
-  const m: Record<string, string> = {
-    pending: 'Order Confirmed',
-    accepted: 'Order Confirmed',
-    preparing: 'Preparing',
-    cooking: 'Preparing',
-    quality_check: 'Preparing',
-    packed: 'Preparing',
-    ready: 'Ready at Counter',
-    completed: 'Order Collected',
-    cancelled: 'Cancelled',
-  };
-  return m[s] || 'Order Confirmed';
-};
-
-const getPrimaryStage = (kitchenStatus: string | undefined, fallbackStatus: string) => {
-  const s = (kitchenStatus || fallbackStatus || '').toLowerCase();
-  if (['pending', 'accepted'].includes(s)) return 'pending';
-  if (['preparing', 'cooking', 'quality_check', 'packed'].includes(s)) return 'preparing';
-  if (s === 'ready') return 'ready';
-  if (s === 'completed') return 'completed';
-  return 'pending';
-};
+import { getTimelineLabel, getTimelineDescription, isOrderCancelled } from '../../lib/orderTimeline';
 
 interface ActiveLiveOrderProps {
   orders: Order[];
@@ -46,14 +16,13 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
   onQrOpen,
 }) => {
   const order = orders[0];
-
   if (!order) return null;
 
-  const currentPrimary = getPrimaryStage(order.kitchen_status, order.status);
-  const currentStageIndex = STAGES_ORDER.indexOf(currentPrimary) >= 0 ? STAGES_ORDER.indexOf(currentPrimary) : 0;
-  const progressPct = Math.round(((currentStageIndex + 1) / STAGES_ORDER.length) * 100);
+  const stageLabel = getTimelineLabel(order.status);
+  const isCancelled = isOrderCancelled(order.status);
+  const isCompleted = order.status === 'completed';
 
-  const orderNum = order.order_number || order.order_id?.replace('#FX-', '') || String(order.id).slice(-8).toUpperCase();
+  const orderNumber = order.order_number || order.order_id?.replace('#FX-', '') || String(order.id).slice(-8).toUpperCase();
 
   const estimatedReadyTime = order.estimated_ready_at;
 
@@ -73,15 +42,15 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
                 {order.payment_status}
               </span>
             </div>
-            {orderNum && (
+            {orderNumber && (
               <h3 className="text-lg font-bold text-white tracking-tight">
-                Order #{orderNum}
+                Order #{orderNumber}
               </h3>
             )}
           </div>
         </div>
 
-        {order.status !== 'ready' && order.status !== 'completed' && (
+        {!isCancelled && !isCompleted && (
           <div className="bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border border-white/10 flex items-center gap-2 w-fit">
             <Clock className="w-4 h-4 text-cyan-300 animate-spin" />
             <span className="text-xs text-slate-300">Est. Ready:</span>
@@ -94,34 +63,45 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
         )}
       </div>
 
-      <div className="my-4">
-        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Items Ordered</p>
+      <div className="my-4 space-y-2">
+        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Items Ordered</p>
         <p className="text-sm font-semibold text-white line-clamp-1">
-          {order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}
+          {order.items.map(i => `${i.quantity}x ${i.name}`).join(', ') || 'No items'}
         </p>
         {order.counter && (
-          <p className="text-xs text-cyan-200 mt-1">
-            📍 {order.counter}
-          </p>
+          <p className="text-xs text-cyan-200">📍 {order.counter}</p>
         )}
       </div>
 
-      <div className="my-4">
-        <div className="flex items-center justify-between text-xs mb-1.5">
+      <div className="my-4 space-y-2">
+        <div className="flex items-center justify-between text-xs">
           <span className="font-bold text-cyan-300 flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            Stage: {statusLabel(order.kitchen_status || order.status)}
+            {isCancelled ? (
+              <XCircle className="w-3.5 h-3.5 text-red-400" />
+            ) : (
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            )}
+            {stageLabel}
           </span>
-          <span className="text-slate-400 font-semibold">{progressPct}% Complete</span>
         </div>
 
-        <div className="w-full bg-white/10 rounded-full h-2.5 overflow-hidden p-0.5 border border-white/10">
-          <motion.div
-            className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full"
-            initial={{ width: 0 }}
-            animate={{ width: `${progressPct}%` }}
-            transition={{ duration: 0.5, ease: 'easeOut' }}
-          ></motion.div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+          <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
+            <p className="text-[10px] text-slate-400 font-bold uppercase">Kitchen Status</p>
+            <p className="text-sm font-extrabold text-white mt-0.5">{order.kitchen_status || order.status || '—'}</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
+            <p className="text-[10px] text-slate-400 font-bold uppercase">Counter Status</p>
+            <p className="text-sm font-extrabold text-white mt-0.5">{order.counter_status || '—'}</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
+            <p className="text-[10px] text-slate-400 font-bold uppercase">Order Status</p>
+            <p className="text-sm font-extrabold text-white mt-0.5">{order.order_status || order.status || '—'}</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
+            <p className="text-[10px] text-slate-400 font-bold uppercase">Completion Time</p>
+            <p className="text-sm font-extrabold text-white mt-0.5">{order.completed_at ? new Date(order.completed_at).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'}</p>
+          </div>
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Order, OrderStatus } from '../types';
+import { isOrderActive, isOrderPast } from '../lib/orderTimeline';
 
 interface UseSupabaseOrdersOptions {
   userId: string | undefined;
@@ -70,24 +71,18 @@ function mapOrderRow(r: any): Order {
   };
 }
 
-const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'cooking', 'quality_check', 'packed', 'ready'];
-
-// Polling interval (ms) while active orders exist — fallback for missed Realtime events
-const ACTIVE_ORDER_POLL_MS = 5000;
-
 export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersOptions): UseSupabaseOrdersReturn {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const channelRef = useRef<any>(null);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
-  const ordersRef = useRef<Order[]>([]);
 
-  // Keep ordersRef in sync so polling can read latest without stale closure
   useEffect(() => {
-    ordersRef.current = orders;
-  }, [orders]);
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const fetchOrders = useCallback(async () => {
     if (!userId) {
@@ -95,37 +90,31 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
       setLoading(false);
       return;
     }
-
     try {
       const { data, error: fetchError } = await supabase
         .from('orders')
         .select('*')
         .eq('student_id', userId)
         .order('created_at', { ascending: false });
-
-      if (fetchError) {
-        setError(fetchError.message);
-        return;
-      }
-
+      if (fetchError) { setError(fetchError.message); return; }
       if (mountedRef.current) {
         setOrders((data || []).map(mapOrderRow));
         setError(null);
       }
     } catch (err: any) {
-      if (mountedRef.current) {
-        setError(err?.message || 'Failed to fetch orders');
-      }
+      if (mountedRef.current) setError(err?.message || 'Failed to fetch orders');
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      if (mountedRef.current) setLoading(false);
     }
   }, [userId]);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+  const upsertOrder = useCallback((row: any) => {
+    if (!mountedRef.current) return;
+    const mapped = mapOrderRow(row);
+    setOrders(prev => {
+      const next = prev.filter(o => o.id !== mapped.id);
+      return [mapped, ...next];
+    });
   }, []);
 
   useEffect(() => {
@@ -138,95 +127,89 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
     setLoading(true);
     fetchOrders();
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // REALTIME: Subscribe WITHOUT a server-side filter.
-    //
-    // Reason: Supabase postgres_changes filters rely on the column being present
-    // in the WAL diff payload. With REPLICA IDENTITY DEFAULT (the Supabase
-    // default), unchanged columns like `student_id` are OMITTED from UPDATE
-    // payloads. This causes the `student_id=eq.X` filter to silently drop
-    // every status-change UPDATE event for the student.
-    //
-    // Fix: subscribe to ALL order changes (no filter), then check client-side
-    // whether the payload belongs to this student.
-    // ─────────────────────────────────────────────────────────────────────────
-    const channelName = `orders-student-${userId}-${Date.now()}`;
+    let isSettingUp = false;
 
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'orders',
-          // No server-side filter — we check client-side below
-        },
-        (payload: any) => {
-          if (!mountedRef.current) return;
+    const setup = () => {
+      if (!userId || !enabled || !mountedRef.current || isSettingUp) return;
+      isSettingUp = true;
 
-          const record = payload?.new || payload?.old;
-          if (!record) return;
-
-          // Client-side guard: only react if this record belongs to our user
-          const recordStudentId = record.student_id || record.user_id || '';
-          if (recordStudentId && recordStudentId !== userId) return;
-
-          // Re-fetch to get full, consistent order data
-          fetchOrders();
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          setTimeout(() => {
-            if (mountedRef.current && channelRef.current === channel) {
-              try { supabase.removeChannel(channel); } catch {}
-              channelRef.current = null;
-            }
-          }, 5000);
-        }
-      });
-
-    channelRef.current = channel;
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // POLLING FALLBACK: Poll every 5 seconds while there are active orders.
-    // This guarantees the student sees status updates even if Realtime misses
-    // events (e.g., REPLICA IDENTITY DEFAULT drops student_id from WAL diff).
-    // ─────────────────────────────────────────────────────────────────────────
-    pollTimerRef.current = setInterval(() => {
-      if (!mountedRef.current) return;
-      const hasActive = ordersRef.current.some(o => ACTIVE_STATUSES.includes(o.status));
-      if (hasActive) {
-        fetchOrders();
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
       }
-    }, ACTIVE_ORDER_POLL_MS);
-
-    return () => {
       if (channelRef.current) {
-        try { supabase.removeChannel(channelRef.current); } catch {}
+        try { supabase.removeChannel(channelRef.current); } catch { /* ignore */ }
         channelRef.current = null;
       }
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
+
+      const channelName = `student-orders-${userId}`;
+
+      const handleChange = async (payload: any) => {
+        if (!mountedRef.current) return;
+        const record = payload?.new;
+        if (!record) return;
+        const recordStudentId = record.student_id || record.user_id || '';
+        if (recordStudentId && recordStudentId !== userId) return;
+
+        /* INSERT payloads contain the full row; UPDATE payloads may only
+           include changed columns (REPLICA IDENTITY DEFAULT). Fetch the
+           latest complete row to guarantee consistency (items, timestamps, …). */
+        try {
+          const { data: freshRow, error: fetchErr } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('id', record.id)
+            .single();
+          if (fetchErr || !freshRow) throw fetchErr;
+          upsertOrder(freshRow);
+        } catch {
+          upsertOrder(record);
+        }
+      };
+
+      const channel = supabase
+        .channel(channelName)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, handleChange)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, handleChange)
+        .subscribe((status) => {
+          if (!mountedRef.current) return;
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            reconnectTimerRef.current = setTimeout(() => {
+              reconnectTimerRef.current = null;
+              isSettingUp = false;
+              if (mountedRef.current && enabled && userId) {
+                setup();
+              }
+            }, 3000);
+          } else {
+            isSettingUp = false;
+          }
+        });
+
+      channelRef.current = channel;
+    };
+
+    setup();
+
+    return () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      isSettingUp = false;
+      if (channelRef.current) {
+        try { supabase.removeChannel(channelRef.current); } catch { /* ignore */ }
+        channelRef.current = null;
       }
     };
-  }, [userId, enabled, fetchOrders]);
+  }, [userId, enabled]);
 
   const refresh = useCallback(async () => {
     await fetchOrders();
   }, [fetchOrders]);
 
-  const activeOrders = orders.filter((o) => ACTIVE_STATUSES.includes(o.status));
-  const pastOrders = orders.filter((o) => !ACTIVE_STATUSES.includes(o.status));
+  const activeOrders = orders.filter(o => isOrderActive(o.status));
+  const pastOrders = orders.filter(o => isOrderPast(o.status));
 
-  return {
-    orders,
-    activeOrders,
-    pastOrders,
-    loading,
-    error,
-    refresh,
-  };
+  return { orders, activeOrders, pastOrders, loading, error, refresh };
 }

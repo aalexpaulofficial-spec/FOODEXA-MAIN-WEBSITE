@@ -15,7 +15,7 @@ import { useSupabaseOrders } from '../hooks/useSupabaseOrders';
 import {
   formatINR, formatDateTime, subscribeMenuItems, subscribeAnnouncements,
   subscribeBanners, subscribeMenuCategories, subscribeCounters, subscribeOrders,
-  placeOrder, createRazorpayOrder, verifyRazorpayPayment, updateOrderAfterPayment, updateOrderPaymentStatus, getItemAvailability, mapMenuItem, cancelOrder, fetchOrderById,
+  createOrderAfterPayment, createRazorpayOrder, verifyRazorpayPayment, updateOrderPaymentStatus, getItemAvailability, mapMenuItem, cancelOrder, fetchOrderById,
   fetchMenuItems as fetchMenuItemsService, searchMenuItems, filterMenuItems,
   calculateCartTotals, validateCoupon, applyCouponUsage,
   fetchUserFavorites, toggleFavorite, fetchAIRecommendations, getOrderProgress, getEstimatedTimeRemaining, generateReceipt,
@@ -890,6 +890,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   };
 
   // ── PRODUCTION PAYMENT FLOW ────────────────────────────────────────────
+  // Order is ONLY created in Supabase AFTER payment succeeds.
+  // Institution never sees unpaid orders.
   const handlePlaceOrder = async () => {
     if (!user?.id || !profile?.email) { setError('Sign in required.'); return; }
     if (!liveRole) { setError('Profile role missing.'); return; }
@@ -897,8 +899,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
     setSubmittingOrder(true); setError(null);
 
-    // PRODUCTION FIX: Always re-fetch institution_id fresh from DB before creating an order.
-    // React profile state may be stale — the DB is the source of truth.
+    // Re-fetch institution_id fresh from DB — React state may be stale
     const { data: freshProfileRow, error: profileFetchError } = await supabase
       .from('profiles')
       .select('institution_id')
@@ -926,8 +927,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     try {
       const now = new Date();
       const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
-      const seq = String(Math.floor(Math.random() * 999999) + 1).padStart(6, '0');
-      const orderNumber = `FDX-${dateStr}-${seq}`;
+      const tempReceiptId = `fdx_temp_${dateStr}_${Date.now()}`;
 
       const itemsForBackend = cart.map((e) => ({
         id: e.item.id,
@@ -936,45 +936,18 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         price: e.item.offer_price || e.item.price,
         subtotal: (e.item.offer_price || e.item.price) * e.quantity,
       }));
-      const itemsFull = cart.map((e) => ({
-        id: e.item.id,
-        name: e.item.name,
-        quantity: e.quantity,
-        price: e.item.offer_price || e.item.price,
-        subtotal: (e.item.offer_price || e.item.price) * e.quantity,
-        image_url: e.item.image_url,
-        is_veg: e.item.is_veg,
-      }));
+       const itemsFull = cart.map((e) => ({
+         id: e.item.id,
+         name: e.item.name,
+         variant: e.item.food_type || e.item.category || e.item.counter_name || null,
+         quantity: e.quantity,
+         price: e.item.offer_price || e.item.price,
+         subtotal: (e.item.offer_price || e.item.price) * e.quantity,
+         image_url: e.item.image_url,
+         is_veg: e.item.is_veg,
+       }));
 
-      // ── STEP 1: Create a PENDING order row in Supabase ──────────────────
-      // placeOrder() fetches canteen_id from menu_items and uses liveInstitutionId
-      // (freshly fetched from DB) — never from stale React state.
-      const orderResult = await placeOrder({
-        user_id: user.id,
-        email: profile.email,
-        role: liveRole,
-        customer_name: profile.full_name || user.email?.split('@')[0] || 'Customer',
-        phone: profile.phone || '0000000000',
-        institution_id: liveInstitutionId, // PRODUCTION FIX: use fresh DB value
-        canteen_id: cart[0]?.item.canteen_id || cart[0]?.item.counter_id || null,
-        items: itemsForBackend,
-        itemsFull: itemsFull,
-        total_amount: cartGrandTotal,
-        notes: kitchenNotes || null,
-        estimated_prep_time_minutes: estimatedPrepTime,
-      });
-
-      if (orderResult.error || !orderResult.data) {
-        setError(orderResult.error || 'Failed to create order.');
-        setSubmittingOrder(false);
-        if (triggerToast) triggerToast('Order Creation Failed', orderResult.error || 'Please try again.', 'warning');
-        return;
-      }
-
-      const pendingOrder = orderResult.data;
-      const supabaseOrderId = pendingOrder.id; // Real UUID from DB
-
-      // ── STEP 2: Create a Razorpay order ─────────────────────────────────
+      // ── STEP 1: Create Razorpay order (NO Supabase write yet) ──────────
       const razorpayResult = await createRazorpayOrder({
         amount: cartGrandTotal,
         currency: 'INR',
@@ -982,55 +955,49 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         email: profile.email,
         phone: profile.phone || undefined,
         name: profile.full_name || undefined,
-        institution_id: pendingOrder.institution_id || profile.institution_id || undefined,
-        order_id: supabaseOrderId, // Use real DB UUID as receipt reference
+        institution_id: liveInstitutionId,
+        order_id: tempReceiptId,
         items: itemsForBackend,
       });
 
       if (!razorpayResult.success || !razorpayResult.order_id) {
-        // SIMULATE SUCCESSFUL RAZORPAY PAYMENT FOR DEMO
-        const simulatedRazorpayOrderId = `pay_${Date.now()}`;
-        const simulatedRazorpayPaymentId = `pay_${Date.now()}`;
-        const simulatedRazorpaySignature = `simulated_signature`;
+        // DEMO FALLBACK: Simulate successful payment (no DB writes before this)
+        const simOrderId = `pay_${Date.now()}`;
+        const simPaymentId = `pay_${Date.now()}`;
+        const simSignature = `simulated_signature_${Date.now()}`;
 
-        const finalizeResult = await updateOrderAfterPayment({
-          order_id: supabaseOrderId,
-          razorpay_order_id: simulatedRazorpayOrderId,
-          razorpay_payment_id: simulatedRazorpayPaymentId,
-          razorpay_signature: simulatedRazorpaySignature,
-          institution_id: pendingOrder.institution_id,
-          canteen_id: pendingOrder.canteen_id,
-          student_id: user.id,
+        const createResult = await createOrderAfterPayment({
+          user_id: user.id,
+          email: profile.email,
+          role: liveRole,
+          customer_name: profile.full_name || user.email?.split('@')[0] || 'Customer',
+          phone: profile.phone || '0000000000',
+          institution_id: liveInstitutionId,
+          canteen_id: cart[0]?.item.canteen_id || cart[0]?.item.counter_id || null,
+          items: itemsForBackend,
+          itemsFull,
           total_amount: cartGrandTotal,
-          prep_time_minutes: estimatedPrepTime,
+          razorpay_order_id: simOrderId,
+          razorpay_payment_id: simPaymentId,
+          razorpay_signature: simSignature,
+          payment_method: 'razorpay',
+          estimated_prep_time_minutes: estimatedPrepTime,
+          notes: kitchenNotes || null,
         });
 
-        if (!finalizeResult.success) {
-          setError(finalizeResult.error || 'Payment received but order update failed. Contact support.');
+        if (createResult.error || !createResult.data) {
+          setError(createResult.error || 'Failed to create order after payment.');
           setActiveTab('payment_failed');
           setSubmittingOrder(false);
-          if (triggerToast) triggerToast('Order Update Failed', finalizeResult.error || 'Contact support.', 'warning');
+          if (triggerToast) triggerToast('Order Creation Failed', createResult.error || 'Contact support.', 'warning');
           return;
         }
 
-        const confirmedOrder = finalizeResult.data ?? await fetchOrderById(supabaseOrderId);
-        const paidOrder: Order = {
-          ...(confirmedOrder || pendingOrder),
-          payment_status: 'paid',
-          status: 'confirmed' as any,
-          order_status: 'Confirmed',
-          payment_method: 'razorpay',
-          counter: cart[0]?.item?.counter_name || cart[0]?.item?.counter || pendingOrder.counter || 'Campus Counter',
-          razorpay_order_id: simulatedRazorpayOrderId,
-          razorpay_payment_id: simulatedRazorpayPaymentId,
-          razorpay_signature: simulatedRazorpaySignature,
-          paid_at: new Date().toISOString(),
-          accepted_at: new Date().toISOString(),
-        };
-
-        // Refresh orders from Supabase (hook manages state)
         await refreshOrders();
         setCart([]);
+        setShowCart(false);
+        setCouponDiscount(0);
+        setCouponCode('');
         setActiveTab('payment_success');
         setSubmittingOrder(false);
         if (triggerToast) triggerToast('Payment Successful', 'Order placed successfully.', 'success');
@@ -1040,30 +1007,29 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       const razorpayKeyId = razorpayResult.razorpay_key_id;
       if (!razorpayKeyId) { setError('Payment configuration error.'); setSubmittingOrder(false); return; }
 
-      // ── STEP 3: Open Razorpay checkout ──────────────────────────────────
+      // ── STEP 2: Open Razorpay checkout (NO Supabase order yet) ─────────
       const options: any = {
         key: razorpayKeyId,
         amount: razorpayResult.amount,
         currency: razorpayResult.currency || 'INR',
         name: 'FOODEXA',
-        description: `Campus Order — ${orderNumber}`,
+        description: `Campus Order`,
         image: 'https://foodexa.com/logo.png',
         order_id: razorpayResult.order_id,
         handler: async function (response: any) {
           const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = response;
           try {
-            // ── STEP 4: Server-side verification ────────────────────────
+            // ── STEP 3: Server-side verification ────────────────────────
             const verifyResult = await verifyRazorpayPayment({
               razorpay_order_id,
               razorpay_payment_id,
               razorpay_signature,
               user_id: user.id,
-              order_id: supabaseOrderId,
+              order_id: tempReceiptId,
             });
 
             if (!verifyResult.success) {
-              // Rollback: mark order as payment_failed
-              await updateOrderPaymentStatus({ order_id: supabaseOrderId, payment_status: 'failed', status: 'cancelled', order_status: 'Payment Failed' });
+              // Payment failed — NO order was created in Supabase
               setError(verifyResult.error || 'Payment verification failed.');
               setActiveTab('payment_failed');
               setSubmittingOrder(false);
@@ -1071,26 +1037,36 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               return;
             }
 
-            // ── STEP 5: Fetch the confirmed order fresh from DB (API already updated it) ──
-            // NOTE: We do NOT call updateOrderAfterPayment here because:
-            //   1. verify-payment.js (server-side, service key) already updates the order.
-            //   2. Client-side update would be blocked by RLS and throw errors.
-            const confirmedOrder = await fetchOrderById(supabaseOrderId);
-
-            const paidOrder: Order = {
-              ...(confirmedOrder || pendingOrder),
-              payment_status: 'paid',
-              status: 'pending' as any,
-              order_status: 'Confirmed',
-              payment_method: 'razorpay',
-              counter: cart[0]?.item?.counter_name || cart[0]?.item?.counter || pendingOrder.counter || 'Campus Counter',
+            // ── STEP 4: Create order + order_items in Supabase ──────────
+            // Only now does the institution see the order
+            const createResult = await createOrderAfterPayment({
+              user_id: user.id,
+              email: profile.email,
+              role: liveRole,
+              customer_name: profile.full_name || user.email?.split('@')[0] || 'Customer',
+              phone: profile.phone || '0000000000',
+              institution_id: liveInstitutionId,
+              canteen_id: cart[0]?.item.canteen_id || cart[0]?.item.counter_id || null,
+              items: itemsForBackend,
+              itemsFull,
+              total_amount: cartGrandTotal,
               razorpay_order_id,
               razorpay_payment_id,
               razorpay_signature,
-              paid_at: new Date().toISOString(),
-            };
+              payment_method: 'razorpay',
+              estimated_prep_time_minutes: estimatedPrepTime,
+              notes: kitchenNotes || null,
+            });
 
-            // ── STEP 6: Refresh from DB (hook manages state) ───────────
+            if (createResult.error || !createResult.data) {
+              setError(createResult.error || 'Payment succeeded but order creation failed. Contact support.');
+              setActiveTab('payment_failed');
+              setSubmittingOrder(false);
+              if (triggerToast) triggerToast('Order Creation Failed', createResult.error || 'Contact support.', 'warning');
+              return;
+            }
+
+            // ── STEP 5: Success — refresh and show confirmation ──────────
             await refreshOrders();
             setCart([]);
             setShowCart(false);
@@ -1099,10 +1075,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             setActiveTab('payment_success');
             setSubmittingOrder(false);
             setError(null);
-            if (triggerToast) triggerToast('Order Placed!', `${orderNumber} is being prepared.`, 'success');
+            if (triggerToast) triggerToast('Order Placed!', 'Your order is being prepared.', 'success');
 
           } catch (verifyErr: any) {
-            setError('Payment completed but verification failed. Contact support.');
+            setError('Payment completed but order creation failed. Contact support.');
             setActiveTab('payment_failed');
             setSubmittingOrder(false);
             if (triggerToast) triggerToast('Verification Error', 'Payment completed but order confirmation failed.', 'warning');
@@ -1114,9 +1090,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           contact: profile.phone || '',
         },
         notes: {
-          institution_id: pendingOrder.institution_id || profile.institution_id || '',
-          supabase_order_id: supabaseOrderId,
-          order_number: orderNumber,
+          institution_id: liveInstitutionId,
+          receipt: tempReceiptId,
         },
         theme: { color: '#10b981' },
         modal: { ondismiss: function () { setSubmittingOrder(false); } },
@@ -1124,7 +1099,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
       const razorpay = new window.Razorpay(options);
       razorpay.on('payment.failed', async function (response: any) {
-        await updateOrderPaymentStatus({ order_id: supabaseOrderId, payment_status: 'failed', order_status: 'Payment Failed' });
+        // NO order was created in Supabase — nothing to update
         setError(`Payment failed: ${response?.error?.description || 'Please try again.'}`);
         setActiveTab('payment_failed');
         setSubmittingOrder(false);

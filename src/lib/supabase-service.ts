@@ -254,8 +254,10 @@ export async function fetchMenuCategories(params?: { institution_id?: string }):
 }
 
 // ==================== ORDERS ====================
+const SELECT_ORDER_WITH_ITEMS = '*, order_items(id, order_id, menu_item_id, quantity, price, name, menu_items(id, food_name, item_name, name, image_url, is_veg, price))';
+
 export async function fetchOrders(params: { user_id?: string; institution_id?: string; status?: OrderStatus }): Promise<Order[]> {
-  let query = supabase.from('orders').select('*');
+  let query = supabase.from('orders').select(SELECT_ORDER_WITH_ITEMS);
   if (params.user_id) query = query.eq('student_id', params.user_id);
   if (params.institution_id) query = query.eq('institution_id', params.institution_id);
   if (params.status) query = query.eq('status', params.status);
@@ -264,22 +266,44 @@ export async function fetchOrders(params: { user_id?: string; institution_id?: s
   return (data || []).map(mapOrder);
 }
 
+function resolveOrderItems(row: any): OrderItem[] {
+  const joinedItems = row.order_items;
+  if (Array.isArray(joinedItems) && joinedItems.length > 0) {
+    return joinedItems.map((oi: any) => {
+      const mi = oi.menu_items;
+      return {
+        id: String(oi.id || ''),
+        order_id: String(oi.order_id || ''),
+        menu_item_id: String(oi.menu_item_id || ''),
+        name: String(mi?.food_name || mi?.item_name || mi?.name || oi.name || 'Item'),
+        variant: String(oi.name || mi?.category || mi?.food_type || mi?.counter_name || ''),
+        quantity: Number(oi.quantity || 1),
+        price: Number(oi.price || 0),
+        image_url: mi?.image_url || null,
+        is_veg: mi?.is_veg !== undefined ? mi.is_veg : null,
+      };
+    });
+  }
+  return normalizeOrderItems(row.items);
+}
+
 export function mapOrder(row: any): Order {
   return {
     id: String(row.id),
-    student_id: String(row.student_id || ''),
-    user_id: String(row.student_id || ''),
+    student_id: String(row.student_id || row.user_id || ''),
+    user_id: String(row.student_id || row.user_id || ''),
     email: String(row.email || ''),
     customer_name: row.customer_name || null,
     phone: row.phone || null,
     role: ['student', 'faculty', 'guest', 'institution_admin', 'kitchen_staff', 'canteen_manager', 'super_admin'].includes(row.role) ? row.role : null,
     institution_id: row.institution_id || null,
     canteen_id: row.canteen_id || null,
-    counter_id: null,
-    category_id: null,
+    counter_id: row.counter_id || null,
+    category_id: row.category_id || null,
     order_id: row.order_number ? `#FX-${String(row.order_number).padStart(4, '0')}` : `#FX-${String(row.id).slice(-4).toUpperCase()}`,
     order_number: row.order_number || undefined,
-    items: normalizeOrderItems(row.items),
+    counter: row.counter_name || row.counter || 'Campus Counter',
+    items: resolveOrderItems(row),
     total_amount: Number(row.total_amount || 0),
     transaction_amount: Number(row.transaction_amount || row.total_amount || 0),
     status: normalizeOrderStatus(row.status),
@@ -292,9 +316,9 @@ export function mapOrder(row: any): Order {
     pickup_token: row.pickup_token || undefined,
     qr_pickup_code: row.qr_pickup_code || null,
     qr_code: row.qr_code || null,
-    qr_code_data: null,
-    pickup_pin: null,
-    locker_number: null,
+    qr_code_data: row.qr_code_data || null,
+    pickup_pin: row.pickup_pin || null,
+    locker_number: row.locker_number || null,
     notes: row.notes || null,
     created_at: row.created_at || '',
     accepted_at: row.accepted_at || null,
@@ -327,13 +351,153 @@ function normalizeOrderItems(items: any): OrderItem[] {
   if (!items) return [];
   if (Array.isArray(items)) return items.map((i: any) => ({
     name: String(i.item_name || i.name || 'Item'),
+    variant: String(i.food_type || i.category || i.variant || i.counter_name || ''),
     quantity: Number(i.quantity || i.qty || 1),
     price: Number(i.price || i.amount || 0),
+    image_url: i.image_url || null,
+    is_veg: i.is_veg !== undefined ? i.is_veg : null,
   }));
   if (typeof items === 'string') {
     try { return normalizeOrderItems(JSON.parse(items)); } catch { return []; }
   }
   return [];
+}
+
+export async function createOrderAfterPayment(params: {
+  user_id: string;
+  email: string;
+  role: UserRole;
+  customer_name?: string;
+  phone?: string;
+  canteen_id?: string;
+  notes?: string;
+  institution_id: string | null;
+  items: { id: string; name: string; variant?: string | null; quantity: number; price: number; subtotal?: number }[];
+  itemsFull: { id: string; name: string; variant?: string | null; quantity: number; price: number; subtotal?: number; image_url?: string; is_veg?: boolean }[];
+  total_amount: number;
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+  payment_method?: string;
+  estimated_prep_time_minutes?: number;
+}): Promise<{ data: Order | null; error: string | null }> {
+  const now = new Date();
+  const nowISO = now.toISOString();
+  const dateStr = nowISO.slice(0, 10).replace(/-/g, '');
+
+  const { count: orderCount } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true });
+  const nextSeq = (orderCount || 0) + 1;
+  const seqPadded = String(nextSeq).padStart(4, '0');
+
+  const tokenNumber = `TKN-${seqPadded}`;
+  const pickupCode = `PICKUP-${seqPadded}`;
+  const qrPickupCode = `QR-FDX-${dateStr}-${seqPadded}`;
+
+  const customerName = params.customer_name || params.email?.split('@')[0] || 'Customer';
+  const phone = params.phone || '0000000000';
+  const prepTimeMinutes = params.estimated_prep_time_minutes || 15;
+
+  const actualInstitutionId = params.institution_id;
+  let actualCanteenId = params.canteen_id;
+
+  if (params.itemsFull && params.itemsFull.length > 0) {
+    const firstItemId = params.itemsFull[0].id;
+    const { data: itemData } = await supabase
+      .from('menu_items')
+      .select('canteen_id')
+      .eq('id', firstItemId)
+      .single();
+    if (itemData) actualCanteenId = itemData.canteen_id;
+  }
+
+  if (!actualInstitutionId) {
+    return { data: null, error: 'You must join an institution before placing an order.' };
+  }
+  if (!actualCanteenId) {
+    return { data: null, error: 'Failed to create order: missing canteen_id from menu item.' };
+  }
+
+  const orderPayload: Record<string, any> = {
+    student_id: params.user_id,
+    email: params.email,
+    customer_name: customerName,
+    phone,
+    institution_id: actualInstitutionId,
+    canteen_id: actualCanteenId,
+    total_amount: params.total_amount,
+    transaction_amount: params.total_amount,
+    status: 'accepted',
+    order_status: 'Accepted',
+    payment_status: 'paid',
+    payment_method: params.payment_method === 'cash' ? 'cash' : 'razorpay',
+    order_number: nextSeq,
+    pickup_token: tokenNumber,
+    pickup_code: pickupCode,
+    qr_pickup_code: qrPickupCode,
+    token_number: tokenNumber,
+    notes: params.notes || null,
+    kitchen_status: 'Pending',
+    counter_status: 'Incoming',
+    estimated_ready_at: new Date(now.getTime() + prepTimeMinutes * 60000).toISOString(),
+    created_at: nowISO,
+    updated_at: nowISO,
+    paid_at: nowISO,
+    accepted_at: nowISO,
+    razorpay_order_id: params.razorpay_order_id,
+    razorpay_payment_id: params.razorpay_payment_id,
+    razorpay_signature: params.razorpay_signature,
+  };
+
+  const { data: orderData, error: orderError } = await supabase.from('orders').insert([orderPayload]).select(SELECT_ORDER_WITH_ITEMS).single();
+  if (orderError || !orderData) {
+    return { data: null, error: orderError?.message || 'Failed to create order.' };
+  }
+
+  // Insert order_items
+  const orderItemsPayload = params.itemsFull.map((item) => ({
+    order_id: orderData.id,
+    menu_item_id: item.id,
+    quantity: item.quantity,
+    price: item.price,
+    name: item.name,
+    variant: item.variant || null,
+  }));
+  const { error: itemsError } = await supabase.from('order_items').insert(orderItemsPayload);
+  if (itemsError) {
+    console.error('[Supabase] Failed to create order_items:', itemsError);
+  }
+
+  // Insert payments record (best-effort)
+  try {
+    await supabase.from('payments').insert([{
+      order_id: orderData.id,
+      razorpay_order_id: params.razorpay_order_id,
+      razorpay_payment_id: params.razorpay_payment_id,
+      razorpay_signature: params.razorpay_signature,
+      amount: params.total_amount,
+      currency: 'INR',
+      status: 'paid',
+      payment_method: 'razorpay',
+      created_at: nowISO,
+      updated_at: nowISO,
+    }]);
+  } catch (_) { /* best-effort */ }
+
+  // Insert notifications (best-effort)
+  try {
+    const notifs: Record<string, any>[] = [];
+    notifs.push({ type: 'order_confirmed', title: 'Order Confirmed!', message: 'Your order has been confirmed and is being prepared.', user_id: params.user_id, created_at: nowISO, is_read: false, order_id: orderData.id });
+    if (actualInstitutionId) {
+      notifs.push({ type: 'new_order', title: 'New Order Received', message: 'A new order has been placed and payment confirmed.', institution_id: actualInstitutionId, created_at: nowISO, is_read: false, order_id: orderData.id });
+    }
+    await supabase.from('notifications').insert(notifs);
+  } catch (_) { /* best-effort */ }
+
+  // Re-fetch with joined items to guarantee consistency
+  const { data: finalOrder } = await supabase.from('orders').select(SELECT_ORDER_WITH_ITEMS).eq('id', orderData.id).single();
+  return { data: mapOrder(finalOrder || orderData), error: null };
 }
 
 export async function placeOrder(params: {
@@ -345,8 +509,8 @@ export async function placeOrder(params: {
   canteen_id?: string;
   notes?: string;
   institution_id: string | null;
-  items: { id: string; name: string; quantity: number; price: number; subtotal?: number }[];
-  itemsFull: { id: string; name: string; quantity: number; price: number; subtotal?: number }[];
+  items: { id: string; name: string; variant?: string | null; quantity: number; price: number; subtotal?: number }[];
+  itemsFull: { id: string; name: string; variant?: string | null; quantity: number; price: number; subtotal?: number }[];
   total_amount: number;
   razorpay_order_id?: string;
   razorpay_payment_id?: string;
@@ -446,6 +610,8 @@ export async function placeOrder(params: {
   const orderItemsPayload = params.itemsFull.map((item) => ({
     order_id: orderData.id,
     menu_item_id: item.id,
+    name: item.name,
+    variant: item.variant || null,
     quantity: item.quantity,
     price: item.price,
   }));
@@ -551,7 +717,7 @@ export async function updateOrderAfterPayment(params: {
 }
 
 export async function fetchOrderById(orderId: string): Promise<Order | null> {
-  const { data, error } = await supabase.from('orders').select('*, items:order_items(*)').eq('id', orderId).single();
+  const { data, error } = await supabase.from('orders').select(SELECT_ORDER_WITH_ITEMS).eq('id', orderId).single();
   if (error || !data) return null;
   return mapOrder(data);
 }

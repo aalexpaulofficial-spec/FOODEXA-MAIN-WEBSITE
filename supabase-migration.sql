@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS public.order_items (
   order_id UUID REFERENCES public.orders(id) ON DELETE CASCADE,
   menu_item_id UUID REFERENCES public.menu_items(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
+  variant TEXT DEFAULT NULL,
   quantity INTEGER NOT NULL DEFAULT 1,
   price NUMERIC(10,2) NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now()

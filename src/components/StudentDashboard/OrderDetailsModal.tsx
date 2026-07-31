@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { X, Building2, MapPin, Clock, CreditCard, Hash, QrCode, Package, CheckCircle2, XCircle, Calendar } from 'lucide-react';
+import { X, Building2, MapPin, Clock, CreditCard, Hash, QrCode, Package, CheckCircle2, XCircle, Calendar, Tag } from 'lucide-react';
 import type { Order } from '../../types';
 import { formatINR, formatDateTime } from '../../lib/supabase-service';
 
@@ -152,26 +152,52 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, on
               <h3 className="text-sm font-bold text-slate-900">Ordered Items ({order.items.length})</h3>
             </div>
             <div className="divide-y divide-slate-100">
-              {order.items.map((item, i) => (
-                <div key={i} className="flex items-center gap-3 px-4 py-3">
-                  <div className="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
-                    {(item as any).image_url ? (
-                      <img src={(item as any).image_url} alt={item.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <Package className="w-5 h-5 text-slate-300" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-900 truncate">{item.name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-slate-500">{item.quantity}x</span>
-                      <span className="text-xs text-slate-400">·</span>
-                      <span className="text-xs text-slate-500">{formatINR(item.price)} each</span>
+              {order.items.length === 0 ? (
+                <div className="px-4 py-4 text-center text-sm text-slate-400">No items recorded</div>
+              ) : (
+                order.items.map((item, i) => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-3">
+                    <div className="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
+                      {(item as any).image_url ? (
+                        <img src={(item as any).image_url} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Package className="w-5 h-5 text-slate-300" />
+                      )}
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-900 truncate">{item.name}</p>
+                      {item.variant && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <Tag className="w-3 h-3 text-slate-400" />
+                          <span className="text-[10px] text-slate-400 font-medium">{item.variant}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-slate-500">{item.quantity}x</span>
+                        <span className="text-xs text-slate-400">·</span>
+                        <span className="text-xs text-slate-500">{formatINR(item.price)} each</span>
+                      </div>
+                    </div>
+                    <p className="text-sm font-black text-slate-900 shrink-0">{formatINR(item.price * item.quantity)}</p>
                   </div>
-                  <p className="text-sm font-black text-slate-900 shrink-0">{formatINR(item.price * item.quantity)}</p>
-                </div>
-              ))}
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Kitchen & Counter Status */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100">
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Kitchen</p>
+              <p className="text-xs font-bold text-slate-900">{order.kitchen_status || order.order_status || '—'}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100">
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Counter</p>
+              <p className="text-xs font-bold text-slate-900">{order.counter_status || '—'}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100">
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Est. Ready</p>
+              <p className="text-xs font-bold text-slate-900">{order.estimated_ready_at ? formatDateTime(order.estimated_ready_at) : '—'}</p>
             </div>
           </div>
 

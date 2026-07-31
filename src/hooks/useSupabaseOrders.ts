@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Order, OrderStatus } from '../types';
+import type { Order, OrderItem, OrderStatus } from '../types';
 import { isOrderActive, isOrderPast } from '../lib/orderTimeline';
 
 interface UseSupabaseOrdersOptions {
@@ -17,11 +17,54 @@ interface UseSupabaseOrdersReturn {
   refresh: () => Promise<void>;
 }
 
+function normalizeStatus(status: any): OrderStatus {
+  const s = String(status || 'pending').toLowerCase();
+  if (['pending', 'order received'].includes(s)) return 'pending';
+  if (['accepted', 'confirmed'].includes(s)) return 'accepted';
+  if (['preparing', 'preparation'].includes(s)) return 'preparing';
+  if (['ready', 'ready for pickup'].includes(s)) return 'ready';
+  if (['completed', 'collected', 'delivered'].includes(s)) return 'completed';
+  if (['cancelled', 'canceled'].includes(s)) return 'cancelled';
+  return 'pending';
+}
+
+function mapJoinedItems(orderRow: any): OrderItem[] {
+  const joinedItems = orderRow.order_items;
+  if (Array.isArray(joinedItems) && joinedItems.length > 0) {
+    return joinedItems.map((oi: any) => {
+      const mi = oi.menu_items;
+      return {
+        id: String(oi.id || ''),
+        order_id: String(oi.order_id || ''),
+        menu_item_id: String(oi.menu_item_id || ''),
+        name: String(mi?.food_name || mi?.item_name || mi?.name || oi.name || 'Item'),
+        variant: String(oi.name || mi?.category || mi?.food_type || mi?.counter_name || ''),
+        quantity: Number(oi.quantity || 1),
+        price: Number(oi.price || 0),
+        image_url: mi?.image_url || null,
+        is_veg: mi?.is_veg !== undefined ? mi.is_veg : null,
+      };
+    });
+  }
+  const jsonbItems = orderRow.items;
+  if (Array.isArray(jsonbItems) && jsonbItems.length > 0) {
+    return jsonbItems.map((i: any) => ({
+      name: String(i.item_name || i.name || 'Item'),
+      variant: String(i.food_type || i.category || i.counter_name || i.variant || ''),
+      quantity: Number(i.quantity || i.qty || 1),
+      price: Number(i.price || i.amount || 0),
+      image_url: i.image_url || null,
+      is_veg: i.is_veg !== undefined ? i.is_veg : null,
+    }));
+  }
+  return [];
+}
+
 function mapOrderRow(r: any): Order {
   return {
     id: String(r.id),
-    student_id: String(r.student_id || ''),
-    user_id: String(r.student_id || ''),
+    student_id: String(r.student_id || r.user_id || ''),
+    user_id: String(r.student_id || r.user_id || ''),
     email: String(r.email || ''),
     customer_name: r.customer_name || null,
     phone: r.phone || null,
@@ -33,15 +76,11 @@ function mapOrderRow(r: any): Order {
     category_id: r.category_id || null,
     order_id: r.order_number ? `#FX-${String(r.order_number).padStart(4, '0')}` : `#FX-${String(r.id).slice(-4).toUpperCase()}`,
     order_number: r.order_number || undefined,
-    counter: r.counter_name || (Array.isArray(r.items) && r.items[0]?.food_type) || (Array.isArray(r.items) && r.items[0]?.counter_name) || 'Campus Counter',
-    items: Array.isArray(r.items) ? r.items.map((i: any) => ({
-      name: String(i.item_name || i.name || 'Item'),
-      quantity: Number(i.quantity || 1),
-      price: Number(i.price || 0),
-    })) : [],
+    counter: r.counter_name || r.counter || 'Campus Counter',
+    items: mapJoinedItems(r),
     total_amount: Number(r.total_amount || 0),
     transaction_amount: Number(r.transaction_amount || r.total_amount || 0),
-    status: (r.status || 'pending').toLowerCase() as OrderStatus,
+    status: normalizeStatus(r.status),
     order_status: r.order_status || r.status || 'pending',
     payment_status: r.payment_status || 'pending',
     kitchen_status: r.kitchen_status || undefined,
@@ -71,6 +110,8 @@ function mapOrderRow(r: any): Order {
   };
 }
 
+const SELECT_WITH_ITEMS = '*, order_items(id, order_id, menu_item_id, quantity, price, name, menu_items(id, food_name, item_name, name, image_url, is_veg, price))';
+
 export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersOptions): UseSupabaseOrdersReturn {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +134,7 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
     try {
       const { data, error: fetchError } = await supabase
         .from('orders')
-        .select('*')
+        .select(SELECT_WITH_ITEMS)
         .eq('student_id', userId)
         .order('created_at', { ascending: false });
       if (fetchError) { setError(fetchError.message); return; }
@@ -108,14 +149,26 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
     }
   }, [userId]);
 
-  const upsertOrder = useCallback((row: any) => {
+  const upsertOrder = useCallback(async (orderId: string) => {
     if (!mountedRef.current) return;
-    const mapped = mapOrderRow(row);
-    setOrders(prev => {
-      const next = prev.filter(o => o.id !== mapped.id);
-      return [mapped, ...next];
-    });
-  }, []);
+    try {
+      const { data: freshRow } = await supabase
+        .from('orders')
+        .select(SELECT_WITH_ITEMS)
+        .eq('id', orderId)
+        .single();
+      if (freshRow && mountedRef.current) {
+        const mapped = mapOrderRow(freshRow);
+        setOrders(prev => {
+          const next = prev.filter(o => o.id !== mapped.id);
+          return [mapped, ...next];
+        });
+      }
+    } catch {
+      // fallback: refetch all
+      fetchOrders();
+    }
+  }, [fetchOrders]);
 
   useEffect(() => {
     if (!enabled || !userId) {
@@ -144,33 +197,34 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
 
       const channelName = `student-orders-${userId}`;
 
-      const handleChange = async (payload: any) => {
+      const handleOrderChange = async (payload: any) => {
         if (!mountedRef.current) return;
-        const record = payload?.new;
+        const record = payload?.new || payload?.old;
         if (!record) return;
         const recordStudentId = record.student_id || record.user_id || '';
         if (recordStudentId && recordStudentId !== userId) return;
+        await upsertOrder(record.id);
+      };
 
-        /* INSERT payloads contain the full row; UPDATE payloads may only
-           include changed columns (REPLICA IDENTITY DEFAULT). Fetch the
-           latest complete row to guarantee consistency (items, timestamps, …). */
-        try {
-          const { data: freshRow, error: fetchErr } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('id', record.id)
-            .single();
-          if (fetchErr || !freshRow) throw fetchErr;
-          upsertOrder(freshRow);
-        } catch {
-          upsertOrder(record);
+      const handleOrderItemChange = async (payload: any) => {
+        if (!mountedRef.current) return;
+        const record = payload?.new || payload?.old;
+        if (!record?.order_id) return;
+        // Re-fetch the parent order (which includes all order_items via join)
+        const { data: parentOrder } = await supabase
+          .from('orders')
+          .select('student_id')
+          .eq('id', record.order_id)
+          .single();
+        if (parentOrder && parentOrder.student_id === userId) {
+          await upsertOrder(record.order_id);
         }
       };
 
       const channel = supabase
         .channel(channelName)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, handleChange)
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, handleChange)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleOrderChange)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, handleOrderItemChange)
         .subscribe((status) => {
           if (!mountedRef.current) return;
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {

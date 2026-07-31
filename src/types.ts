@@ -240,6 +240,7 @@ export interface OrderItem {
   order_id?: string;
   menu_item_id?: string;
   name: string;
+  variant?: string | null;
   quantity: number;
   price: number;
   image_url?: string | null;

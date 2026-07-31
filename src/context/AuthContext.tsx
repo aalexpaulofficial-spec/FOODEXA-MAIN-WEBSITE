@@ -303,8 +303,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { error: 'Institution Code is required.', data: null };
     }
     try {
-      // Call the server-side endpoint so the service role key bypasses RLS.
-      // Anonymous browser requests are blocked by RLS on the institutions table.
       const resp = await fetch('/api/validate-institution-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -313,11 +311,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const json = await resp.json().catch(() => ({}));
 
-      if (!resp.ok || json.error) {
-        return { error: json.error || 'Invalid Institution Code. Please check and try again.', data: null };
+      if (!resp.ok) {
+        return { error: json.message || 'Invalid Institution Code. Please check and try again.', data: null };
       }
 
-      // Validate the returned institution_id is a real UUID (not a seeded fake)
+      if (!json.valid) {
+        return { error: json.message || 'Invalid Institution Code. Please check and try again.', data: null };
+      }
+
       if (!json.institution_id || typeof json.institution_id !== 'string' || json.institution_id.length < 10) {
         console.error('[Auth] validateInstitutionCode: invalid institution_id returned:', json.institution_id);
         return { error: 'Institution data is invalid. Please contact support.', data: null };

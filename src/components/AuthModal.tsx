@@ -230,7 +230,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     institutionCodeTimerRef.current = setTimeout(async () => {
       const { error, data } = await validateInstitutionCode(trimmed);
       if (error || !data) {
-        setInstitutionError(error || 'Institution Code not found.');
+        setInstitutionError('Invalid Institution Code');
         setValidatedInstitution(null);
       } else {
         setValidatedInstitution(data);
@@ -240,72 +240,54 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }, 500);
   };
 
-  const handleInstitutionCodeBlur = (code: string) => {
-    if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
-    setInstitutionVerifyCode(code);
-    const trimmed = code.trim();
-    if (!trimmed) return;
-    setValidatingCode(true);
-    validateInstitutionCode(trimmed).then(({ error, data }) => {
-      if (error || !data) {
-        setInstitutionError(error || 'Institution Code not found.');
-        setValidatedInstitution(null);
-      } else {
-        setValidatedInstitution(data);
-        setInstitutionData(data);
+const handleLoginInstitutionVerify = async () => {
+      const code = institutionVerifyCode.trim() || validatedInstitution?.institution_code || institutionData?.institution_code || '';
+      if (!code) {
+        setInstitutionError('Please enter a valid Institution Code.');
+        return;
       }
-      setValidatingCode(false);
-    });
-  };
 
-   const handleLoginInstitutionVerify = async () => {
-     const code = institutionVerifyCode.trim() || validatedInstitution?.institution_code || institutionData?.institution_code || '';
-     if (!code) {
-       setInstitutionError('Please enter a valid Institution Code.');
-       return;
-     }
+      const { error: validateError, data: liveInstitution } = await validateInstitutionCode(code);
+      if (validateError || !liveInstitution) {
+        setInstitutionError('Invalid Institution Code');
+        setValidatedInstitution(null);
+        return;
+      }
 
-     const { error: validateError, data: liveInstitution } = await validateInstitutionCode(code);
-     if (validateError || !liveInstitution) {
-       setInstitutionError(validateError || 'Invalid Institution Code. Please check and try again.');
-       setValidatedInstitution(null);
-       return;
-     }
+      const userId = loginUserId || user?.id;
+      let freshProfile: Profile | null = authProfile;
 
-     const userId = loginUserId || user?.id;
-     let freshProfile: Profile | null = authProfile;
-
-     if (userId) {
-       // PRODUCTION FIX: Use direct .update to bypass upsert requirement errors
-       const { error: upsertError } = await supabase
-         .from('profiles')
-         .update({ institution_id: liveInstitution.institution_id })
-         .eq('user_id', userId);
-
-       if (upsertError) {
-         setInstitutionError(upsertError.message || 'Failed to save institution. Please try again.');
-         return;
-       }
-
-       await refreshProfile();
-       setValidatedInstitution(liveInstitution);
-       setVerifiedInstitution(liveInstitution);
-       setInstitutionData(liveInstitution);
-
-       const { data: profileData } = await supabase
+      if (userId) {
+        // PRODUCTION FIX: Use direct .update to bypass upsert requirement errors
+        const { error: upsertError } = await supabase
           .from('profiles')
-          .select('user_id, email, full_name, role, institution_id')
-          .eq('user_id', userId)
-          .maybeSingle();
-       if (profileData) freshProfile = { ...profileData, phone: null, created_at: '', updated_at: '' } as Profile;
-     }
+          .update({ institution_id: liveInstitution.institution_id })
+          .eq('user_id', userId);
 
-     setStep('success');
+        if (upsertError) {
+          setInstitutionError(upsertError.message || 'Failed to save institution. Please try again.');
+          return;
+        }
 
-     if (onLoginSuccess && freshProfile) {
-       onLoginSuccess({ profile: freshProfile, institution: liveInstitution });
-     }
-   };
+        await refreshProfile();
+        setValidatedInstitution(liveInstitution);
+        setVerifiedInstitution(liveInstitution);
+        setInstitutionData(liveInstitution);
+
+        const { data: profileData } = await supabase
+           .from('profiles')
+           .select('user_id, email, full_name, role, institution_id')
+           .eq('user_id', userId)
+           .maybeSingle();
+        if (profileData) freshProfile = { ...profileData, phone: null, created_at: '', updated_at: '' } as Profile;
+      }
+
+      setStep('success');
+
+      if (onLoginSuccess && freshProfile) {
+        onLoginSuccess({ profile: freshProfile, institution: liveInstitution });
+      }
+    };
 
   const handleCounterVerify = async () => {
     const code = counterCode.trim();
@@ -475,12 +457,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     const { error: validateError, data: validatedInst } = await validateInstitutionCode(currentForm.institutionCode);
 
-    if (validateError || !validatedInst) {
-      setInstitutionError(validateError || 'Institution Code not found.');
-      setValidatingCode(false);
-      setRegistrationPhase('idle');
-      return;
-    }
+if (validateError || !validatedInst) {
+       setInstitutionError('Invalid Institution Code');
+       setValidatingCode(false);
+       setRegistrationPhase('idle');
+       return;
+     }
 
     setRegistrationPhase('connecting');
     setValidatedInstitution(validatedInst);
@@ -746,33 +728,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         type="text"
                         required
                         value={getCurrentForm().institutionCode}
-                        onChange={(e) => {
-                          if (selectedAccountRole === 'student') setStudentForm({ ...studentForm, institutionCode: e.target.value });
-                          else if (selectedAccountRole === 'faculty') setFacultyForm({ ...facultyForm, institutionCode: e.target.value });
-                          else setGuestForm({ ...guestForm, institutionCode: e.target.value });
-                          handleInstitutionCodeChange(e.target.value);
-                        }}
-                        onBlur={() => {
-                          if (selectedAccountRole === 'student') handleInstitutionCodeBlur(studentForm.institutionCode);
-                          else if (selectedAccountRole === 'faculty') handleInstitutionCodeBlur(facultyForm.institutionCode);
-                          else handleInstitutionCodeBlur(guestForm.institutionCode);
-                        }}
-                        placeholder="e.g. YAWEHH264881"
-                        className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+onChange={(e) => {
+                           if (selectedAccountRole === 'student') setStudentForm({ ...studentForm, institutionCode: e.target.value });
+                           else if (selectedAccountRole === 'faculty') setFacultyForm({ ...facultyForm, institutionCode: e.target.value });
+                           else setGuestForm({ ...guestForm, institutionCode: e.target.value });
+                           handleInstitutionCodeChange(e.target.value);
+                         }}
+                         placeholder="e.g. YAWEHH264881"
+                         className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
                       />
                       {validatingCode && (
                         <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       )}
                     </div>
-                    {institutionError && !validatingCode && (
-                      <p className="text-[10px] text-red-400 mt-1">✗ {institutionError}</p>
-                    )}
-                    {!institutionError && validatedInstitution && !validatingCode && (
-                      <div className="text-[10px] text-emerald-400 mt-1 space-y-0.5">
-                        <p>✓ {validatedInstitution.institution_name}</p>
-                        <p className="text-emerald-500">Code: {validatedInstitution.institution_code}</p>
-                      </div>
-                    )}
+{institutionError && !validatingCode && (
+                       <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code</p>
+                     )}
+                     {!institutionError && validatedInstitution && !validatingCode && (
+                       <div className="text-[10px] text-emerald-400 mt-1 space-y-0.5">
+                         <p>✓ Institution Verified</p>
+                         <p className="text-emerald-500">{validatedInstitution.institution_name}</p>
+                         <p className="text-emerald-500">Campus: {validatedInstitution.campus || 'N/A'}</p>
+                         <p className="text-emerald-500">Type: {validatedInstitution.institution_type || 'N/A'}</p>
+                       </div>
+                     )}
                   </div>
 
                   <div>
@@ -1086,21 +1065,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     type="text"
                     required
                     value={institutionVerifyCode}
-                    onChange={(e) => handleInstitutionCodeChange(e.target.value)}
-                    onBlur={(e) => handleInstitutionCodeBlur(e.target.value)}
-                    placeholder="e.g. YAWEHH264881"
-                    className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+onChange={(e) => handleInstitutionCodeChange(e.target.value)}
+                     placeholder="e.g. YAWEHH264881"
+                     className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
                   />
                   {validatingCode && (
                     <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   )}
                 </div>
-                {institutionError && !validatingCode && (
-                  <p className="text-[10px] text-red-400 mt-1">✗ {institutionError}</p>
-                )}
-                {validatedInstitution && !institutionError && !validatingCode && (
-                  <p className="text-[10px] text-emerald-400 mt-1">✓ Institution Code Verified: {validatedInstitution.institution_name}</p>
-                )}
+{institutionError && !validatingCode && (
+                   <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code</p>
+                 )}
+                 {validatedInstitution && !institutionError && !validatingCode && (
+                   <div className="text-[10px] text-emerald-400 mt-1 space-y-0.5">
+                     <p>✓ Institution Verified</p>
+                     <p className="text-emerald-500">{validatedInstitution.institution_name}</p>
+                     <p className="text-emerald-500">Campus: {validatedInstitution.campus || 'N/A'}</p>
+                     <p className="text-emerald-500">Type: {validatedInstitution.institution_type || 'N/A'}</p>
+                   </div>
+                 )}
               </div>
 
               <button

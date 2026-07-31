@@ -106,7 +106,7 @@ Important rules:
     try {
       const { code } = req.body;
       if (!code || typeof code !== 'string' || !code.trim()) {
-        return res.status(400).json({ error: 'Institution code is required.' });
+        return res.status(400).json({ valid: false, message: 'Institution code is required.' });
       }
 
       const supabaseServerKey = supabaseServiceKey || supabaseAnonKey;
@@ -114,15 +114,17 @@ Important rules:
       if (!supabaseUrl || !supabaseServerKey) {
         console.error('[Institutions] Missing Supabase server environment variables');
         return res.status(503).json({
-          error: 'Institution verification is not configured yet. Please contact Foodexa support.',
+          valid: false,
+          message: 'Institution verification is not configured yet. Please contact Foodexa support.',
           code: 'MISSING_SUPABASE_SERVER_ENV',
         });
       }
 
-      const trimmed = code.trim();
+      const trimmed = code.trim().toUpperCase();
 
       // Use the service role key so RLS is bypassed for this public lookup
-      const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/institutions?institution_code=ilike.${encodeURIComponent(trimmed)}&select=id,name,campus,city,state,country,institution_code&limit=1`;
+      // Query with status='active' filter
+      const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/institutions?institution_code=eq.${encodeURIComponent(trimmed)}&status=eq.active&select=id,name,campus,city,state,country,institution_code&limit=1`;
       const resp = await fetch(url, {
         headers: {
           'apikey': supabaseServerKey,
@@ -137,33 +139,37 @@ Important rules:
         const isMissingTable = resp.status === 404 || errText.includes('PGRST205') || errText.includes('Could not find the table');
         if (isMissingTable) {
           return res.status(503).json({
-            error: 'Institution verification is being set up. Please try again after the Foodexa database is updated.',
+            valid: false,
+            message: 'Institution verification is being set up. Please try again after the Foodexa database is updated.',
             code: 'INSTITUTIONS_TABLE_MISSING',
           });
         }
 
         if (!supabaseServiceKey && (resp.status === 401 || resp.status === 403)) {
           return res.status(503).json({
-            error: 'Institution verification needs the server Supabase service key in Vercel.',
+            valid: false,
+            message: 'Institution verification needs the server Supabase service key in Vercel.',
             code: 'SUPABASE_SERVICE_KEY_REQUIRED',
           });
         }
 
         return res.status(502).json({
-          error: 'Unable to verify Institution Code. Please try again.',
+          valid: false,
+          message: 'Unable to verify Institution Code. Please try again.',
           code: 'SUPABASE_LOOKUP_FAILED',
         });
       }
 
       const rows = await resp.json();
       if (!rows || rows.length === 0) {
-        return res.status(404).json({ error: 'Institution Code not found.' });
+        return res.status(404).json({ valid: false, message: 'Institution code not found.' });
       }
 
       const inst = rows[0];
       return res.json({
-        institution_id: inst.id,
+        valid: true,
         institution_name: inst.name || '',
+        institution_id: inst.id,
         campus: inst.campus || '',
         city: inst.city || '',
         state: inst.state || '',
@@ -172,7 +178,7 @@ Important rules:
       });
     } catch (err: any) {
       console.error('[Institutions] Validate error:', err);
-      return res.status(500).json({ error: 'Server error during institution code validation.' });
+      return res.status(500).json({ valid: false, message: 'Unexpected server error.' });
     }
   });
 

@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return res.status(405).json({ valid: false, message: 'Method Not Allowed' });
   }
 
   let body = req.body || {};
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
 
   const { code } = body;
   if (!code || typeof code !== 'string' || !code.trim()) {
-    return res.status(400).json({ error: 'Institution code is required.' });
+    return res.status(400).json({ valid: false, message: 'Institution code is required.' });
   }
 
   const trimmed = normalizeCode(code);
@@ -56,7 +56,8 @@ export default async function handler(req, res) {
       hasAnonKey: !!supabaseAnonKey,
     });
     return res.status(503).json({
-      error: 'Institution verification is not configured. Please contact Foodexa support.',
+      valid: false,
+      message: 'Institution verification is not configured. Please contact Foodexa support.',
       code: 'MISSING_SUPABASE_SERVER_ENV',
     });
   }
@@ -70,11 +71,12 @@ export default async function handler(req, res) {
       },
     });
 
-    // Case-insensitive search using ilike
+    // Query with status='active' filter, case-insensitive using ilike
     const { data: rows, error: dbError } = await supabase
       .from('institutions')
       .select('id, name, campus, city, state, country, institution_code')
-      .ilike('institution_code', trimmed)
+      .eq('institution_code', trimmed)
+      .eq('status', 'active')
       .limit(1);
 
     if (dbError) {
@@ -86,26 +88,29 @@ export default async function handler(req, res) {
 
       if (isMissingTable) {
         return res.status(503).json({
-          error: 'Institution verification is being set up. Please try again shortly.',
+          valid: false,
+          message: 'Institution verification is being set up. Please try again shortly.',
           code: 'INSTITUTIONS_TABLE_MISSING',
         });
       }
 
       if (dbError.code === '42501' || (dbError.message && dbError.message.includes('permission'))) {
         return res.status(503).json({
-          error: 'Institution verification needs the Supabase service key configured in Vercel.',
+          valid: false,
+          message: 'Institution verification needs the Supabase service key configured in Vercel.',
           code: 'SUPABASE_SERVICE_KEY_REQUIRED',
         });
       }
 
       return res.status(502).json({
-        error: 'Unable to verify Institution Code. Please try again.',
+        valid: false,
+        message: 'Unable to verify Institution Code. Please try again.',
         code: 'SUPABASE_LOOKUP_FAILED',
       });
     }
 
     if (!rows || rows.length === 0) {
-      return res.status(404).json({ error: 'Invalid Institution Code. Please check and try again.' });
+      return res.status(404).json({ valid: false, message: 'Institution code not found.' });
     }
 
     const inst = rows[0];
@@ -113,12 +118,13 @@ export default async function handler(req, res) {
     // Validate the returned institution has a real UUID id
     if (!inst.id || typeof inst.id !== 'string' || inst.id.length < 10) {
       console.error('[validate-institution-code] Institution row missing valid id:', inst);
-      return res.status(500).json({ error: 'Institution data is invalid. Please contact support.' });
+      return res.status(500).json({ valid: false, message: 'Institution data is invalid. Please contact support.' });
     }
 
     return res.status(200).json({
-      institution_id: inst.id,
+      valid: true,
       institution_name: inst.name || '',
+      institution_id: inst.id,
       campus: inst.campus || '',
       city: inst.city || '',
       state: inst.state || '',
@@ -127,6 +133,6 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     console.error('[validate-institution-code] Unexpected error:', err?.message || err);
-    return res.status(500).json({ error: 'Server error during institution code validation.' });
+    return res.status(500).json({ valid: false, message: 'Unexpected server error.' });
   }
 }

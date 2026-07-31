@@ -1536,7 +1536,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                         <div className="relative z-10">
                           <div className="flex items-start justify-between mb-4">
                             <div>
-                              <p className="text-blue-300 text-xs font-bold uppercase tracking-wider mb-1">Order Confirmed</p>
+                              <p className="text-blue-300 text-xs font-bold uppercase tracking-wider mb-1">{LIVE_STEPS[liveStepIdx]?.label || 'Order Confirmed'}</p>
                               <h2 className="text-3xl font-black">{orderNumber}</h2>
                             </div>
                             <div className="text-right">

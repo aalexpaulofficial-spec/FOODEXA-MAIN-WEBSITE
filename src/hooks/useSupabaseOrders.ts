@@ -72,12 +72,22 @@ function mapOrderRow(r: any): Order {
 
 const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'cooking', 'quality_check', 'packed', 'ready'];
 
+// Polling interval (ms) while active orders exist — fallback for missed Realtime events
+const ACTIVE_ORDER_POLL_MS = 5000;
+
 export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersOptions): UseSupabaseOrdersReturn {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const channelRef = useRef<any>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
+  const ordersRef = useRef<Order[]>([]);
+
+  // Keep ordersRef in sync so polling can read latest without stale closure
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
 
   const fetchOrders = useCallback(async () => {
     if (!userId) {
@@ -128,8 +138,19 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
     setLoading(true);
     fetchOrders();
 
-    const filter = `student_id=eq.${userId}`;
-    const channelName = `orders-student-realtime:${userId}`;
+    // ─────────────────────────────────────────────────────────────────────────
+    // REALTIME: Subscribe WITHOUT a server-side filter.
+    //
+    // Reason: Supabase postgres_changes filters rely on the column being present
+    // in the WAL diff payload. With REPLICA IDENTITY DEFAULT (the Supabase
+    // default), unchanged columns like `student_id` are OMITTED from UPDATE
+    // payloads. This causes the `student_id=eq.X` filter to silently drop
+    // every status-change UPDATE event for the student.
+    //
+    // Fix: subscribe to ALL order changes (no filter), then check client-side
+    // whether the payload belongs to this student.
+    // ─────────────────────────────────────────────────────────────────────────
+    const channelName = `orders-student-${userId}-${Date.now()}`;
 
     const channel = supabase
       .channel(channelName)
@@ -139,11 +160,19 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
           event: '*',
           schema: 'public',
           table: 'orders',
-          filter,
+          // No server-side filter — we check client-side below
         },
-        (payload) => {
+        (payload: any) => {
           if (!mountedRef.current) return;
-          // Fetch orders again to ensure all relations (like items) are preserved
+
+          const record = payload?.new || payload?.old;
+          if (!record) return;
+
+          // Client-side guard: only react if this record belongs to our user
+          const recordStudentId = record.student_id || record.user_id || '';
+          if (recordStudentId && recordStudentId !== userId) return;
+
+          // Re-fetch to get full, consistent order data
           fetchOrders();
         }
       )
@@ -160,10 +189,27 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
 
     channelRef.current = channel;
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // POLLING FALLBACK: Poll every 5 seconds while there are active orders.
+    // This guarantees the student sees status updates even if Realtime misses
+    // events (e.g., REPLICA IDENTITY DEFAULT drops student_id from WAL diff).
+    // ─────────────────────────────────────────────────────────────────────────
+    pollTimerRef.current = setInterval(() => {
+      if (!mountedRef.current) return;
+      const hasActive = ordersRef.current.some(o => ACTIVE_STATUSES.includes(o.status));
+      if (hasActive) {
+        fetchOrders();
+      }
+    }, ACTIVE_ORDER_POLL_MS);
+
     return () => {
       if (channelRef.current) {
         try { supabase.removeChannel(channelRef.current); } catch {}
         channelRef.current = null;
+      }
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
       }
     };
   }, [userId, enabled, fetchOrders]);

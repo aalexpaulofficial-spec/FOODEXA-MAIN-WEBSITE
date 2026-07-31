@@ -458,7 +458,7 @@ const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
 // ── Main Component ──────────────────────────────────────────────────────────
 
 export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, onClose, role, triggerToast }) => {
-  const { user, profile, refreshProfile, signOut, updateProfile, leaveInstitution } = useAuth();
+  const { user, profile, refreshProfile, signOut, updateProfile, leaveInstitution, institutionData } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<PortalTab>('explore');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -594,8 +594,14 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           setUnreadNotif(notifs.filter(n => !n.read).length);
         }
 
-        // Fetch institution name from the institutions table
-        if (instId) {
+        // Fetch institution name — prefer AuthContext (already loaded), fallback to direct query
+        if (institutionData?.institution_name) {
+          const nameField = institutionData.institution_name;
+          setInstitutionName(`${nameField}${institutionData.campus ? ` · ${institutionData.campus}` : ''}`);
+          setInstitutionCode(institutionData.institution_code || '');
+          setInstitutionCampus(institutionData.campus || '');
+          setInstitutionCity(institutionData.city || '');
+        } else if (instId) {
           const { data: inst } = await supabase
             .from('institutions')
             .select('institution_name, name, campus, city, institution_code')

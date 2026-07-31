@@ -5,11 +5,7 @@ import type { Order, OrderStatus } from '../../types';
 
 const STAGES_ORDER = [
   'pending',
-  'accepted',
   'preparing',
-  'cooking',
-  'quality_check',
-  'packed',
   'ready',
   'completed'
 ];
@@ -17,16 +13,24 @@ const STAGES_ORDER = [
 const statusLabel = (s: string): string => {
   const m: Record<string, string> = {
     pending: 'Order Confirmed',
-    accepted: 'Kitchen Accepted',
+    accepted: 'Order Confirmed',
     preparing: 'Preparing',
-    cooking: 'Cooking',
-    quality_check: 'Quality Check',
-    packed: 'Packed & Sealed',
-    ready: 'Ready for Pickup',
-    completed: 'Collected',
+    cooking: 'Preparing',
+    quality_check: 'Preparing',
+    packed: 'Preparing',
+    ready: 'Ready at Counter',
+    completed: 'Order Collected',
     cancelled: 'Cancelled',
   };
-  return m[s] || s;
+  return m[s] || 'Order Confirmed';
+};
+
+const getPrimaryStage = (s: string) => {
+  if (['pending', 'accepted'].includes(s)) return 'pending';
+  if (['preparing', 'cooking', 'quality_check', 'packed'].includes(s)) return 'preparing';
+  if (s === 'ready') return 'ready';
+  if (s === 'completed') return 'completed';
+  return 'pending';
 };
 
 interface ActiveLiveOrderProps {
@@ -55,7 +59,8 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
 
   if (!order) return null;
 
-  const currentStageIndex = STAGES_ORDER.indexOf(order.status) >= 0 ? STAGES_ORDER.indexOf(order.status) : 0;
+  const currentPrimary = getPrimaryStage(order.status);
+  const currentStageIndex = STAGES_ORDER.indexOf(currentPrimary) >= 0 ? STAGES_ORDER.indexOf(currentPrimary) : 0;
   const progressPct = Math.round(((currentStageIndex + 1) / STAGES_ORDER.length) * 100);
 
   const prepMinutes = (order as any).estimated_prep_time_minutes || 15;

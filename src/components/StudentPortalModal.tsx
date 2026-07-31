@@ -182,13 +182,13 @@ const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => v
         </div>
 
         {/* QR Code display */}
-        <div className="bg-white rounded-2xl p-5 mx-auto max-w-[220px] shadow-lg">
-          <div className="grid grid-cols-7 gap-1 mb-3">
-            {Array.from({ length: 49 }).map((_, i) => (
-              <div key={i} className={`h-2.5 w-2.5 rounded-sm ${Math.random() > 0.5 ? 'bg-slate-900' : 'bg-white'}`} />
-            ))}
-          </div>
-          <div className="font-mono text-xl font-black text-slate-950 tracking-[0.3em] text-center">{qrValue}</div>
+        <div className="bg-white rounded-2xl p-5 mx-auto max-w-[220px] shadow-lg flex flex-col items-center">
+          <img 
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrValue)}`} 
+            alt="QR Code" 
+            className="w-full h-auto mb-4 object-contain"
+          />
+          <div className="font-mono text-xl font-black text-slate-950 tracking-widest text-center">{qrValue}</div>
         </div>
 
         {/* Order info */}
@@ -584,18 +584,23 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
   const handleOrderUpdate = useCallback((payload: any) => {
     const newStatus = payload.new?.status;
-    if (newStatus && payload.new?.user_id === user?.id) {
+    const orderUserId = payload.new?.student_id || payload.new?.user_id;
+    if (newStatus && orderUserId === user?.id) {
       setOrders((prev) => {
         const exists = prev.find((o) => o.id === String(payload.new.id));
         if (exists) {
           return prev.map((o) => o.id === String(payload.new.id) ? {
-            ...o, status: newStatus.toLowerCase() as OrderStatus,
+            ...o,
+            status: newStatus.toLowerCase() as OrderStatus,
+            order_status: payload.new.order_status || o.order_status,
             ready_at: payload.new.ready_at || o.ready_at,
             completed_at: payload.new.completed_at || o.completed_at,
             qr_pickup_code: payload.new.qr_pickup_code || o.qr_pickup_code,
             pickup_code: payload.new.pickup_code || o.pickup_code,
+            estimated_ready_at: payload.new.estimated_ready_at || o.estimated_ready_at,
           } : o);
         }
+        // New order inserted — re-fetch to stay in sync
         return prev;
       });
     }
@@ -657,7 +662,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               role: ['student', 'faculty', 'guest', 'institution_admin', 'kitchen_staff', 'canteen_manager', 'super_admin'].includes(r.role) ? r.role : null,
               institution_id: r.institution_id || null, institution_code: null,
               canteen_id: r.canteen_id || null, counter_id: null, category_id: null,
-              order_id: String(r.id),
+              order_id: r.order_number ? `#FX-${String(r.order_number).padStart(4, '0')}` : `#FX-${String(r.id).slice(-4).toUpperCase()}`,
+              order_number: r.order_number || undefined,
               // Derive counter display name: food_type on items, or fallback to 'Campus Counter'
               counter: r.counter_name || (Array.isArray(r.items) && r.items[0]?.food_type) || (Array.isArray(r.items) && r.items[0]?.counter_name) || 'Campus Counter',
               items: Array.isArray(r.items) ? r.items.map((i: any) => ({ name: String(i.item_name || i.name || 'Item'), quantity: Number(i.quantity || 1), price: Number(i.price || 0) })) : [],
@@ -779,6 +785,51 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       return () => clearTimeout(timer);
     }
   }, [cart, user?.id, loading]);
+
+  // LIVE POLLING: Re-fetch active orders every 10 seconds so tracking stays up-to-date
+  // even if Supabase realtime is not firing (e.g. behind RLS or network issues)
+  useEffect(() => {
+    if (!user?.id || !isOpen) return;
+    const pollOrders = async () => {
+      const { data } = await supabase
+        .from('orders')
+        .select('id, status, order_status, order_number, pickup_code, pickup_token, qr_pickup_code, estimated_ready_at, ready_at, completed_at, updated_at')
+        .eq('student_id', user.id)
+        .in('status', ['pending', 'accepted', 'preparing', 'cooking', 'quality_check', 'packed', 'ready'])
+        .order('created_at', { ascending: false });
+
+      if (data && data.length > 0) {
+        setOrders((prev) => {
+          let changed = false;
+          const next = prev.map((o) => {
+            const fresh = data.find((d: any) => String(d.id) === o.id);
+            if (!fresh) return o;
+            const newStatus = (fresh.status || '').toLowerCase() as OrderStatus;
+            if (newStatus !== o.status || fresh.updated_at !== o.updated_at) {
+              changed = true;
+              return {
+                ...o,
+                status: newStatus,
+                order_status: fresh.order_status || o.order_status,
+                pickup_code: fresh.pickup_code || o.pickup_code,
+                pickup_token: fresh.pickup_token || o.pickup_token,
+                qr_pickup_code: fresh.qr_pickup_code || o.qr_pickup_code,
+                estimated_ready_at: fresh.estimated_ready_at || o.estimated_ready_at,
+                ready_at: fresh.ready_at || o.ready_at,
+                completed_at: fresh.completed_at || o.completed_at,
+                updated_at: fresh.updated_at || o.updated_at,
+              };
+            }
+            return o;
+          });
+          return changed ? next : prev;
+        });
+      }
+    };
+
+    const interval = setInterval(pollOrders, 10000); // every 10 seconds
+    return () => clearInterval(interval);
+  }, [user?.id, isOpen]);
 
   // Derived data
   const allCategories = useMemo(() => {
@@ -1567,20 +1618,17 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 {/* PAYMENT SUCCESS TAB */}
                 {/* ═══════════════════ LIVE CANTEEN TRACKING ═══════════════════ */}
                 {activeTab === 'payment_success' && (() => {
-                  const o = orders[0];
+                  // Always use the latest active order; fall back to the most recent order overall
+                  const o = activeOrders[0] || orders.find(ord => ['pending','accepted','preparing','cooking','quality_check','packed','ready','completed'].includes(ord.status)) || orders[0];
                   const LIVE_STEPS = [
                     { label: 'Order Confirmed',       desc: 'Received at campus kitchen server'   },
-                    { label: 'Kitchen Accepted',       desc: 'Head chef assigned to order'         },
-                    { label: 'Preparing Ingredients',  desc: 'Fresh ingredients sliced & measured' },
-                    { label: 'Cooking & Firing',       desc: 'On stove / tandoor / oven'           },
-                    { label: 'Quality Check',          desc: 'Passed hygiene & temp check'         },
-                    { label: 'Packed & Sealed',        desc: 'Eco-friendly hot pack ready'         },
-                    { label: 'Ready at Counter',       desc: 'Scan QR at counter screen'           },
-                    { label: 'Order Collected',        desc: 'Enjoy your meal!'                    },
+                    { label: 'Preparing',             desc: 'Kitchen is preparing your order'     },
+                    { label: 'Ready at Counter',      desc: 'Scan QR at counter screen'           },
+                    { label: 'Order Collected',       desc: 'Enjoy your meal!'                    },
                   ];
                   const statusToStep: Record<string, number> = {
-                    pending: 0, accepted: 1, preparing: 2, cooking: 3,
-                    quality_check: 4, packed: 5, ready: 6, completed: 7,
+                    pending: 0, accepted: 0, preparing: 1, cooking: 1,
+                    quality_check: 1, packed: 1, ready: 2, completed: 3,
                   };
                   const orderStatus = o?.status || 'pending';
                   const liveStepIdx = statusToStep[orderStatus] ?? 0;

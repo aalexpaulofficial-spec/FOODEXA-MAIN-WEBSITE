@@ -174,7 +174,13 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
 
               <div className="border-t-2 border-dashed border-slate-200 pt-4 pb-6">
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm font-bold text-slate-500">Total Paid (via FOODEXA Wallet)</span>
+                  <span className="text-sm font-bold text-slate-500">
+                    Total {receiptOrder.payment_status === 'paid' ? 'Paid' : 'Pending'} (via {
+                      receiptOrder.payment_method === 'cash' ? 'Cash' : 
+                      receiptOrder.payment_method === 'razorpay' ? 'Razorpay (UPI)' : 
+                      'FOODEXA Wallet'
+                    })
+                  </span>
                   <span className="text-xl font-black text-slate-900">{formatINR(receiptOrder.total_amount)}</span>
                 </div>
               </div>

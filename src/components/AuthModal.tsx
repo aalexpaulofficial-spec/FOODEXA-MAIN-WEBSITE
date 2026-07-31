@@ -276,9 +276,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
      let freshProfile: Profile | null = authProfile;
 
      if (userId) {
-      const { error: upsertError } = await updateProfile({
-          institution_id: liveInstitution.institution_id,
-        });
+       // PRODUCTION FIX: Use direct .update to bypass upsert requirement errors
+       const { error: upsertError } = await supabase
+         .from('profiles')
+         .update({ institution_id: liveInstitution.institution_id })
+         .eq('user_id', userId);
 
        if (upsertError) {
          setInstitutionError(upsertError.message || 'Failed to save institution. Please try again.');
@@ -487,8 +489,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setValidatingCode(false);
 
     setRegistrationPhase('sending');
+    // PRODUCTION FIX: Pass institution_id directly so verifyOtp can always resolve it,
+    // even if React context state gets stale or is reset between steps.
     const { error } = await signUpWithPassword(currentForm.universityEmail, currentForm.password, currentForm.fullName, selectedAccountRole, {
       institutionCode: currentForm.institutionCode,
+      institutionId: validatedInst.institution_id, // Direct UUID — never NULL
       phone: currentForm.phone,
       department: (currentForm as any).department,
       semester: (currentForm as any).semester,

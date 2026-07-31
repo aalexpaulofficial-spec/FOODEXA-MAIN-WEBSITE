@@ -368,26 +368,28 @@ export async function placeOrder(params: {
   const phone = params.phone || '0000000000';
   const prepTimeMinutes = params.estimated_prep_time_minutes || 15;
 
-  // CRITICAL FIX: Fetch institution_id and canteen_id directly from the first menu item to guarantee they are never NULL
-  let actualInstitutionId = params.institution_id;
+  // CRITICAL FIX: Enforce profiles.institution_id and menu_items.canteen_id
+  const actualInstitutionId = params.institution_id;
   let actualCanteenId = params.canteen_id;
 
   if (params.itemsFull && params.itemsFull.length > 0) {
     const firstItemId = params.itemsFull[0].id;
     const { data: itemData, error: itemError } = await supabase
       .from('menu_items')
-      .select('institution_id, canteen_id')
+      .select('canteen_id')
       .eq('id', firstItemId)
       .single();
       
     if (!itemError && itemData) {
-      actualInstitutionId = itemData.institution_id || actualInstitutionId;
-      actualCanteenId = itemData.canteen_id || actualCanteenId;
+      actualCanteenId = itemData.canteen_id;
     }
   }
 
-  if (!actualInstitutionId || !actualCanteenId) {
-    return { data: null, error: 'Failed to create order: missing institution_id or canteen_id from menu item.' };
+  if (!actualInstitutionId) {
+    return { data: null, error: 'You must join an institution before placing an order.' };
+  }
+  if (!actualCanteenId) {
+    return { data: null, error: 'Failed to create order: missing canteen_id from menu item.' };
   }
 
   const payload: Record<string, any> = {

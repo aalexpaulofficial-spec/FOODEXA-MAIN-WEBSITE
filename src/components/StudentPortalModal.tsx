@@ -945,7 +945,35 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     if (!user?.id || !profile?.email) { setError('Sign in required.'); return; }
     if (!liveRole) { setError('Profile role missing.'); return; }
     if (!cart.length) return;
+
     setSubmittingOrder(true); setError(null);
+
+    // PRODUCTION FIX: Always re-fetch institution_id fresh from DB before creating an order.
+    // React profile state may be stale — the DB is the source of truth.
+    const { data: freshProfileRow, error: profileFetchError } = await supabase
+      .from('profiles')
+      .select('institution_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (profileFetchError) {
+      const msg = 'Unable to verify your profile. Please try again.';
+      setError(msg);
+      if (triggerToast) triggerToast('Profile Error', msg, 'warning');
+      setSubmittingOrder(false);
+      return;
+    }
+
+    const liveInstitutionId = freshProfileRow?.institution_id || profile?.institution_id || null;
+
+    if (!liveInstitutionId) {
+      const msg = 'You must join an institution before placing an order.';
+      setError(msg);
+      if (triggerToast) triggerToast('Missing Institution', msg, 'warning');
+      setSubmittingOrder(false);
+      return;
+    }
+
     try {
       const now = new Date();
       const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
@@ -970,15 +998,15 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       }));
 
       // ── STEP 1: Create a PENDING order row in Supabase ──────────────────
-      // placeOrder() fetches institution_id & canteen_id from menu_items,
-      // inserts order_items, and generates all token/QR codes.
+      // placeOrder() fetches canteen_id from menu_items and uses liveInstitutionId
+      // (freshly fetched from DB) — never from stale React state.
       const orderResult = await placeOrder({
         user_id: user.id,
         email: profile.email,
         role: liveRole,
         customer_name: profile.full_name || user.email?.split('@')[0] || 'Customer',
         phone: profile.phone || '0000000000',
-        institution_id: profile.institution_id,
+        institution_id: liveInstitutionId, // PRODUCTION FIX: use fresh DB value
         canteen_id: cart[0]?.item.canteen_id || cart[0]?.item.counter_id || null,
         items: itemsForBackend,
         itemsFull: itemsFull,

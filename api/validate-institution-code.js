@@ -1,20 +1,8 @@
 // Vercel Serverless Function: /api/validate-institution-code
 // Uses the Supabase service role key to bypass RLS for anonymous institution code lookups.
-
-const SEEDED_INSTITUTIONS = {
-  YESHUA339537: {
-    institution_id: 'yeshua339537',
-    institution_name: 'Yeshua Institution',
-    campus: 'Main Campus',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    country: 'India',
-    institution_code: 'YESHUA339537',
-  },
-};
+// PRODUCTION: No hardcoded/seeded fallbacks — only live DB lookups.
 
 const normalizeCode = (value) => String(value || '').trim().toUpperCase();
-const fallbackInstitution = (code) => SEEDED_INSTITUTIONS[normalizeCode(code)] || null;
 
 export default async function handler(req, res) {
   // Allow CORS for the Vercel deployment
@@ -44,8 +32,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Institution code is required.' });
   }
 
-  const trimmed = code.trim();
-  const seededInstitution = fallbackInstitution(trimmed);
+  const trimmed = normalizeCode(code);
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -53,16 +40,14 @@ export default async function handler(req, res) {
 
   if (!supabaseUrl || !supabaseServerKey) {
     console.error('[validate-institution-code] Missing Supabase env vars');
-    if (seededInstitution) {
-      return res.status(200).json(seededInstitution);
-    }
     return res.status(503).json({
-      error: 'Institution verification is not configured yet. Please contact Foodexa support.',
+      error: 'Institution verification is not configured. Please contact Foodexa support.',
       code: 'MISSING_SUPABASE_SERVER_ENV',
     });
   }
 
   try {
+    // Use ilike for case-insensitive matching on institution_code
     const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/institutions?institution_code=ilike.${encodeURIComponent(trimmed)}&select=id,name,campus,city,state,country,institution_code&limit=1`;
     const resp = await fetch(url, {
       headers: {
@@ -74,21 +59,19 @@ export default async function handler(req, res) {
 
     if (!resp.ok) {
       const errText = await resp.text();
-      console.error('[validate-institution-code] Supabase error:', errText);
-      if (seededInstitution) {
-        return res.status(200).json(seededInstitution);
-      }
+      console.error('[validate-institution-code] Supabase error:', resp.status, errText);
+
       const isMissingTable = resp.status === 404 || errText.includes('PGRST205') || errText.includes('Could not find the table');
       if (isMissingTable) {
         return res.status(503).json({
-          error: 'Institution verification is being set up. Please try again after the Foodexa database is updated.',
+          error: 'Institution verification is being set up. Please try again shortly.',
           code: 'INSTITUTIONS_TABLE_MISSING',
         });
       }
 
       if (!supabaseServiceKey && (resp.status === 401 || resp.status === 403)) {
         return res.status(503).json({
-          error: 'Institution verification needs the server Supabase service key in Vercel.',
+          error: 'Institution verification needs the Supabase service key configured in Vercel.',
           code: 'SUPABASE_SERVICE_KEY_REQUIRED',
         });
       }
@@ -101,13 +84,17 @@ export default async function handler(req, res) {
 
     const rows = await resp.json();
     if (!rows || rows.length === 0) {
-      if (seededInstitution) {
-        return res.status(200).json(seededInstitution);
-      }
-      return res.status(404).json({ error: 'Institution Code not found.' });
+      return res.status(404).json({ error: 'Invalid Institution Code. Please check and try again.' });
     }
 
     const inst = rows[0];
+
+    // Validate the returned institution has a real UUID id
+    if (!inst.id || typeof inst.id !== 'string' || inst.id.length < 10) {
+      console.error('[validate-institution-code] Institution row missing valid id:', inst);
+      return res.status(500).json({ error: 'Institution data is invalid. Please contact support.' });
+    }
+
     return res.status(200).json({
       institution_id: inst.id,
       institution_name: inst.name || '',
@@ -119,9 +106,6 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     console.error('[validate-institution-code] Error:', err);
-    if (seededInstitution) {
-      return res.status(200).json(seededInstitution);
-    }
     return res.status(500).json({ error: 'Server error during institution code validation.' });
   }
 }

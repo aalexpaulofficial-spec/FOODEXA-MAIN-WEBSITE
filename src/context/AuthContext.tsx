@@ -14,7 +14,7 @@ interface AuthContextType {
   setInstitutionData: (data: InstitutionData | null) => void;
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
-  signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
+  signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; institutionId?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
   signOut: () => Promise<void>;
   clearAllSessionData: () => void;
@@ -30,19 +30,6 @@ const normalizeRole = (value: unknown): UserRole | null => {
   return allowed.includes(value as UserRole) ? (value as UserRole) : null;
 };
 
-const seededInstitutionByCode = (code: string): InstitutionData | null => {
-  if (code.trim().toUpperCase() !== 'YESHUA339537') return null;
-  return {
-    institution_id: 'yeshua339537',
-    institution_name: 'Yeshua Institution',
-    campus: 'Main Campus',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    country: 'India',
-    institution_code: 'YESHUA339537',
-  };
-};
-
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -56,6 +43,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     fullName: string;
     role: UserRole;
     institutionId: string | null;
+    institutionCode: string | null;
     phone: string | null;
   } | null>(null);
   const pendingOtpProfileRef = React.useRef<typeof pendingOtpProfile>(null);
@@ -212,8 +200,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   };
 
-  const signUpWithPassword = async (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; facultyId?: string; }) => {
+  // FIX: Accept institutionId as a direct parameter to avoid relying on volatile context state
+  const signUpWithPassword = async (
+    email: string,
+    password: string,
+    fullName: string,
+    role: UserRole,
+    metadata?: {
+      institutionCode?: string;
+      institutionId?: string; // PRODUCTION FIX: pass institution_id directly
+      phone?: string;
+      department?: string;
+      semester?: string;
+      programme?: string;
+      campusBlock?: string;
+      designation?: string;
+      facultyId?: string;
+    }
+  ) => {
     const trimmedEmail = email.trim().toLowerCase();
+
+    // Resolve institution_id: prefer direct param, then context state
+    const resolvedInstitutionId = metadata?.institutionId || institutionData?.institution_id || null;
+
+    if (!resolvedInstitutionId) {
+      console.warn('[Auth] signUpWithPassword: institution_id is NULL. Institution code may not have been validated.');
+    }
 
     // Block any auto-redirect while OTP is pending
     setIsPendingOtpVerification(true);
@@ -222,7 +234,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       email: trimmedEmail,
       fullName: fullName.trim(),
       role,
-      institutionId: institutionData?.institution_id || null,
+      institutionId: resolvedInstitutionId,
+      institutionCode: metadata?.institutionCode?.trim() || null,
       phone: metadata?.phone?.trim() || null,
     });
 
@@ -233,7 +246,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         data: {
           full_name: fullName.trim(),
           role,
-          institution_id: institutionData?.institution_id,
+          institution_id: resolvedInstitutionId,
+          institution_code: metadata?.institutionCode?.trim() || null,
           phone: metadata?.phone?.trim() || null,
           department: metadata?.department?.trim() || null,
           semester: metadata?.semester?.trim() || null,
@@ -265,7 +279,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           data: {
             full_name: fullName.trim(),
             role,
-            institution_id: institutionData?.institution_id,
+            institution_id: resolvedInstitutionId,
+            institution_code: metadata?.institutionCode?.trim() || null,
           },
         },
       });
@@ -287,7 +302,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!trimmed) {
       return { error: 'Institution Code is required.', data: null };
     }
-    const fallbackInstitution = seededInstitutionByCode(trimmed);
     try {
       // Call the server-side endpoint so the service role key bypasses RLS.
       // Anonymous browser requests are blocked by RLS on the institutions table.
@@ -300,10 +314,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const json = await resp.json().catch(() => ({}));
 
       if (!resp.ok || json.error) {
-        if (fallbackInstitution) {
-          return { error: null, data: fallbackInstitution };
-        }
         return { error: json.error || 'Invalid Institution Code. Please check and try again.', data: null };
+      }
+
+      // Validate the returned institution_id is a real UUID (not a seeded fake)
+      if (!json.institution_id || typeof json.institution_id !== 'string' || json.institution_id.length < 10) {
+        console.error('[Auth] validateInstitutionCode: invalid institution_id returned:', json.institution_id);
+        return { error: 'Institution data is invalid. Please contact support.', data: null };
       }
 
       return {
@@ -320,121 +337,145 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       };
     } catch (err: any) {
       console.error('[Auth] Institution code validation exception:', err);
-      if (fallbackInstitution) {
-        return { error: null, data: fallbackInstitution };
-      }
       return { error: 'Unable to verify Institution Code. Please try again.', data: null };
     }
   };
 
 
-   const verifyOtp = async (email: string, token: string) => {
-     console.log('[Auth] Verifying OTP for:', email);
+  // FIX: Strengthened institution_id resolution with last-resort API lookup
+  const verifyOtp = async (email: string, token: string) => {
+    console.log('[Auth] Verifying OTP for:', email);
 
-     let authData = null as Awaited<ReturnType<typeof supabase.auth.verifyOtp>>['data'] | null;
-     const { error: signupError, data: signupData } = await supabase.auth.verifyOtp({
-       email,
-       token,
-       type: 'signup',
-     });
+    let authData = null as Awaited<ReturnType<typeof supabase.auth.verifyOtp>>['data'] | null;
+    const { error: signupError, data: signupData } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'signup',
+    });
 
-     if (signupError) {
-       const { error: emailError, data: emailData } = await supabase.auth.verifyOtp({
-         email,
-         token,
-         type: 'email',
-       });
-
-       if (emailError) {
-         console.error('[Auth] OTP verification failed:', signupError.message, emailError.message);
-         // Keep isPendingOtpVerification true so user can retry OTP
-         return { error: new Error(emailError.message || signupError.message), profile: null, institution: null };
-       }
-
-       authData = emailData;
-     } else {
-       authData = signupData;
-     }
-
-      console.log('[Auth] OTP signup verification succeeded');
-
-      // OTP verified — clear the pending flag and mark email as confirmed
-      setIsPendingOtpVerification(false);
-      setIsEmailVerified(true);
-
-      const { data: currentUserData, error: userError } = await supabase.auth.getUser();
-     if (userError || !currentUserData.user?.id) {
-       console.error('[Auth] Unable to get user after OTP verification:', userError?.message);
-       return { error: new Error(userError?.message || 'Verification successful but unable to load user data.'), profile: null, institution: null };
-     }
-
-     const authUser = currentUserData.user;
-     const userId = authUser.id;
-
-     const pendingProfile = pendingOtpProfileRef.current || pendingOtpProfile;
-     const userData = authUser.user_metadata || authData.user?.user_metadata || {};
-     const role = normalizeRole(pendingProfile?.role || userData.role);
-
-     if (!role) {
-       console.error('[Auth] No valid role found for new profile');
-       return { error: new Error('Unable to complete registration. Please restart the process.'), profile: null, institution: null };
-     }
-
-      const fullName = pendingProfile?.fullName || userData.full_name || null;
-      const phone = pendingProfile?.phone || userData.phone || null;
-      const institutionId = pendingProfile?.institutionId || userData.institution_id || institutionData?.institution_id || null;
-
-      console.log('[Auth] Creating/upserting profile for user:', userId, 'role:', role);
-
-      const { error: upsertError } = await upsertProfileSafely({
-        user_id: userId,
-        email: authUser.email || email,
-        full_name: fullName,
-        phone,
-        role,
-        institution_id: institutionId,
-        department: userData.department || null,
-        semester: userData.semester || null,
-        programme: userData.programme || null,
-        campus_block: userData.campus_block || null,
+    if (signupError) {
+      const { error: emailError, data: emailData } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'email',
       });
 
-      if (upsertError) {
-        console.error('[Auth] Profile upsert error:', upsertError.message);
-        return { error: new Error(upsertError.message), profile: null, institution: null };
+      if (emailError) {
+        console.error('[Auth] OTP verification failed:', signupError.message, emailError.message);
+        return { error: new Error(emailError.message || signupError.message), profile: null, institution: null };
       }
 
-      const fetchedProfile = await fetchProfile(userId);
-      setPendingRegistrationProfile(null);
+      authData = emailData;
+    } else {
+      authData = signupData;
+    }
 
-      let fetchedInstitution: InstitutionData | null = null;
+    console.log('[Auth] OTP signup verification succeeded');
 
-      if (institutionId) {
-        console.log('[Auth] Loading institution by id:', institutionId);
-        const { data: instData, error: instError } = await supabase
-          .from('institutions')
-          .select('id, name, campus, city, state, country, institution_code')
-          .eq('id', institutionId)
-          .maybeSingle();
+    // OTP verified — clear the pending flag and mark email as confirmed
+    setIsPendingOtpVerification(false);
+    setIsEmailVerified(true);
 
-        if (instError) {
-          console.error('[Auth] Institution fetch by id error:', instError.message);
-        } else if (instData) {
-          fetchedInstitution = {
-            institution_id: instData.id,
-            institution_name: instData.name || '',
-            campus: instData.campus || '',
-            city: instData.city || '',
-            state: instData.state || '',
-            country: instData.country || '',
-            institution_code: instData.institution_code || '',
-          };
-          setInstitutionData(fetchedInstitution);
+    const { data: currentUserData, error: userError } = await supabase.auth.getUser();
+    if (userError || !currentUserData.user?.id) {
+      console.error('[Auth] Unable to get user after OTP verification:', userError?.message);
+      return { error: new Error(userError?.message || 'Verification successful but unable to load user data.'), profile: null, institution: null };
+    }
+
+    const authUser = currentUserData.user;
+    const userId = authUser.id;
+
+    const pendingProfile = pendingOtpProfileRef.current || pendingOtpProfile;
+    const userData = authUser.user_metadata || authData.user?.user_metadata || {};
+    const role = normalizeRole(pendingProfile?.role || userData.role);
+
+    if (!role) {
+      console.error('[Auth] No valid role found for new profile');
+      return { error: new Error('Unable to complete registration. Please restart the process.'), profile: null, institution: null };
+    }
+
+    const fullName = pendingProfile?.fullName || userData.full_name || null;
+    const phone = pendingProfile?.phone || userData.phone || null;
+
+    // PRODUCTION FIX: Multi-source institution_id resolution with last-resort API lookup
+    let institutionId: string | null =
+      pendingProfile?.institutionId ||
+      userData.institution_id ||
+      institutionData?.institution_id ||
+      null;
+
+    // Last-resort: if we have an institution_code but no id, look it up now
+    if (!institutionId) {
+      const institutionCode = pendingProfile?.institutionCode || userData.institution_code || null;
+      if (institutionCode) {
+        console.log('[Auth] verifyOtp: institution_id missing, attempting last-resort lookup by code:', institutionCode);
+        try {
+          const { data: resolved } = await validateInstitutionCode(institutionCode);
+          if (resolved?.institution_id) {
+            institutionId = resolved.institution_id;
+            console.log('[Auth] verifyOtp: resolved institution_id via code lookup:', institutionId);
+          }
+        } catch (lookupErr) {
+          console.warn('[Auth] verifyOtp: last-resort institution lookup failed:', lookupErr);
         }
       }
+    }
 
-      return { error: null, profile: fetchedProfile, institution: fetchedInstitution };
-    };
+    if (!institutionId) {
+      console.warn('[Auth] verifyOtp: institution_id is NULL after all resolution attempts. Profile will have NULL institution_id.');
+    }
+
+    console.log('[Auth] Creating/upserting profile for user:', userId, 'role:', role, 'institution_id:', institutionId);
+
+    const { error: upsertError } = await upsertProfileSafely({
+      user_id: userId,
+      email: authUser.email || email,
+      full_name: fullName,
+      phone,
+      role,
+      institution_id: institutionId,
+      department: userData.department || null,
+      semester: userData.semester || null,
+      programme: userData.programme || null,
+      campus_block: userData.campus_block || null,
+    });
+
+    if (upsertError) {
+      console.error('[Auth] Profile upsert error:', upsertError.message);
+      return { error: new Error(upsertError.message), profile: null, institution: null };
+    }
+
+    const fetchedProfile = await fetchProfile(userId);
+    setPendingRegistrationProfile(null);
+
+    let fetchedInstitution: InstitutionData | null = null;
+
+    if (institutionId) {
+      console.log('[Auth] Loading institution by id:', institutionId);
+      const { data: instData, error: instError } = await supabase
+        .from('institutions')
+        .select('id, name, campus, city, state, country, institution_code')
+        .eq('id', institutionId)
+        .maybeSingle();
+
+      if (instError) {
+        console.error('[Auth] Institution fetch by id error:', instError.message);
+      } else if (instData) {
+        fetchedInstitution = {
+          institution_id: instData.id,
+          institution_name: instData.name || '',
+          campus: instData.campus || '',
+          city: instData.city || '',
+          state: instData.state || '',
+          country: instData.country || '',
+          institution_code: instData.institution_code || '',
+        };
+        setInstitutionData(fetchedInstitution);
+      }
+    }
+
+    return { error: null, profile: fetchedProfile, institution: fetchedInstitution };
+  };
 
   const clearAllSessionData = () => {
     const keysToRemove: string[] = [];

@@ -441,7 +441,6 @@ export async function placeOrder(params: {
     menu_item_id: item.id,
     quantity: item.quantity,
     price: item.price,
-    subtotal: item.subtotal || (item.price * item.quantity),
   }));
   const { error: itemsError } = await supabase.from('order_items').insert(orderItemsPayload);
   if (itemsError) {
@@ -489,10 +488,20 @@ export async function updateOrderAfterPayment(params: {
     })
     .eq('id', params.order_id)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (updateError || !updatedOrder) {
-    return { success: false, error: updateError?.message || 'Failed to update order after payment.' };
+  if (updateError) {
+    return { success: false, error: updateError.message || 'Failed to update order after payment.' };
+  }
+
+  let finalOrder = updatedOrder;
+  if (!finalOrder) {
+    console.warn('[Supabase] updateOrderAfterPayment: update returned no rows (RLS?). Fetching order directly.');
+    const { data: fetchedOrder } = await supabase.from('orders').select('*').eq('id', params.order_id).maybeSingle();
+    finalOrder = fetchedOrder;
+    if (!finalOrder) {
+      return { success: false, error: 'Order not found after payment.' };
+    }
   }
 
   // Step B: Insert into payments table (best-effort, do not block on failure)
@@ -502,7 +511,7 @@ export async function updateOrderAfterPayment(params: {
       razorpay_order_id: params.razorpay_order_id,
       razorpay_payment_id: params.razorpay_payment_id,
       razorpay_signature: params.razorpay_signature,
-      amount: params.total_amount || updatedOrder.total_amount || 0,
+      amount: params.total_amount || finalOrder.total_amount || 0,
       currency: 'INR',
       status: 'paid',
       payment_method: 'razorpay',
@@ -531,7 +540,7 @@ export async function updateOrderAfterPayment(params: {
     if (notifs.length > 0) await supabase.from('notifications').insert(notifs);
   } catch (_) { /* best-effort */ }
 
-  return { success: true, data: mapOrder(updatedOrder) };
+  return { success: true, data: mapOrder(finalOrder) };
 }
 
 export async function fetchOrderById(orderId: string): Promise<Order | null> {

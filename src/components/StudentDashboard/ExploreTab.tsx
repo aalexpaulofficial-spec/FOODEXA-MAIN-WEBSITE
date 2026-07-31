@@ -98,12 +98,23 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentBanner(c => (c + 1) % BANNERS.length);
+      setCurrentBanner(c => (c + 1) % (dbBanners?.length || BANNERS.length));
     }, 5000);
     return () => clearInterval(timer);
   }, []);
 
-  const currentBannerData = BANNERS[currentBanner];
+  const activeBanners = (dbBanners?.length ? dbBanners : BANNERS).map(banner => {
+    if (banner.id === 'b4') {
+      const instName = institutionName || 'Campus';
+      return {
+        ...banner,
+        subtitle: `${instName} Canteen Dosa & Sky Cafe Coffee express priority counters active.`
+      };
+    }
+    return banner;
+  });
+
+  const currentBannerData = activeBanners[currentBanner] || activeBanners[0];
 
   const trendingItems = [...menuItems]
     .sort((a, b) => Number(b.popular) - Number(a.popular) || b.rating - a.rating)
@@ -202,7 +213,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                 </button>
 
                 <div className="flex items-center gap-1.5">
-                  {BANNERS.map((_, idx) => (
+                  {activeBanners.map((_, idx) => (
                     <button
                       key={idx}
                       onClick={() => setCurrentBanner(idx)}

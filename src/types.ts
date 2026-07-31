@@ -284,7 +284,6 @@ export interface Order {
   completed_at: string | null;
   paid_at?: string | null;
   updated_at: string;
-  estimated_ready_at: string | null;
   token_number?: string;
   pickup_pin?: string;
   kitchen_queue_status?: string;

@@ -7,15 +7,21 @@ const STAGES_ORDER = [
   'pending',
   'accepted',
   'preparing',
+  'cooking',
+  'quality_check',
+  'packed',
   'ready',
   'completed'
 ];
 
-const statusLabel = (s: OrderStatus): string => {
-  const m: Record<OrderStatus, string> = {
+const statusLabel = (s: string): string => {
+  const m: Record<string, string> = {
     pending: 'Order Confirmed',
     accepted: 'Kitchen Accepted',
-    preparing: 'Cooking',
+    preparing: 'Preparing',
+    cooking: 'Cooking',
+    quality_check: 'Quality Check',
+    packed: 'Packed & Sealed',
     ready: 'Ready for Pickup',
     completed: 'Collected',
     cancelled: 'Cancelled',

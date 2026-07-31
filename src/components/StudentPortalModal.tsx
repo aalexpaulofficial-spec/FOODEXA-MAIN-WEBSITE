@@ -1610,87 +1610,113 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                   );
 
                   return (
-                    <div className="max-w-sm mx-auto space-y-5 pb-12">
-                      {/* Header */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-black border border-blue-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping inline-block" />
-                          Live Canteen Tracking
-                        </span>
-                        <span className="text-xs font-black text-slate-600 font-mono">{o?.order_id || '#FX-0000'}</span>
-                      </div>
-                      <h2 className="text-2xl font-black text-slate-900">{o?.counter || institutionName || 'Campus Food Court'}</h2>
+                    <div className="max-w-md mx-auto space-y-4 pb-20">
+                      {/* Top Status Card */}
+                      <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
+                        {/* Background subtle elements */}
+                        <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                        <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                        
+                        <div className="relative z-10">
+                          <div className="flex items-start justify-between mb-4">
+                            <div>
+                              <p className="text-blue-300 text-xs font-bold uppercase tracking-wider mb-1">Order Confirmed</p>
+                              <h2 className="text-3xl font-black">{o?.order_id || '#FX-0001'}</h2>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">Pickup Code</p>
+                              <p className="text-xl font-black text-emerald-400 tracking-wider">
+                                {o?.pickup_code || o?.pickup_token || `PICKUP-${String(o?.id || '').slice(-4).toUpperCase() || '0001'}`}
+                              </p>
+                            </div>
+                          </div>
 
-                      {/* Pickup Location Card */}
-                      <div className="rounded-2xl bg-white border border-slate-200 p-4 flex items-start justify-between shadow-sm">
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">PICKUP LOCATION</p>
-                          <p className="text-base font-black text-slate-900">{o?.counter || firstItemCounter || 'Counter 1'}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">PICKUP CODE</p>
-                          <p className="text-base font-black text-blue-600">{o?.pickup_code || o?.pickup_token || `PICKUP-${String(o?.id || '').slice(-4).toUpperCase() || '0001'}`}</p>
+                          <div className="flex items-center gap-3 bg-white/10 rounded-2xl p-3 border border-white/10">
+                            <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center border border-blue-400/30">
+                              <Clock className="w-5 h-5 text-blue-300" />
+                            </div>
+                            <div>
+                              <p className="text-slate-300 text-xs">Estimated Ready Time</p>
+                              <p className="font-bold text-white">
+                                {o?.estimated_ready_at ? new Date(o.estimated_ready_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 
+                                 new Date(Date.now() + 15 * 60000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
                       {/* 8-Step Vertical Tracker */}
-                      <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm">
-                        {LIVE_STEPS.map((step, i) => {
-                          const isDone = i < liveStepIdx;
-                          const isActive = i === liveStepIdx;
-                          return (
-                            <div key={i} className="flex gap-4">
-                              <div className="flex flex-col items-center">
-                                <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center shrink-0 font-black text-sm transition-all duration-500 ${
-                                  isDone ? 'bg-blue-600 border-blue-600 text-white' :
-                                  isActive ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/30' :
-                                  'bg-white border-slate-200 text-slate-400'
-                                }`}>
-                                  {isDone ? <Check className="w-5 h-5" /> : i + 1}
+                      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-5">
+                          <h3 className="font-bold text-slate-900">Live Timeline</h3>
+                          <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold border border-emerald-100 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Live
+                          </span>
+                        </div>
+                        <div className="space-y-0">
+                          {LIVE_STEPS.map((step, i) => {
+                            const isDone = i < liveStepIdx;
+                            const isActive = i === liveStepIdx;
+                            return (
+                              <div key={i} className="flex gap-4">
+                                <div className="flex flex-col items-center">
+                                  <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 font-bold text-xs transition-all duration-500 z-10 ${
+                                    isDone ? 'bg-blue-600 border-blue-600 text-white' :
+                                    isActive ? 'bg-white border-blue-600 text-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.3)]' :
+                                    'bg-white border-slate-200 text-slate-300'
+                                  }`}>
+                                    {isDone ? <Check className="w-4 h-4" /> : i + 1}
+                                  </div>
+                                  {i < LIVE_STEPS.length - 1 && (
+                                    <div className={`w-0.5 h-8 my-0.5 rounded-full transition-all duration-700 ${isDone ? 'bg-blue-600' : 'bg-slate-100'}`} />
+                                  )}
                                 </div>
-                                {i < LIVE_STEPS.length - 1 && (
-                                  <div className={`w-0.5 h-6 my-1 rounded-full transition-all duration-700 ${isDone ? 'bg-blue-500' : 'bg-slate-200'}`} />
-                                )}
-                              </div>
-                              <div className={`pt-1.5 flex-1 min-w-0 ${i < LIVE_STEPS.length - 1 ? 'pb-4' : 'pb-0'}`}>
-                                <div className="flex items-center gap-2">
-                                  <p className={`text-sm font-black ${isActive ? 'text-blue-600' : isDone ? 'text-slate-700' : 'text-slate-400'}`}>{step.label}</p>
-                                  {isActive && <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">In Progress</span>}
+                                <div className={`pt-1 flex-1 min-w-0 ${i < LIVE_STEPS.length - 1 ? 'pb-3' : 'pb-0'}`}>
+                                  <div className="flex items-center gap-2">
+                                    <p className={`text-sm font-bold ${isActive ? 'text-blue-600' : isDone ? 'text-slate-800' : 'text-slate-400'}`}>{step.label}</p>
+                                  </div>
+                                  <p className={`text-[11px] mt-0.5 ${isActive || isDone ? 'text-slate-500' : 'text-slate-300'}`}>{step.desc}</p>
                                 </div>
-                                <p className={`text-xs mt-0.5 ${isActive || isDone ? 'text-slate-500' : 'text-slate-300'}`}>{step.desc}</p>
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
 
-                      {/* Cancel within 30 seconds */}
-                      {(() => {
-                        const secs = Math.max(0, 30 - Math.floor((currentTime - new Date(o?.created_at || Date.now()).getTime()) / 1000));
-                        if (secs > 0 && o?.status !== 'cancelled') return (
-                          <button
-                            onClick={async () => {
-                              setSubmittingOrder(true);
-                              const res = await cancelOrder(o!.id);
-                              if (res.success) { triggerToast && triggerToast('Cancelled', 'Order cancelled.', 'success'); setActiveTab('history'); }
-                              else { triggerToast && triggerToast('Failed', 'Could not cancel.', 'error'); }
-                              setSubmittingOrder(false);
-                            }}
-                            disabled={submittingOrder}
-                            className="w-full py-3 rounded-2xl bg-red-50 border border-red-200 text-red-600 font-bold text-sm hover:bg-red-100 transition-colors disabled:opacity-50"
-                          >
-                            Cancel Order ({secs}s left)
+                      {/* Actions */}
+                      <div className="pt-2 space-y-3">
+                        {/* Always Show QR */}
+                        {o && (
+                          <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-blue-600 text-white font-bold text-sm shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition-colors">
+                            <QrCode className="w-5 h-5" /> Show Pickup QR
                           </button>
-                        );
-                        return null;
-                      })()}
-
-                      {/* Show QR when ready */}
-                      {(orderStatus === 'ready') && o && (
-                        <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-slate-900 text-white font-black text-sm shadow-lg hover:bg-slate-800 transition-colors">
-                          <QrCode className="w-4 h-4" /> Show Pickup QR Code
-                        </button>
-                      )}
+                        )}
+                        
+                        {/* Cancel within 30 seconds */}
+                        {(() => {
+                          const secs = Math.max(0, 30 - Math.floor((currentTime - new Date(o?.created_at || Date.now()).getTime()) / 1000));
+                          if (secs > 0 && o?.status !== 'cancelled') return (
+                            <div className="text-center mt-2">
+                              <button
+                                onClick={async () => {
+                                  setSubmittingOrder(true);
+                                  const res = await cancelOrder(o!.id);
+                                  if (res.success) { triggerToast && triggerToast('Cancelled', 'Order cancelled and refunded.', 'success'); setActiveTab('history'); }
+                                  else { triggerToast && triggerToast('Failed', 'Could not cancel.', 'error'); }
+                                  setSubmittingOrder(false);
+                                }}
+                                disabled={submittingOrder}
+                                className="text-red-500 font-bold text-xs hover:text-red-600 hover:underline transition-all disabled:opacity-50"
+                              >
+                                Cancel Order within {secs} seconds timing
+                              </button>
+                            </div>
+                          );
+                          return null;
+                        })()}
+                      </div>
                     </div>
                   );
                 })()}

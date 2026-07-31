@@ -32,7 +32,7 @@ export const NutritionTab: React.FC<NutritionTabProps> = ({
   onAddCart = () => {},
   onFavorite = () => {},
   favoritedIds = new Set(),
-  setIsLxAiOpen = () => {}
+  setIsLxAiOpen = (v: boolean) => {}
 }) => {
   const [waterGlasses, setWaterGlasses] = useState(waterConsumed);
 

@@ -88,7 +88,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                 {/* Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <h3 className="font-black text-slate-900 text-lg">Order {order.order_id || `#FX-${String(order.id).slice(-4).toUpperCase()}`}</h3>
+                    <h3 className="font-black text-slate-900 text-lg">Order {order.order_number || order.order_id || `#FX-${String(order.id).slice(-4).toUpperCase()}`}</h3>
                     <p className="text-xs font-medium text-slate-500 mt-0.5">{formatDate(order.created_at)} • {order.counter || 'Campus Canteen'}</p>
                   </div>
                   <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${statusStyle(order.status)}`}>
@@ -160,7 +160,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
               </div>
               
               <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{receiptOrder.institution_name || 'CHRIST UNIVERSITY'} CANTEEN RECEIPT</h2>
-              <h3 className="text-2xl font-black text-slate-900 mb-1">Tax Invoice {receiptOrder.order_id || `#FX-${String(receiptOrder.id).slice(-4).toUpperCase()}`}</h3>
+              <h3 className="text-2xl font-black text-slate-900 mb-1">Tax Invoice {receiptOrder.order_number || receiptOrder.order_id || `#FX-${String(receiptOrder.id).slice(-4).toUpperCase()}`}</h3>
               <p className="text-sm font-medium text-slate-500 mb-6">{formatDate(receiptOrder.created_at)}</p>
 
               <div className="space-y-3 mb-6">

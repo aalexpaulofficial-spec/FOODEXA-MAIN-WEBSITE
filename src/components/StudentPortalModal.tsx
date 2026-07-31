@@ -7,7 +7,7 @@ import {
   Phone, Mail, Hash, Shield, ChevronRight, Flame, Package, RefreshCw, Filter, Wifi,
   WifiOff, Coffee, Pizza, Sandwich, Salad, ChevronLeft, Check, ShoppingCart, Plus, Minus,
   Gift, Bell as BellIcon, RotateCcw, ArrowUpRight, Activity, Calendar, Timer, Info,
-  CheckCircle, XCircle, Lock, Trash2
+  CheckCircle, XCircle, Lock, Trash2, Copy, Download
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -149,74 +149,65 @@ const SkeletonCard = () => (
 );
 
 const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => void; order: Order | null }) => {
-  const [countdown, setCountdown] = useState(300); // 5 min
-  useEffect(() => {
-    if (!isOpen) return;
-    setCountdown(300);
-    const interval = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000);
-    return () => clearInterval(interval);
-  }, [isOpen]);
-
   if (!isOpen || !order) return null;
-  const qrValue = order.qr_pickup_code || order.qr_code_data || order.pickup_code || order.order_id;
-  const mins = Math.floor(countdown / 60);
-  const secs = countdown % 60;
+  const qrValue = order.qr_pickup_code || order.qr_code_data || order.pickup_code || order.order_number || order.order_id;
+  const counterName = order.counter || 'Campus Counter';
+
+  const downloadQR = () => {
+    // Generate and download QR logic placeholder
+    alert('QR Code Downloaded!');
+  };
+
+  const copyCode = () => {
+    navigator.clipboard.writeText(qrValue || '');
+  };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-slate-950/90 backdrop-blur-xl p-4" onClick={onClose}>
       <div
-        className="bg-slate-900 border border-emerald-500/50 rounded-3xl p-6 max-w-sm w-full text-center space-y-5 shadow-2xl shadow-emerald-950/60"
+        className="bg-[#DCE1E7] rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-emerald-950 border border-emerald-500/40 flex items-center justify-center">
-              <QrCode className="w-4 h-4 text-emerald-400" />
-            </div>
-            <span className="text-xs font-black text-emerald-400 uppercase tracking-wider">Pickup Ready!</span>
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
+        <button onClick={onClose} className="absolute right-4 top-4 p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition-colors">
+          <X className="w-5 h-5" />
+        </button>
+
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-full text-blue-600 text-xs font-bold mb-4 shadow-sm">
+          <Sparkles className="w-3.5 h-3.5" /> Scan at Counter Scanner
         </div>
+
+        <h3 className="text-2xl font-black text-slate-800 mb-1">Express QR Pickup</h3>
+        <p className="text-sm font-medium text-slate-500 mb-6">{(order as any).institution_name || 'Central Mess Food Court'}</p>
 
         {/* QR Code display */}
-        <div className="bg-white rounded-2xl p-5 mx-auto max-w-[220px] shadow-lg flex flex-col items-center">
+        <div className="bg-white rounded-2xl p-4 mx-auto max-w-[220px] shadow-lg flex flex-col items-center border-[3px] border-blue-400/50 relative">
+          <div className="absolute inset-0 rounded-2xl ring-4 ring-blue-400/20 shadow-[0_0_20px_rgba(59,130,246,0.3)] pointer-events-none" />
           <img 
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrValue)}`} 
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrValue)}`} 
             alt="QR Code" 
-            className="w-full h-auto mb-4 object-contain"
+            className="w-full h-auto object-contain rounded-lg relative z-10"
           />
-          <div className="font-mono text-xl font-black text-slate-950 tracking-widest text-center">{qrValue}</div>
         </div>
 
-        {/* Order info */}
-        <div className="space-y-2">
-          <p className="text-[10px] font-mono text-slate-500">{order.order_id}</p>
-          <div className="flex items-center justify-center gap-2">
-            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-            <p className="text-xs font-bold text-white">Counter: <span className="text-emerald-300">{order.counter}</span></p>
+        <div className="bg-white rounded-2xl p-4 mt-6 text-left shadow-sm">
+          <div className="flex justify-between items-center mb-3">
+            <span className="text-xs font-bold text-slate-400 uppercase">Counter Number</span>
+            <span className="text-sm font-black text-slate-900">{counterName}</span>
           </div>
-          {order.locker_number && (
-            <div className="flex items-center justify-center gap-2">
-              <Hash className="w-3.5 h-3.5 text-cyan-400" />
-              <p className="text-xs font-bold text-white">Locker: <span className="text-cyan-300">{order.locker_number}</span></p>
-            </div>
-          )}
+          <div className="flex justify-between items-center">
+            <span className="text-xs font-bold text-slate-400 uppercase">Pickup Code</span>
+            <span className="text-base font-black text-blue-600 uppercase">{qrValue}</span>
+          </div>
         </div>
 
-        {/* Countdown */}
-        <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-950/60 border border-emerald-500/30 px-4 py-2.5">
-          <Timer className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-          <span className="text-xs font-mono font-bold text-emerald-300">
-            Expires in {mins}:{secs.toString().padStart(2, '0')}
-          </span>
+        <div className="grid grid-cols-2 gap-3 mt-6">
+          <button onClick={copyCode} className="w-full py-3 bg-white rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
+            <Copy className="w-4 h-4" /> Copy Code
+          </button>
+          <button onClick={downloadQR} className="w-full py-3 bg-blue-600 rounded-xl text-sm font-bold text-white hover:bg-blue-700 shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
+            <Download className="w-4 h-4" /> Download QR
+          </button>
         </div>
-
-        <button onClick={onClose} className="w-full py-2.5 rounded-xl bg-slate-800 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors">
-          Close
-        </button>
       </div>
     </div>
   );
@@ -1634,29 +1625,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                   const liveStepIdx = statusToStep[orderStatus] ?? 0;
                   const isCompleted = orderStatus === 'completed';
 
-                  if (isCompleted) return (
-                    <div className="max-w-sm mx-auto space-y-8 text-center py-12">
-                      <div className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-2xl shadow-emerald-500/30 animate-bounce">
-                        <CheckCircle className="w-16 h-16 text-white" />
-                      </div>
-                      <div className="space-y-2">
-                        <h2 className="text-4xl font-black text-slate-900">Thank You! 🎉</h2>
-                        <p className="text-base text-emerald-600 font-bold">Your order has been collected.</p>
-                        <p className="text-xs text-slate-500 font-medium">We hope you enjoy your meal! Come back soon.</p>
-                      </div>
-                      {o && (
-                        <div className="rounded-2xl bg-slate-50 border border-slate-200 p-5 text-left space-y-3">
-                          <div className="flex justify-between text-sm"><span className="font-bold text-slate-500">Order ID</span><span className="font-black text-slate-900 font-mono">{o.order_id}</span></div>
-                          <div className="flex justify-between text-sm"><span className="font-bold text-slate-500">Total Paid</span><span className="font-black text-emerald-600">{formatINR(o.total_amount)}</span></div>
-                        </div>
-                      )}
-                      <div className="space-y-3">
-                        <button onClick={() => { setCart([]); setActiveTab('explore'); }} className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-sm shadow-lg shadow-blue-500/30 hover:from-blue-500 hover:to-indigo-500 transition-all">Order Again</button>
-                        <button onClick={() => setActiveTab('history')} className="w-full py-3.5 rounded-2xl border border-slate-200 bg-white text-slate-700 font-bold text-sm hover:bg-slate-50 transition-colors">View Order History</button>
-                      </div>
-                    </div>
-                  );
-
                   return (
                     <div className="max-w-md mx-auto space-y-4 pb-20">
                       {/* Top Status Card */}
@@ -1669,7 +1637,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           <div className="flex items-start justify-between mb-4">
                             <div>
                               <p className="text-blue-300 text-xs font-bold uppercase tracking-wider mb-1">Order Confirmed</p>
-                              <h2 className="text-3xl font-black">{o?.order_id || '#FX-0001'}</h2>
+                              <h2 className="text-3xl font-black">{o?.order_number || o?.order_id || '#FX-0001'}</h2>
                             </div>
                             <div className="text-right">
                               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">Pickup Code</p>
@@ -1687,7 +1655,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                               <p className="text-slate-300 text-xs">Estimated Ready Time</p>
                               <p className="font-bold text-white">
                                 {o?.estimated_ready_at ? new Date(o.estimated_ready_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 
-                                 new Date(Date.now() + 15 * 60000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                 new Date(Date.now() + ((o as any)?.estimated_prep_time_minutes || 15) * 60000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                               </p>
                             </div>
                           </div>

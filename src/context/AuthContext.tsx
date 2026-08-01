@@ -104,8 +104,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await loadInstitutionForProfile(fetchedProfile);
         return fetchedProfile;
       }
-    } catch (err) {
-      // silent
+    } catch (err: any) {
+      console.error('[Auth] Profile fetch threw an exception:', err?.message || err);
     }
 
     setProfile(null);
@@ -138,10 +138,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .upsert(safePayload, { onConflict: 'user_id' });
 
       if (error) {
+        console.error('[Auth] Profile upsert DB error:', error.message);
         const friendlyMessage = error.message.includes('duplicate key')
           ? 'Your profile already exists. Please try logging in.'
           : error.message.includes('violates row-level security')
-            ? 'Unable to create profile. Please contact support.'
+            ? 'Unable to create profile (permission denied). Ensure the `profiles` table allows authenticated inserts, then contact support.'
             : error.message;
         return { error: new Error(friendlyMessage) };
       }
@@ -230,16 +231,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Block any auto-redirect while OTP is pending
     setIsPendingOtpVerification(true);
 
-    setPendingRegistrationProfile({
-      email: trimmedEmail,
-      fullName: fullName.trim(),
-      role,
-      institutionId: resolvedInstitutionId,
-      institutionCode: metadata?.institutionCode?.trim() || null,
-      phone: metadata?.phone?.trim() || null,
-    });
+     setPendingRegistrationProfile({
+       email: trimmedEmail,
+       fullName: fullName.trim(),
+       role,
+       institutionId: resolvedInstitutionId,
+       institutionCode: metadata?.institutionCode?.trim() || null,
+       phone: metadata?.phone?.trim() || null,
+     });
 
-    const { data, error } = await supabase.auth.signUp({
+     console.info('[Auth] Signup request → signUp() | email:', trimmedEmail, '| role:', role, '| institution_id:', resolvedInstitutionId || 'NULL (NOT VALIDATED)');
+
+     const { data, error } = await supabase.auth.signUp({
       email: trimmedEmail,
       password,
       options: {
@@ -260,40 +263,63 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     if (error) {
+      console.error('[Auth] Signup signUp() error:', error.name, '-', error.message);
       setIsPendingOtpVerification(false);
       return { error: new Error(error.message) };
     }
 
-    // OTP verification is mandatory for this flow. If signUp returns a session,
-    // request an email OTP explicitly and keep the user out of the dashboard.
+    const authUser = data?.user;
+    console.info('[Auth] Signup signUp() succeeded | authUser:', authUser?.id || '<none>', '| session:', !!data?.session, '| email_confirmed_at:', authUser?.email_confirmed_at || 'NULL');
+
+    // PRODUCTION FIX: OTP verification is mandatory regardless of whether
+    // `mailer_autoconfirm` is on or off. Supabase sends the OTP via the
+    // "Magic Link" email template whenever signInWithOtp is invoked. Sending
+    // the OTP explicitly (instead of relying solely on the confirm-signup email)
+    // keeps the flow deterministic in BOTH autoconfirm modes.
     if (data?.session) {
+      // autoconfirm ON → the user is instantly email-confirmed and logged in.
+      // Sign out so they cannot reach the dashboard before completing OTP.
+      console.info('[Auth] Signup returned an immediate session (autoconfirm ON). Signing out to enforce the OTP gate.');
       await supabase.auth.signOut();
       setSession(null);
       setUser(null);
       setIsEmailVerified(false);
-
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        email: trimmedEmail,
-        options: {
-          shouldCreateUser: false,
-          data: {
-            full_name: fullName.trim(),
-            role,
-            institution_id: resolvedInstitutionId,
-            institution_code: metadata?.institutionCode?.trim() || null,
-          },
-        },
-      });
-
-      if (otpError) {
-        setIsPendingOtpVerification(false);
-        return { error: new Error(otpError.message) };
-      }
-
-      return { error: null };
     }
 
-    // No session yet — user must verify via OTP email. isPendingOtpVerification stays true.
+    // Always send the OTP email explicitly so the code path is identical
+    // whether or not email confirmation is enabled in the dashboard.
+    if (!authUser) {
+      console.error('[Auth] Signup signUp() returned no user object despite success.');
+      setIsPendingOtpVerification(false);
+      return { error: new Error('Registration succeeded but no user was returned. Please try again.') };
+    }
+
+    console.info('[Auth] Sending OTP email via signInWithOtp for:', trimmedEmail, '| authUser:', authUser.id);
+
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      email: trimmedEmail,
+      options: {
+        // The account already exists (just created via signUp), so we only
+        // need to deliver the verification OTP to an existing user.
+        shouldCreateUser: false,
+        data: {
+          full_name: fullName.trim(),
+          role,
+          institution_id: resolvedInstitutionId,
+          institution_code: metadata?.institutionCode?.trim() || null,
+        },
+      },
+    });
+
+    if (otpError) {
+      // Common causes: rate limit (already-pending OTP/60-per-hour cap), or a
+      // misconfigured / missing "Magic Link" email template in the dashboard.
+      console.error('[Auth] OTP email request (signInWithOtp) failed:', otpError.name, '-', otpError.message);
+      setIsPendingOtpVerification(false);
+      return { error: new Error(otpError.message) };
+    }
+
+    console.info('[Auth] OTP email request accepted by Supabase. User must enter the code from the email.');
     return { error: null };
   };
 
@@ -344,120 +370,159 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   // FIX: Strengthened institution_id resolution with last-resort API lookup
-  const verifyOtp = async (email: string, token: string) => {
-    console.log('[Auth] Verifying OTP for:', email);
+   const verifyOtp = async (email: string, token: string) => {
+     const normalizedEmail = (email || '').trim().toLowerCase();
+     const safeToken = (token || '').trim();
+     console.info('[Auth] OTP verification request | email:', normalizedEmail, '| token length:', safeToken.length, '| authUser:', user?.id || '<none>');
 
-    let authData = null as Awaited<ReturnType<typeof supabase.auth.verifyOtp>>['data'] | null;
-    const { error: signupError, data: signupData } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'signup',
-    });
+     if (!normalizedEmail) {
+       return { error: new Error('An email address is required to verify the OTP.'), profile: null, institution: null };
+     }
+     if (!safeToken) {
+       return { error: new Error('Please enter the OTP code sent to your email.'), profile: null, institution: null };
+     }
 
-    if (signupError) {
-      const { error: emailError, data: emailData } = await supabase.auth.verifyOtp({
-        email,
-        token,
-        type: 'email',
-      });
+     let authData = null as Awaited<ReturnType<typeof supabase.auth.verifyOtp>>['data'] | null;
 
-      if (emailError) {
-        console.error('[Auth] OTP verification failed:', signupError.message, emailError.message);
-        return { error: new Error(emailError.message || signupError.message), profile: null, institution: null };
-      }
+      // PRIMARY: the OTP is issued by signInWithOtp (Magic Link flow) → type 'email'.
+     // FALLBACK: if "Confirm email" is enabled in the dashboard, the signup
+     // confirmation email uses an OTP verified with type 'signup'.
+     console.info('[Auth] Attempting OTP verification with type "email" (Magic Link/OTP flow)...');
+     const emailAttempt = await supabase.auth.verifyOtp({
+       email: normalizedEmail,
+       token: safeToken,
+       type: 'email',
+     });
 
-      authData = emailData;
-    } else {
-      authData = signupData;
-    }
+     if (emailAttempt.error) {
+       console.warn('[Auth] verifyOtp type=email failed:', emailAttempt.error.name, '-', emailAttempt.error.message);
+       console.info('[Auth] Fallback: attempting OTP verification with type "signup" (email confirmation flow)...');
+       const signupAttempt = await supabase.auth.verifyOtp({
+         email: normalizedEmail,
+         token: safeToken,
+         type: 'signup',
+       });
 
-    console.log('[Auth] OTP signup verification succeeded');
+        if (signupAttempt.error) {
+          console.error('[Auth] OTP verification FAILED — both types rejected. | email:', normalizedEmail, '| type=email error:', emailAttempt.error.message, '| type=signup error:', signupAttempt.error.message);
+         return {
+           error: new Error(signupAttempt.error.message || emailAttempt.error.message),
+           profile: null,
+           institution: null,
+         };
+       }
 
-    // OTP verified — clear the pending flag and mark email as confirmed
-    setIsPendingOtpVerification(false);
-    setIsEmailVerified(true);
+       authData = signupAttempt.data;
+       console.info('[Auth] OTP verification SUCCEEDED via type "signup" | user:', authData?.user?.id || '<none>');
+     } else {
+       authData = emailAttempt.data;
+       console.info('[Auth] OTP verification SUCCEEDED via type "email" | user:', authData?.user?.id || '<none>');
+     }
 
-    const { data: currentUserData, error: userError } = await supabase.auth.getUser();
-    if (userError || !currentUserData.user?.id) {
-      console.error('[Auth] Unable to get user after OTP verification:', userError?.message);
-      return { error: new Error(userError?.message || 'Verification successful but unable to load user data.'), profile: null, institution: null };
-    }
+     // OTP verified — clear the pending flag and mark email as confirmed
+     setIsPendingOtpVerification(false);
+     setIsEmailVerified(true);
 
-    const authUser = currentUserData.user;
-    const userId = authUser.id;
+     // verifyOtp already establishes a session; fetch the freshly authenticated user.
+     const { data: currentUserData, error: userError } = await supabase.auth.getUser();
+     const authUser = currentUserData?.user;
+     const userId = authUser?.id;
 
-    const pendingProfile = pendingOtpProfileRef.current || pendingOtpProfile;
-    const userData = authUser.user_metadata || authData.user?.user_metadata || {};
-    const role = normalizeRole(pendingProfile?.role || userData.role);
+     if (userError || !userId) {
+       console.error('[Auth] Unable to get user after OTP verification:', userError?.name, '-', userError?.message);
+       return {
+         error: new Error(userError?.message || 'OTP verified but unable to load your account. Please try signing in.'),
+         profile: null,
+         institution: null,
+       };
+     }
 
-    if (!role) {
-      console.error('[Auth] No valid role found for new profile');
-      return { error: new Error('Unable to complete registration. Please restart the process.'), profile: null, institution: null };
-    }
+     console.info('[Auth] Authenticated user after OTP verification | userId:', userId, '| email_confirmed_at:', authUser.email_confirmed_at || 'NULL', '| email:', authUser.email);
 
-    const fullName = pendingProfile?.fullName || userData.full_name || null;
-    const phone = pendingProfile?.phone || userData.phone || null;
+     const pendingProfile = pendingOtpProfileRef.current || pendingOtpProfile;
+     const userData = authUser.user_metadata || {};
+     const role = normalizeRole(pendingProfile?.role || userData.role);
 
-    // PRODUCTION FIX: Multi-source institution_id resolution with last-resort API lookup
-    let institutionId: string | null =
-      pendingProfile?.institutionId ||
-      userData.institution_id ||
-      institutionData?.institution_id ||
-      null;
+     if (!role) {
+       console.error('[Auth] No valid role found for new profile | userId:', userId, '| pending role:', pendingProfile?.role, '| metadata role:', userData.role);
+       return {
+         error: new Error('Unable to complete registration. The account has no valid role. Please restart the registration process.'),
+         profile: null,
+         institution: null,
+       };
+     }
 
-    // Last-resort: if we have an institution_code but no id, look it up now
-    if (!institutionId) {
-      const institutionCode = pendingProfile?.institutionCode || userData.institution_code || null;
-      if (institutionCode) {
-        console.log('[Auth] verifyOtp: institution_id missing, attempting last-resort lookup by code:', institutionCode);
-        try {
-          const { data: resolved } = await validateInstitutionCode(institutionCode);
-          if (resolved?.institution_id) {
-            institutionId = resolved.institution_id;
-            console.log('[Auth] verifyOtp: resolved institution_id via code lookup:', institutionId);
-          }
-        } catch (lookupErr) {
-          console.warn('[Auth] verifyOtp: last-resort institution lookup failed:', lookupErr);
-        }
-      }
-    }
+     const fullName = pendingProfile?.fullName || userData.full_name || null;
+     const phone = pendingProfile?.phone || userData.phone || null;
 
-    if (!institutionId) {
-      console.warn('[Auth] verifyOtp: institution_id is NULL after all resolution attempts. Profile will have NULL institution_id.');
-    }
+     // PRODUCTION FIX: Multi-source institution_id resolution with last-resort API lookup
+     let institutionId: string | null =
+       pendingProfile?.institutionId ||
+       userData.institution_id ||
+       institutionData?.institution_id ||
+       null;
 
-    console.log('[Auth] Creating/upserting profile for user:', userId, 'role:', role, 'institution_id:', institutionId);
+     // Last-resort: if we have an institution_code but no id, look it up now
+     if (!institutionId) {
+       const institutionCode = pendingProfile?.institutionCode || userData.institution_code || null;
+       if (institutionCode) {
+         console.info('[Auth] verifyOtp: institution_id missing; attempting last-resort lookup by code:', institutionCode);
+         try {
+           const { data: resolved } = await validateInstitutionCode(institutionCode);
+           if (resolved?.institution_id) {
+             institutionId = resolved.institution_id;
+             console.info('[Auth] verifyOtp: resolved institution_id via code lookup:', institutionId);
+           } else {
+             console.warn('[Auth] verifyOtp: institution code lookup returned no id for code:', institutionCode);
+           }
+         } catch (lookupErr) {
+           console.warn('[Auth] verifyOtp: last-resort institution lookup failed:', lookupErr);
+         }
+       }
+     }
 
-    const { error: upsertError } = await upsertProfileSafely({
-      user_id: userId,
-      email: authUser.email || email,
-      full_name: fullName,
-      phone,
-      role,
-      institution_id: institutionId,
-      department: userData.department || null,
-      semester: userData.semester || null,
-      programme: userData.programme || null,
-      campus_block: userData.campus_block || null,
-    });
+     if (!institutionId) {
+       console.warn('[Auth] verifyOtp: institution_id is NULL after all resolution attempts | userId:', userId, '| institution_code:', pendingProfile?.institutionCode || userData.institution_code || 'NULL');
+     }
 
-    if (upsertError) {
-      console.error('[Auth] Profile upsert error:', upsertError.message);
-      return { error: new Error(upsertError.message), profile: null, institution: null };
-    }
+     // Profile creation MUST happen only AFTER email verification has succeeded.
+     console.info('[Auth] Creating/upserting profile | userId:', userId, '| role:', role, '| institution_id:', institutionId || 'NULL', '| email:', authUser.email);
 
-    const fetchedProfile = await fetchProfile(userId);
-    setPendingRegistrationProfile(null);
+     const { error: upsertError } = await upsertProfileSafely({
+       user_id: userId,
+       email: authUser.email || normalizedEmail,
+       full_name: fullName,
+       phone,
+       role,
+       institution_id: institutionId,
+       department: userData.department || null,
+       semester: userData.semester || null,
+       programme: userData.programme || null,
+       campus_block: userData.campus_block || null,
+     });
 
-    let fetchedInstitution: InstitutionData | null = null;
+     if (upsertError) {
+       console.error('[Auth] Profile upsert error | userId:', userId, '| reason:', upsertError.message);
+       return { error: new Error(upsertError.message), profile: null, institution: null };
+     }
 
-    if (institutionId) {
-      console.log('[Auth] Loading institution by id:', institutionId);
-      const { data: instData, error: instError } = await supabase
-        .from('institutions')
-        .select('id, name, campus, city, state, country, institution_code')
-        .eq('id', institutionId)
-        .maybeSingle();
+     console.info('[Auth] Profile upsert succeeded | userId:', userId);
+
+     const fetchedProfile = await fetchProfile(userId);
+     setPendingRegistrationProfile(null);
+     if (!fetchedProfile) {
+       console.error('[Auth] Profile fetch returned NULL immediately after a successful upsert | userId:', userId);
+     }
+
+     let fetchedInstitution: InstitutionData | null = null;
+
+     if (institutionId) {
+       console.info('[Auth] Loading institution by id:', institutionId);
+       const { data: instData, error: instError } = await supabase
+         .from('institutions')
+         .select('id, name, campus, city, state, country, institution_code')
+         .eq('id', institutionId)
+         .maybeSingle();
 
       if (instError) {
         console.error('[Auth] Institution fetch by id error:', instError.message);

@@ -341,29 +341,32 @@ const handleLoginInstitutionVerify = async () => {
 
   if (!isOpen) return null;
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCurrentEmail(loginEmail);
-    setLoginError(null);
-    setInstitutionError(null);
-    setStep('form');
+   const handleLoginSubmit = async (e: React.FormEvent) => {
+     e.preventDefault();
+     const normalizedLoginEmail = (loginEmail || '').trim().toLowerCase();
+     setCurrentEmail(normalizedLoginEmail);
+     setLoginError(null);
+     setInstitutionError(null);
+     setStep('form');
+     console.info('[Auth] Login attempt for:', normalizedLoginEmail);
 
-    const { error, session: authSession, user: authUser, profile: liveProfile } = await signIn(loginEmail, loginPassword);
-    // Sessions persist automatically via Supabase — no need for rememberMe flag
+     const { error, session: authSession, user: authUser, profile: liveProfile } = await signIn(normalizedLoginEmail, loginPassword);
+     // Sessions persist automatically via Supabase — no need for rememberMe flag
 
-    if (error) {
-      const msg = error.message.toLowerCase();
-      if (msg.includes('invalid login') || msg.includes('invalid credentials')) {
-        setLoginError('Invalid email or password. Please check your credentials and try again.');
-      } else if (msg.includes('email not confirmed')) {
-        setLoginError('Please verify your email before signing in. Check your inbox for a verification link.');
-      } else if (msg.includes('rate limit')) {
-        setLoginError('Too many login attempts. Please wait a moment and try again.');
-      } else {
-        setLoginError(error.message);
-      }
-      return;
-    }
+     if (error) {
+       const msg = error.message.toLowerCase();
+       console.error('[Auth] Login rejected:', error.message);
+       if (msg.includes('invalid login') || msg.includes('invalid credentials')) {
+         setLoginError('Invalid email or password. Please check your credentials and try again.');
+       } else if (msg.includes('email not confirmed')) {
+         setLoginError('Please verify your email before signing in. Check your inbox for the OTP emailed after registration.');
+       } else if (msg.includes('rate limit')) {
+         setLoginError('Too many login attempts. Please wait a moment and try again.');
+       } else {
+         setLoginError(error.message);
+       }
+       return;
+     }
 
     if (!authUser) {
       setLoginError('Unable to sign in. Please try again or contact support.');
@@ -438,7 +441,8 @@ const handleLoginInstitutionVerify = async () => {
 
     const currentForm = getCurrentForm();
 
-    setCurrentEmail(currentForm.universityEmail);
+    const normalizedEmail = (currentForm.universityEmail || '').trim().toLowerCase();
+    setCurrentEmail(normalizedEmail);
     setInstitutionError(null);
     setOtpError(null);
 
@@ -471,9 +475,10 @@ if (validateError || !validatedInst) {
     setValidatingCode(false);
 
     setRegistrationPhase('sending');
+    console.info('[Auth] Calling signUpWithPassword | email:', normalizedEmail, '| institution_id:', validatedInst.institution_id);
     // PRODUCTION FIX: Pass institution_id directly so verifyOtp can always resolve it,
     // even if React context state gets stale or is reset between steps.
-    const { error } = await signUpWithPassword(currentForm.universityEmail, currentForm.password, currentForm.fullName, selectedAccountRole, {
+    const { error } = await signUpWithPassword(normalizedEmail, currentForm.password, currentForm.fullName, selectedAccountRole, {
       institutionCode: currentForm.institutionCode,
       institutionId: validatedInst.institution_id, // Direct UUID — never NULL
       phone: currentForm.phone,
@@ -486,68 +491,92 @@ if (validateError || !validatedInst) {
     });
 
     if (error) {
-      setInstitutionError(error.message || 'Registration failed');
+      console.error('[Auth] signUpWithPassword rejected:', error.message);
+      setInstitutionError(error.message || 'Registration failed. Please try again.');
       setRegistrationPhase('idle');
       return;
     }
 
+    console.info('[Auth] signUpWithPassword succeeded; OTP email dispatched to:', normalizedEmail);
     setRegistrationPhase('sent');
     setOtpError(null);
     setStep('otp');
   };
   const handleResendOtp = async () => {
     if (!currentEmail || registrationPhase === 'sending') return;
+    const normalizedEmail = currentEmail.trim().toLowerCase();
     setOtpError(null);
     setRegistrationPhase('sending');
+    console.info('[Auth] Resending OTP email for:', normalizedEmail);
     try {
-      const { error } = await supabase.auth.resend({
-        email: currentEmail,
-        type: 'signup',
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      // PRODUCTION FIX: the OTP for this flow is issued by signInWithOtp
+      // (Magic Link template), NOT by a signup confirmation. Using
+      // `resend({ type: 'signup' })` would silently do nothing because no
+      // signup-confirmation email was ever sent (Confirm Email is OFF).
+      const { error } = await supabase.auth.signInWithOtp({
+        email: normalizedEmail,
+        options: { shouldCreateUser: false },
       });
       if (error) {
-        setOtpError(error.message.includes('rate limit')
-          ? 'Too many requests. Please wait a few minutes.'
-          : 'Failed to resend OTP. Please try again.');
+        console.error('[Auth] OTP resend (signInWithOtp) failed:', error.name, '-', error.message);
+        setOtpError(error.message?.toLowerCase().includes('rate limit')
+          ? 'Too many requests. Please wait a few minutes before requesting another OTP.'
+          : (error.message || 'Failed to resend OTP. Please try again.'));
         setRegistrationPhase('sent');
         return;
       }
+      console.info('[Auth] OTP email resent successfully for:', normalizedEmail);
       setRegistrationPhase('sent');
-    } catch {
-      setOtpError('Network error. Please check your connection.');
+    } catch (err: any) {
+      console.error('[Auth] OTP resend threw:', err?.message || err);
+      setOtpError('Network error. Please check your connection and try again.');
       setRegistrationPhase('sent');
     }
   };
 
    const handleVerifyOtp = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (otpCode.length < 8) {
-        setOtpError('Please enter a valid 8-digit OTP code');
+
+      const normalizedEmail = currentEmail.trim().toLowerCase();
+      const normalizedToken = otpCode.trim();
+      console.info('[Auth] OTP submit | email:', normalizedEmail, '| token length:', normalizedToken.length);
+
+      // Supabase OTP tokens are 6 digits by default (configurable to 8 in the
+      // Supabase dashboard). Accept any token between 6 and 8 digits so the
+      // form works regardless of that dashboard setting.
+      if (normalizedToken.length < 6 || normalizedToken.length > 8) {
+        setOtpError('Please enter the verification code sent to your email.');
         return;
       }
 
-      const { error, profile: liveProfile, institution } = await verifyOtp(currentEmail, otpCode);
+      const { error, profile: liveProfile, institution } = await verifyOtp(normalizedEmail, normalizedToken);
 
       if (error) {
-        setOtpError(error.message || 'OTP verification failed. Please check your code and try again.');
+        console.error('[Auth] OTP verification rejected:', error.message);
+        setOtpError(error.message || 'OTP verification failed. Please check the code and try again.');
         return;
       }
 
       if (!liveProfile) {
-        setOtpError('Unable to set up your profile. Please contact support.');
+        const detail = '[Auth] verifyOtp resolved but profile fetch returned null. Check Supabase logs for the underlying upsert/fetch error.';
+        console.error(detail);
+        setOtpError('Unable to set up your profile. Please try signing in again or contact support. (Details: profile resolution failed after verification.)');
         return;
       }
 
+      console.info('[Auth] OTP verified and profile ready | user:', liveProfile.user_id, '| institution:', institution?.institution_id || 'NULL');
       setRegistrationPhase('idle');
 
       if (institution?.institution_code) {
         setInstitutionVerifyCode(institution.institution_code);
+        setVerifiedInstitution(institution);
+        setValidatedInstitution(institution);
       }
 
       if (onLoginSuccess) {
         onLoginSuccess({ profile: liveProfile, institution: institution || null });
       }
-    };
+   };
 
   const handleBack = () => {
     if (step === 'otp') {
@@ -979,10 +1008,11 @@ onChange={(e) => {
                 <KeyRound className="w-6 h-6" />
               </div>
               <h3 className="text-xl font-extrabold text-white">Verify Your Email OTP</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                We sent an 8-digit security code to{' '}
-                <strong className="text-emerald-400">{currentEmail || ''}</strong>
-              </p>
+               <p className="text-xs text-slate-300 leading-relaxed">
+                 We sent a security code to{' '}
+                 <strong className="text-emerald-400">{currentEmail || ''}</strong>
+                 . Check your inbox (and spam folder) and enter the code below.
+               </p>
             </div>
 
             {validatedInstitution && (
@@ -1006,20 +1036,21 @@ onChange={(e) => {
               </div>
             )}
 
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block text-center">
-                  8-Digit Verification Code
-                </label>
-                <input
-                  type="text"
-                  maxLength={8}
-                  required
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value)}
-                  className="w-full bg-slate-950 border border-emerald-500/60 focus:border-emerald-400 rounded-2xl py-3 text-center text-xl font-mono tracking-[0.5em] text-emerald-300 font-bold focus:outline-none shadow-inner"
-                />
-              </div>
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+               <div>
+                 <label className="text-xs font-semibold text-slate-300 mb-1 block text-center">
+                   Verification Code
+                 </label>
+                 <input
+                   type="text"
+                   inputMode="numeric"
+                   maxLength={8}
+                   required
+                   value={otpCode}
+                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                   className="w-full bg-slate-950 border border-emerald-500/60 focus:border-emerald-400 rounded-2xl py-3 text-center text-xl font-mono tracking-[0.5em] text-emerald-300 font-bold focus:outline-none shadow-inner"
+                 />
+               </div>
 
               <button
                 type="submit"
@@ -1029,20 +1060,20 @@ onChange={(e) => {
                 <span>Verify & Join Campus Portal</span>
               </button>
 
-              <div className="text-center text-xs text-slate-400">
-                Didn't receive code?{' '}
-              <button
-                type="button"
-                onClick={handleResendOtp}
-                disabled={registrationPhase === 'sending'}
-                className="text-emerald-400 font-bold hover:underline cursor-pointer disabled:text-slate-500"
-              >
-                {registrationPhase === 'sending' ? 'Sending...' : 'Resend OTP'}
-              </button>
-              </div>
-            </form>
-          </div>
-        )}
+               <div className="text-center text-xs text-slate-400">
+                 Didn't receive code? Check your spam/junk folder.{' '}
+               <button
+                 type="button"
+                 onClick={handleResendOtp}
+                 disabled={registrationPhase === 'sending'}
+                 className="text-emerald-400 font-bold hover:underline cursor-pointer disabled:text-slate-500 inline-block"
+               >
+                 {registrationPhase === 'sending' ? 'Sending...' : 'Resend OTP'}
+               </button>
+               </div>
+             </form>
+           </div>
+         )}
 
         {/* INSTITUTION CODE VERIFICATION STEP (for institution_admin login) */}
         {step === 'institution_verify' && (

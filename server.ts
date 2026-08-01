@@ -174,12 +174,14 @@ Important rules:
       }
 
       const inst = rows[0];
+      const institutionName = inst.institution_name || inst.name || '';
       return res.json({
         success: true,
         valid: true,
         institution: {
           id: inst.id,
-          name: inst.name || '',
+          name: institutionName,
+          institution_name: institutionName,
           code: inst.institution_code || '',
           status: inst.status || 'active',
           campus: inst.campus || '',
@@ -190,7 +192,7 @@ Important rules:
       });
     } catch (err: any) {
       console.error('[Institutions] Validate error:', err);
-      return res.status(500).json({ success: false, valid: false, message: 'Unexpected server error.' });
+      return res.status(500).json({ success: false, valid: false, message: err?.message || 'Unexpected server error.' });
     }
   });
 

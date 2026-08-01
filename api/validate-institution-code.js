@@ -124,12 +124,15 @@ export default async function handler(req, res) {
       });
     }
 
+    const institutionName = inst.institution_name || inst.name || '';
+
     return res.status(200).json({
       success: true,
       valid: true,
       institution: {
         id: inst.id,
-        name: inst.name || '',
+        name: institutionName,
+        institution_name: institutionName,
         code: inst.institution_code || '',
         status: inst.status || 'active',
         campus: inst.campus || '',
@@ -143,7 +146,7 @@ export default async function handler(req, res) {
     return res.status(500).json({
       success: false,
       valid: false,
-      message: 'Unexpected server error.'
+      message: err?.message || 'Unexpected server error.'
     });
   }
 }

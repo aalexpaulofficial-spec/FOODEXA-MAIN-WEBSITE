@@ -106,7 +106,7 @@ Important rules:
     try {
       const { code } = req.body;
       if (!code || typeof code !== 'string' || !code.trim()) {
-        return res.status(400).json({ valid: false, message: 'Institution code is required.' });
+        return res.status(400).json({ success: false, valid: false, message: 'Institution code is required.' });
       }
 
       const supabaseServerKey = supabaseServiceKey || supabaseAnonKey;
@@ -114,6 +114,7 @@ Important rules:
       if (!supabaseUrl || !supabaseServerKey) {
         console.error('[Institutions] Missing Supabase server environment variables');
         return res.status(503).json({
+          success: false,
           valid: false,
           message: 'Institution verification is not configured yet. Please contact Foodexa support.',
           code: 'MISSING_SUPABASE_SERVER_ENV',
@@ -124,7 +125,7 @@ Important rules:
 
       // Use the service role key so RLS is bypassed for this public lookup
       // Query with status='active' filter
-      const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/institutions?institution_code=eq.${encodeURIComponent(trimmed)}&status=eq.active&select=id,name,campus,city,state,country,institution_code&limit=1`;
+      const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/institutions?institution_code=eq.${encodeURIComponent(trimmed)}&status=eq.active&select=id,name,campus,city,state,country,institution_code,status&limit=1`;
       const resp = await fetch(url, {
         headers: {
           'apikey': supabaseServerKey,
@@ -139,6 +140,7 @@ Important rules:
         const isMissingTable = resp.status === 404 || errText.includes('PGRST205') || errText.includes('Could not find the table');
         if (isMissingTable) {
           return res.status(503).json({
+            success: false,
             valid: false,
             message: 'Institution verification is being set up. Please try again after the Foodexa database is updated.',
             code: 'INSTITUTIONS_TABLE_MISSING',
@@ -147,13 +149,15 @@ Important rules:
 
         if (!supabaseServiceKey && (resp.status === 401 || resp.status === 403)) {
           return res.status(503).json({
+            success: false,
             valid: false,
             message: 'Institution verification needs the server Supabase service key in Vercel.',
             code: 'SUPABASE_SERVICE_KEY_REQUIRED',
           });
         }
 
-        return res.status(502).json({
+        return res.status(500).json({
+          success: false,
           valid: false,
           message: 'Unable to verify Institution Code. Please try again.',
           code: 'SUPABASE_LOOKUP_FAILED',
@@ -162,23 +166,31 @@ Important rules:
 
       const rows = await resp.json();
       if (!rows || rows.length === 0) {
-        return res.status(404).json({ valid: false, message: 'Institution code not found.' });
+        return res.status(200).json({
+          success: false,
+          valid: false,
+          message: 'Institution code not found.'
+        });
       }
 
       const inst = rows[0];
       return res.json({
+        success: true,
         valid: true,
-        institution_name: inst.name || '',
-        institution_id: inst.id,
-        campus: inst.campus || '',
-        city: inst.city || '',
-        state: inst.state || '',
-        country: inst.country || '',
-        institution_code: inst.institution_code || '',
+        institution: {
+          id: inst.id,
+          name: inst.name || '',
+          code: inst.institution_code || '',
+          status: inst.status || 'active',
+          campus: inst.campus || '',
+          city: inst.city || '',
+          state: inst.state || '',
+          country: inst.country || ''
+        }
       });
     } catch (err: any) {
       console.error('[Institutions] Validate error:', err);
-      return res.status(500).json({ valid: false, message: 'Unexpected server error.' });
+      return res.status(500).json({ success: false, valid: false, message: 'Unexpected server error.' });
     }
   });
 

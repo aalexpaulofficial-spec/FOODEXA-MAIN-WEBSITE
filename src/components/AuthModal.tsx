@@ -230,7 +230,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     institutionCodeTimerRef.current = setTimeout(async () => {
       const { error, data } = await validateInstitutionCode(trimmed);
       if (error || !data) {
-        setInstitutionError('Invalid Institution Code');
+        setInstitutionError(error || 'Invalid Institution Code');
         setValidatedInstitution(null);
       } else {
         setValidatedInstitution(data);
@@ -249,7 +249,7 @@ const handleLoginInstitutionVerify = async () => {
 
       const { error: validateError, data: liveInstitution } = await validateInstitutionCode(code);
       if (validateError || !liveInstitution) {
-        setInstitutionError('Invalid Institution Code');
+        setInstitutionError(validateError || 'Invalid Institution Code');
         setValidatedInstitution(null);
         return;
       }
@@ -458,11 +458,11 @@ const handleLoginInstitutionVerify = async () => {
     const { error: validateError, data: validatedInst } = await validateInstitutionCode(currentForm.institutionCode);
 
 if (validateError || !validatedInst) {
-       setInstitutionError('Invalid Institution Code');
-       setValidatingCode(false);
-       setRegistrationPhase('idle');
-       return;
-     }
+        setInstitutionError(validateError || 'Invalid Institution Code');
+        setValidatingCode(false);
+        setRegistrationPhase('idle');
+        return;
+      }
 
     setRegistrationPhase('connecting');
     setValidatedInstitution(validatedInst);
@@ -742,14 +742,14 @@ onChange={(e) => {
                       )}
                     </div>
 {institutionError && !validatingCode && (
-                       <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code</p>
+                       <p className="text-[10px] text-red-400 mt-1">✗ {institutionError}</p>
                      )}
                      {!institutionError && validatedInstitution && !validatingCode && (
                        <div className="text-[10px] text-emerald-400 mt-1 space-y-0.5">
                          <p>✓ Institution Verified</p>
                          <p className="text-emerald-500">{validatedInstitution.institution_name}</p>
                          <p className="text-emerald-500">Campus: {validatedInstitution.campus || 'N/A'}</p>
-                         <p className="text-emerald-500">Type: {validatedInstitution.institution_type || 'N/A'}</p>
+                         <p className="text-emerald-500">Status: Active</p>
                        </div>
                      )}
                   </div>
@@ -1074,14 +1074,14 @@ onChange={(e) => handleInstitutionCodeChange(e.target.value)}
                   )}
                 </div>
 {institutionError && !validatingCode && (
-                   <p className="text-[10px] text-red-400 mt-1">✗ Invalid Institution Code</p>
+                   <p className="text-[10px] text-red-400 mt-1">✗ {institutionError}</p>
                  )}
                  {validatedInstitution && !institutionError && !validatingCode && (
                    <div className="text-[10px] text-emerald-400 mt-1 space-y-0.5">
                      <p>✓ Institution Verified</p>
                      <p className="text-emerald-500">{validatedInstitution.institution_name}</p>
                      <p className="text-emerald-500">Campus: {validatedInstitution.campus || 'N/A'}</p>
-                     <p className="text-emerald-500">Type: {validatedInstitution.institution_type || 'N/A'}</p>
+                     <p className="text-emerald-500">Status: Active</p>
                    </div>
                  )}
               </div>

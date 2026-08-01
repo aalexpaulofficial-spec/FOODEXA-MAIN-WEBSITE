@@ -312,28 +312,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const json = await resp.json().catch(() => ({}));
 
       if (!resp.ok) {
-        return { error: json.message || 'Invalid Institution Code. Please check and try again.', data: null };
+        return { error: json.message || 'Unable to validate institution. Please try again.', data: null };
       }
 
       if (!json.valid) {
-        return { error: json.message || 'Invalid Institution Code. Please check and try again.', data: null };
+        return { error: json.message || 'Invalid Institution Code', data: null };
       }
 
-      if (!json.institution_id || typeof json.institution_id !== 'string' || json.institution_id.length < 10) {
-        console.error('[Auth] validateInstitutionCode: invalid institution_id returned:', json.institution_id);
+      if (!json.success || !json.institution || !json.institution.id || typeof json.institution.id !== 'string' || json.institution.id.length < 10) {
+        console.error('[Auth] validateInstitutionCode: invalid institution returned:', json.institution);
         return { error: 'Institution data is invalid. Please contact support.', data: null };
       }
 
       return {
         error: null,
         data: {
-          institution_id: json.institution_id,
-          institution_name: json.institution_name || '',
-          campus: json.campus || '',
-          city: json.city || '',
-          state: json.state || '',
-          country: json.country || '',
-          institution_code: json.institution_code || '',
+          institution_id: json.institution.id,
+          institution_name: json.institution.name || '',
+          campus: json.institution.campus || '',
+          city: json.institution.city || '',
+          state: json.institution.state || '',
+          country: json.institution.country || '',
+          institution_code: json.institution.code || '',
         } as InstitutionData,
       };
     } catch (err: any) {

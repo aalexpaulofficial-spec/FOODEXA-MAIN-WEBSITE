@@ -43,8 +43,8 @@ export default async function handler(req, res) {
 
     const trimmed = String(code).trim().toUpperCase();
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = (process.env.SUPABASE_URL || '').replace(/[^\x20-\x7E]/g, '').trim();
+    const supabaseServiceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').replace(/[^\x20-\x7E]/g, '').trim();
 
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error('[validate-institution-code] Missing Supabase server environment variables:', {

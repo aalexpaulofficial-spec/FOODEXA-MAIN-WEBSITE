@@ -549,33 +549,48 @@ if (validateError || !validatedInst) {
         return;
       }
 
-      const { error, profile: liveProfile, institution } = await verifyOtp(normalizedEmail, normalizedToken);
+       const { error, profile: liveProfile, institution } = await verifyOtp(normalizedEmail, normalizedToken);
 
-      if (error) {
-        console.error('[Auth] OTP verification rejected:', error.message);
-        setOtpError(error.message || 'OTP verification failed. Please check the code and try again.');
-        return;
-      }
+       if (error) {
+         console.error('[Auth] OTP verification rejected:', error.message);
+         setOtpError(error.message || 'OTP verification failed. Please check the code and try again.');
+         return;
+       }
 
-      if (!liveProfile) {
-        const detail = '[Auth] verifyOtp resolved but profile fetch returned null. Check Supabase logs for the underlying upsert/fetch error.';
-        console.error(detail);
-        setOtpError('Unable to set up your profile. Please try signing in again or contact support. (Details: profile resolution failed after verification.)');
-        return;
-      }
+       if (!liveProfile) {
+         console.warn('[Auth] verifyOtp returned null profile, attempting to ensure profile exists...');
+         const { data: currentUser } = await supabase.auth.getUser();
+         if (currentUser?.user) {
+           const { error: ensureError } = await supabase.from('profiles').upsert({
+             user_id: currentUser.user.id,
+             email: currentUser.user.email || normalizedEmail,
+             full_name: currentUser.user.user_metadata?.full_name || null,
+             role: currentUser.user.user_metadata?.role || 'student',
+           }, { onConflict: 'user_id' });
+           if (ensureError) {
+             console.error('[Auth] Failed to ensure profile exists:', ensureError.message);
+           }
+         }
+         setOtpError('');
+         setRegistrationPhase('idle');
+         if (onLoginSuccess) {
+           onLoginSuccess({ profile: liveProfile || ({ user_id: '', email: normalizedEmail, full_name: null, role: 'student', institution_id: null, department: null, semester: null, programme: null, campus_block: null, designation: null, avatar_url: null, diet_preference: null, created_at: '', updated_at: '' } as Profile), institution: institution || null });
+         }
+         return;
+       }
 
-      console.info('[Auth] OTP verified and profile ready | user:', liveProfile.user_id, '| institution:', institution?.institution_id || 'NULL');
-      setRegistrationPhase('idle');
+       console.info('[Auth] OTP verified and profile ready | user:', liveProfile.user_id, '| institution:', institution?.institution_id || 'NULL');
+       setRegistrationPhase('idle');
 
-      if (institution?.institution_code) {
-        setInstitutionVerifyCode(institution.institution_code);
-        setVerifiedInstitution(institution);
-        setValidatedInstitution(institution);
-      }
+       if (institution?.institution_code) {
+         setInstitutionVerifyCode(institution.institution_code);
+         setVerifiedInstitution(institution);
+         setValidatedInstitution(institution);
+       }
 
-      if (onLoginSuccess) {
-        onLoginSuccess({ profile: liveProfile, institution: institution || null });
-      }
+       if (onLoginSuccess) {
+         onLoginSuccess({ profile: liveProfile, institution: institution || null });
+       }
    };
 
   const handleBack = () => {

@@ -83,35 +83,103 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return institution;
   }, []);
 
-  const PROFILE_COLUMNS = 'user_id, email, full_name, phone, role, institution_id, department, semester, programme, campus_block, avatar_url, diet_preference';
-
-  const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
-    try {
-       const { data, error } = await supabase
-         .from('profiles')
-         .select(PROFILE_COLUMNS)
-         .eq('user_id', userId)
-         .maybeSingle();
-
-       if (error) {
-         console.error('[Auth] Profile fetch error:', error.message);
-         return null;
+    const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
+        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'diet_preference'];
+       const safePayload: Record<string, any> = {};
+       for (const key of KNOWN_PROFILE_COLUMNS) {
+         if (key in payload) {
+           safePayload[key] = payload[key];
+         }
        }
 
-      if (data) {
-        const fetchedProfile = { ...data, created_at: '', updated_at: '' } as Profile;
-        setProfile(fetchedProfile);
-        await loadInstitutionForProfile(fetchedProfile);
-        return fetchedProfile;
-      }
-    } catch (err: any) {
-      console.error('[Auth] Profile fetch threw an exception:', err?.message || err);
-    }
+       const { error } = await supabase
+         .from('profiles')
+         .upsert(safePayload, { onConflict: 'user_id' });
 
-    setProfile(null);
-    setInstitutionData(null);
-    return null;
-  }, [loadInstitutionForProfile]);
+       if (error) {
+         console.error('[Auth] Profile upsert DB error:', error.message);
+         const friendlyMessage = error.message.includes('duplicate key')
+           ? 'Your profile already exists. Please try logging in.'
+           : error.message.includes('violates row-level security')
+             ? 'Unable to create profile (permission denied). Ensure the `profiles` table allows authenticated inserts, then contact support.'
+             : error.message;
+         return { error: new Error(friendlyMessage) };
+       }
+
+       return { error: null as Error | null };
+     }, []);
+
+   const PROFILE_COLUMNS = 'user_id, email, full_name, phone, role, institution_id, department, semester, programme, campus_block, designation, diet_preference';
+
+    const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
+      try {
+         const { data, error } = await supabase
+           .from('profiles')
+           .select(PROFILE_COLUMNS)
+           .eq('user_id', userId)
+           .maybeSingle();
+
+         if (error) {
+           console.error('[Auth] Profile fetch error:', error.message);
+         }
+
+        if (data) {
+          const fetchedProfile = { ...data, created_at: '', updated_at: '' } as Profile;
+          setProfile(fetchedProfile);
+          await loadInstitutionForProfile(fetchedProfile);
+          return fetchedProfile;
+        }
+
+        const { data: userData } = await supabase.auth.getUser();
+        const authUser = userData?.user;
+        if (!authUser) return null;
+
+        console.info('[Auth] Profile missing for user, auto-creating:', userId);
+
+        const role = normalizeRole(authUser.user_metadata?.role);
+        const fullName = authUser.user_metadata?.full_name || null;
+        const phone = authUser.user_metadata?.phone || null;
+
+        const { error: upsertError } = await upsertProfileSafely({
+          user_id: userId,
+          email: authUser.email || '',
+          full_name: fullName,
+          phone,
+          role,
+          institution_id: null,
+          department: null,
+          semester: null,
+          programme: null,
+          campus_block: null,
+          designation: null,
+        });
+
+        if (upsertError) {
+          console.error('[Auth] Auto-create profile failed:', upsertError.message);
+          return null;
+        }
+
+        const { data: newProfile, error: fetchError } = await supabase
+          .from('profiles')
+          .select(PROFILE_COLUMNS)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (fetchError || !newProfile) {
+          console.error('[Auth] Re-fetch after auto-create failed:', fetchError?.message);
+          return null;
+        }
+
+        const createdProfile = { ...newProfile, created_at: '', updated_at: '' } as Profile;
+        setProfile(createdProfile);
+        await loadInstitutionForProfile(createdProfile);
+        return createdProfile;
+      } catch (err: any) {
+        console.error('[Auth] Profile fetch threw an exception:', err?.message || err);
+      }
+
+      return null;
+    }, [loadInstitutionForProfile, upsertProfileSafely]);
 
   const refreshProfile = useCallback(async () => {
     if (user) {
@@ -119,38 +187,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [fetchProfile, user]);
 
-  const setPendingRegistrationProfile = useCallback((value: typeof pendingOtpProfile) => {
-    pendingOtpProfileRef.current = value;
-    setPendingOtpProfile(value);
-  }, []);
+   const setPendingRegistrationProfile = useCallback((value: typeof pendingOtpProfile) => {
+     pendingOtpProfileRef.current = value;
+     setPendingOtpProfile(value);
+   }, []);
 
-   const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-       const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'avatar_url', 'diet_preference'];
-      const safePayload: Record<string, any> = {};
-      for (const key of KNOWN_PROFILE_COLUMNS) {
-        if (key in payload) {
-          safePayload[key] = payload[key];
-        }
-      }
-
-      const { error } = await supabase
-        .from('profiles')
-        .upsert(safePayload, { onConflict: 'user_id' });
-
-      if (error) {
-        console.error('[Auth] Profile upsert DB error:', error.message);
-        const friendlyMessage = error.message.includes('duplicate key')
-          ? 'Your profile already exists. Please try logging in.'
-          : error.message.includes('violates row-level security')
-            ? 'Unable to create profile (permission denied). Ensure the `profiles` table allows authenticated inserts, then contact support.'
-            : error.message;
-        return { error: new Error(friendlyMessage) };
-      }
-
-      return { error: null as Error | null };
-    }, []);
-
-  // ── Session initialization — Supabase handles persistence natively ────────
+   // ── Session initialization — Supabase handles persistence natively ────────
   useEffect(() => {
     const initAuth = async () => {
       const { data: { session: existingSession } } = await supabase.auth.getSession();
@@ -506,15 +548,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        return { error: new Error(upsertError.message), profile: null, institution: null };
      }
 
-     console.info('[Auth] Profile upsert succeeded | userId:', userId);
+      console.info('[Auth] Profile upsert succeeded | userId:', userId);
 
-     const fetchedProfile = await fetchProfile(userId);
-     setPendingRegistrationProfile(null);
-     if (!fetchedProfile) {
-       console.error('[Auth] Profile fetch returned NULL immediately after a successful upsert | userId:', userId);
-     }
+      let fetchedProfile = await fetchProfile(userId);
 
-     let fetchedInstitution: InstitutionData | null = null;
+      if (!fetchedProfile) {
+        console.warn('[Auth] Profile fetch returned NULL after upsert, retrying once...');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        fetchedProfile = await fetchProfile(userId);
+      }
+
+      if (!fetchedProfile) {
+        console.warn('[Auth] Profile still missing after retry, auto-creating minimal profile...');
+        const { data: currentUser } = await supabase.auth.getUser();
+        const currentUserId = currentUser?.user?.id;
+        if (currentUserId) {
+          const { error: recreateError } = await upsertProfileSafely({
+            user_id: currentUserId,
+            email: currentUser.user?.email || normalizedEmail,
+            full_name: fullName,
+            phone,
+            role,
+            institution_id: institutionId,
+            department: userData.department || null,
+            semester: userData.semester || null,
+            programme: userData.programme || null,
+            campus_block: userData.campus_block || null,
+          });
+          if (!recreateError) {
+            fetchedProfile = await fetchProfile(currentUserId);
+          }
+        }
+      }
+
+      setPendingRegistrationProfile(null);
+
+      let fetchedInstitution: InstitutionData | null = null;
 
      if (institutionId) {
        console.info('[Auth] Loading institution by id:', institutionId);
@@ -540,8 +609,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }
 
-    return { error: null, profile: fetchedProfile, institution: fetchedInstitution };
-  };
+     return { error: null, profile: fetchedProfile, institution: fetchedInstitution };
+   };
+
+   const ensureProfileExists = async (userId: string): Promise<Profile | null> => {
+     const existing = await fetchProfile(userId);
+     if (existing) return existing;
+
+     const { data: currentUser } = await supabase.auth.getUser();
+     const currentUserId = currentUser?.user?.id;
+     if (!currentUserId) return null;
+
+     console.info('[Auth] ensureProfileExists: auto-creating minimal profile for:', currentUserId);
+     const { error: recreateError } = await upsertProfileSafely({
+       user_id: currentUserId,
+       email: currentUser.user?.email || '',
+       full_name: currentUser.user?.user_metadata?.full_name || null,
+       phone: currentUser.user?.user_metadata?.phone || null,
+       role: normalizeRole(currentUser.user?.user_metadata?.role),
+       institution_id: null,
+       department: null,
+       semester: null,
+       programme: null,
+       campus_block: null,
+     });
+     if (recreateError) return null;
+     return await fetchProfile(currentUserId);
+   };
 
   const clearAllSessionData = () => {
     const keysToRemove: string[] = [];

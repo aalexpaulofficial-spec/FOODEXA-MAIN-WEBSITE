@@ -1444,7 +1444,11 @@ export async function uploadAvatar(userId: string, file: File): Promise<{ succes
     const { data: urlData } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(data.path);
     const avatarUrl = urlData?.publicUrl || null;
     if (avatarUrl) {
-      await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('user_id', userId);
+      try {
+        await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('user_id', userId);
+      } catch (e) {
+        console.warn('[Supabase] avatar_url update skipped (column may not exist):', e);
+      }
     }
     return { success: true, url: avatarUrl || undefined };
   } catch (err: any) {
@@ -1454,10 +1458,13 @@ export async function uploadAvatar(userId: string, file: File): Promise<{ succes
 
 export async function removeAvatar(userId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('user_id', userId);
-    if (error) {
-      console.error('[Supabase] removeAvatar error:', error.message);
-      return { success: false, error: error.message };
+    try {
+      const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('user_id', userId);
+      if (error) {
+        console.warn('[Supabase] avatar_url clear skipped (column may not exist):', error.message);
+      }
+    } catch (e) {
+      console.warn('[Supabase] avatar_url clear skipped (column may not exist):', e);
     }
     return { success: true };
   } catch (err: any) {

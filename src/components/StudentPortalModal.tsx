@@ -20,9 +20,14 @@ import {
   calculateCartTotals, validateCoupon, applyCouponUsage,
   fetchUserFavorites, toggleFavorite, fetchAIRecommendations, getOrderProgress, getEstimatedTimeRemaining, generateReceipt,
   fetchUserCart, saveUserCart,
+  fetchCanteens, subscribeCanteens,
+  fetchUserAddresses, subscribeUserAddresses,
+  uploadAvatar as uploadAvatarService, removeAvatar as removeAvatarService,
+  addUserAddress, updateUserAddress, deleteUserAddress, setDefaultAddress,
+  updateDietPreference,
 } from '../lib/supabase-service';
 import { getTimelineLabel, getTimelineStage, isOrderCancelled, isOrderCompleted, STUDENT_TIMELINE_LABELS, STUDENT_TIMELINE_DESCRIPTIONS } from '../lib/orderTimeline';
-import type { MenuItem, Order, OrderStatus, NotificationItem, UserRole, CartItem, FoodFilters, CheckoutData } from '../types';
+import type { MenuItem, Order, OrderStatus, NotificationItem, UserRole, CartItem, FoodFilters, CheckoutData, Canteen, UserAddress, DietPreference } from '../types';
 import { PremiumHeader } from './StudentDashboard/PremiumHeader';
 import { PremiumBottomNav, PremiumTab } from './StudentDashboard/PremiumBottomNav';
 import { ExploreTab } from './StudentDashboard/ExploreTab';
@@ -511,9 +516,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [leavingInstitution, setLeavingInstitution] = useState(false);
   const [leaveInstitutionMessage, setLeaveInstitutionMessage] = useState<string | null>(null);
   
-  // Checkout States
-  const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'wallet' | 'cash'>('razorpay');
-  const [kitchenNotes, setKitchenNotes] = useState('');
+   // Checkout States
+   const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'wallet' | 'cash'>('razorpay');
+   const [kitchenNotes, setKitchenNotes] = useState('');
+
+   // Canteens & Addresses
+   const [canteens, setCanteens] = useState<Canteen[]>([]);
+   const [userAddresses, setUserAddresses] = useState<UserAddress[]>([]);
 
   // Completion & Detail States
   const [completionOrder, setCompletionOrder] = useState<Order | null>(null);
@@ -568,25 +577,35 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           const { data: cData } = await countersQuery;
           setCountersList((cData || []) as any[]);
 
-          // Fetch user favorites
-          if (user?.id) {
-            const favIds = await fetchUserFavorites(user.id);
-            setFavorites(new Set(favIds));
-          }
+         // Fetch user favorites
+           if (user?.id) {
+             const favIds = await fetchUserFavorites(user.id);
+             setFavorites(new Set(favIds));
+           }
 
-          // Fetch menu items — only for this student's institution
-          let menuQuery = supabase
-            .from('menu_items')
-            .select('*')
-            .order('food_name', { ascending: true });
-          if (instId) {
-            menuQuery = menuQuery.eq('institution_id', instId);
-          }
-          const menuResult = await menuQuery;
+           // Fetch menu items — only for this student's institution
+           let menuQuery = supabase
+             .from('menu_items')
+             .select('*')
+             .order('food_name', { ascending: true });
+           if (instId) {
+             menuQuery = menuQuery.eq('institution_id', instId);
+           }
+           const menuResult = await menuQuery;
 
-          if (!menuResult.error) {
-            setMenuItems((menuResult.data || []).map(mapMenuItem));
-          }
+           if (!menuResult.error) {
+             setMenuItems((menuResult.data || []).map(mapMenuItem));
+           }
+
+           // Fetch canteens for this institution
+           const canteenResult = await fetchCanteens(instId || undefined);
+           setCanteens(canteenResult);
+
+           // Fetch user addresses
+           if (user?.id) {
+             const addresses = await fetchUserAddresses(user.id);
+             setUserAddresses(addresses);
+           }
 
         // Fetch notifications — silently ignore RLS errors
         const notifResult = await supabase
@@ -711,13 +730,40 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       }, ...prev]);
       setUnreadNotif(c => c + 1);
 
-      // Show toast for real-time order updates
-      if (triggerToast && ['accepted', 'preparing', 'ready', 'completed'].includes(record.status)) {
-        triggerToast(notifTitle, notifMsg, record.status === 'completed' ? 'success' : 'info');
-      }
-    }, { user_id: user?.id });
+       // Show toast for real-time order updates
+       if (triggerToast && ['accepted', 'preparing', 'ready', 'completed'].includes(record.status)) {
+         triggerToast(notifTitle, notifMsg, record.status === 'completed' ? 'success' : 'info');
+       }
+     }, { user_id: user?.id });
 
-    return () => { unsubMenu(); unsubNotif(); unsubBanners(); unsubCounters(); unsubOrderNotifs(); };
+     // Realtime canteens subscription
+     const unsubCanteens = subscribeCanteens((payload: any) => {
+       const currentInstId = profile?.institution_id;
+       if (!currentInstId) return;
+       if (payload.eventType === 'INSERT' && payload.new?.institution_id === currentInstId && payload.new?.is_active) {
+         setCanteens((prev) => [...prev, payload.new]);
+       } else if (payload.eventType === 'UPDATE') {
+         setCanteens((prev) => prev.map((c) => c.id === payload.new.id ? payload.new : c));
+       } else if (payload.eventType === 'DELETE') {
+         setCanteens((prev) => prev.filter((c) => c.id !== payload.old.id));
+       }
+     }, profile?.institution_id || undefined);
+
+     // Realtime user addresses subscription
+     let unsubAddresses: (() => void) | undefined;
+     if (user?.id) {
+       unsubAddresses = subscribeUserAddresses(user.id, (payload: any) => {
+         if (payload.eventType === 'INSERT') {
+           setUserAddresses((prev) => [payload.new, ...prev]);
+         } else if (payload.eventType === 'UPDATE') {
+           setUserAddresses((prev) => prev.map((a) => a.id === payload.new.id ? payload.new : a));
+         } else if (payload.eventType === 'DELETE') {
+           setUserAddresses((prev) => prev.filter((a) => a.id !== payload.old.id));
+         }
+       });
+     }
+
+     return () => { unsubMenu(); unsubNotif(); unsubBanners(); unsubCounters(); unsubOrderNotifs(); unsubCanteens(); if (unsubAddresses) unsubAddresses(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, profile?.institution_id, user?.id]);
 
@@ -1261,7 +1307,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             ) : (
               <>
                 {/* ═══════════════════ PREMIUM TABS ═══════════════════ */}
-                {activeTab === 'explore' && (
+                 {activeTab === 'explore' && (
                   <ExploreTab
                     menuItems={menuItems}
                     filteredItems={filteredItems}
@@ -1275,6 +1321,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     setSearchQuery={setSearchQuery}
                     institutionName={institutionName}
                     dbBanners={banners}
+                    canteens={canteens}
                   />
                 )}
 
@@ -1340,16 +1387,86 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
                 {activeTab === 'profile' && (
                   <ProfileTab 
-                    profile={profile as any}
+                    profile={profile}
                     userEmail={user?.email}
+                    institutionData={institutionData}
                     institutionName={institutionName}
-                    institutionCode={institutionCode}
-                    liveRole={liveRole}
-                    ordersCount={orders.length}
-                    favoritesCount={favorites.size}
-                    avatarUrl={null}
-                    onEditProfile={() => {}}
+                    userAddresses={userAddresses}
+                    canteens={canteens}
                     onSignOut={() => signOut()}
+                    onEditProfileOpen={() => setEditingProfile(true)}
+                     onAddAddress={async (label, address, isDefault) => {
+                       if (!user?.id) return;
+                       const result = await addUserAddress(user.id, { label, address, institution_id: profile?.institution_id || null, is_default: isDefault });
+                       if (result.success) {
+                         const addresses = await fetchUserAddresses(user.id);
+                         setUserAddresses(addresses);
+                         triggerToast?.('Success', 'Delivery spot added', 'success');
+                       } else {
+                         triggerToast?.('Error', result.error || 'Failed to add address', 'error');
+                       }
+                     }}
+                     onUpdateAddress={async (id, label, address, isDefault) => {
+                       const result = await updateUserAddress(id, { label, address, is_default: isDefault });
+                      if (result.success) {
+                        if (user?.id) {
+                          const addresses = await fetchUserAddresses(user.id);
+                          setUserAddresses(addresses);
+                        }
+                        triggerToast?.('Success', 'Delivery spot updated', 'success');
+                      } else {
+                        triggerToast?.('Error', result.error || 'Failed to update address', 'error');
+                      }
+                    }}
+                    onDeleteAddress={async (id) => {
+                      const result = await deleteUserAddress(id);
+                      if (result.success) {
+                        if (user?.id) {
+                          const addresses = await fetchUserAddresses(user.id);
+                          setUserAddresses(addresses);
+                        }
+                        triggerToast?.('Success', 'Delivery spot removed', 'success');
+                      } else {
+                        triggerToast?.('Error', result.error || 'Failed to delete address', 'error');
+                      }
+                    }}
+                    onSetDefaultAddress={async (id) => {
+                      if (!user?.id) return;
+                      const result = await setDefaultAddress(user.id, id);
+                      if (result.success) {
+                        const addresses = await fetchUserAddresses(user.id);
+                        setUserAddresses(addresses);
+                        triggerToast?.('Success', 'Default address updated', 'success');
+                      } else {
+                        triggerToast?.('Error', result.error || 'Failed to set default', 'error');
+                      }
+                    }}
+                    onUploadAvatar={async (file) => {
+                      if (!user?.id) throw new Error('Not authenticated');
+                      const result = await uploadAvatarService(user.id, file);
+                      if (!result.success) throw new Error(result.error || 'Upload failed');
+                      await refreshProfile();
+                    }}
+                    onRemoveAvatar={async () => {
+                      if (!user?.id) return;
+                      const result = await removeAvatarService(user.id);
+                      if (!result.success) throw new Error(result.error || 'Remove failed');
+                      await refreshProfile();
+                    }}
+                    onUpdateDietPreference={async (pref) => {
+                      if (!user?.id) return;
+                      const result = await updateDietPreference(user.id, pref);
+                      if (!result.success) throw new Error(result.error || 'Update failed');
+                      await refreshProfile();
+                    }}
+                    refreshAddresses={async () => {
+                      if (user?.id) {
+                        const addresses = await fetchUserAddresses(user.id);
+                        setUserAddresses(addresses);
+                      }
+                    }}
+                    refreshProfile={refreshProfile}
+                    triggerToast={triggerToast}
                   />
                 )}
 

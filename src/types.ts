@@ -61,10 +61,37 @@ export interface Profile {
   programme: string | null;
   campus_block: string | null;
   designation: string | null;
-  profile_image?: string | null;
+  avatar_url: string | null;
+  diet_preference: 'all' | 'veg' | 'non-veg' | null;
   wallet_balance?: number;
   total_orders?: number;
   favorite_counters?: string[];
+}
+
+export interface Canteen {
+  id: string;
+  institution_id: string | null;
+  name: string;
+  location: string | null;
+  description: string | null;
+  image_url: string | null;
+  is_active: boolean;
+  is_ordering_enabled: boolean;
+  prep_time_minutes: number;
+  rating: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserAddress {
+  id: string;
+  user_id: string;
+  institution_id: string | null;
+  label: string;
+  address: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface InstitutionData {
@@ -331,6 +358,18 @@ export interface ImpactStat {
 export interface CartItem {
   item: MenuItem;
   quantity: number;
+}
+
+export type DietPreference = 'all' | 'veg' | 'non-veg';
+
+export interface SavedDeliverySpot {
+  id: string;
+  user_id: string;
+  label: string;
+  address: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface FoodFilters {

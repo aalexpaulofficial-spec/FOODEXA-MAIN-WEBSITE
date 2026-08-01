@@ -18,6 +18,8 @@ import type {
   Profile,
   InstitutionData,
   UserRole,
+  Canteen,
+  UserAddress,
 } from '../types';
 import { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
@@ -1261,6 +1263,232 @@ export function generateReceipt(order: Order): string {
   if (order.pickup_code) lines.push(`Pickup Code: ${order.pickup_code}`);
   if (order.canteen_id) lines.push(`Counter: ${order.canteen_id}`);
   
-  lines.push('', 'Thank you for ordering with FOODEXA!');
+   lines.push('', 'Thank you for ordering with FOODEXA!');
   return lines.join('\n');
+}
+
+// ==================== CANTEENS ====================
+export async function fetchCanteens(institutionId?: string): Promise<Canteen[]> {
+  try {
+    let query = supabase.from('canteens').select('*').eq('is_active', true).order('name', { ascending: true });
+    if (institutionId) query = query.eq('institution_id', institutionId);
+    const { data, error } = await query;
+    if (error) {
+      console.error('[Supabase] fetchCanteens error:', error.message);
+      return [];
+    }
+    return (data || []) as Canteen[];
+  } catch (err) {
+    console.error('[Supabase] fetchCanteens exception:', err);
+    return [];
+  }
+}
+
+export async function fetchCanteenById(canteenId: string): Promise<Canteen | null> {
+  try {
+    const { data, error } = await supabase.from('canteens').select('*').eq('id', canteenId).maybeSingle();
+    if (error) {
+      console.error('[Supabase] fetchCanteenById error:', error.message);
+      return null;
+    }
+    return data as Canteen | null;
+  } catch (err) {
+    console.error('[Supabase] fetchCanteenById exception:', err);
+    return null;
+  }
+}
+
+// ==================== USER ADDRESSES ====================
+export async function fetchUserAddresses(userId: string): Promise<UserAddress[]> {
+  try {
+    const { data, error } = await supabase
+      .from('user_addresses')
+      .select('*')
+      .eq('user_id', userId)
+      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('[Supabase] fetchUserAddresses error:', error.message);
+      return [];
+    }
+    return (data || []) as UserAddress[];
+  } catch (err) {
+    console.error('[Supabase] fetchUserAddresses exception:', err);
+    return [];
+  }
+}
+
+export async function addUserAddress(userId: string, params: {
+  label: string;
+  address: string;
+  institution_id?: string | null;
+  is_default?: boolean;
+}): Promise<{ success: boolean; error?: string; data?: UserAddress }> {
+  try {
+    const { label, address, institution_id, is_default = false } = params;
+    if (!label.trim() || !address.trim()) {
+      return { success: false, error: 'Label and address are required.' };
+    }
+
+    if (is_default) {
+      await supabase.from('user_addresses').update({ is_default: false }).eq('user_id', userId);
+    }
+
+    const { data, error } = await supabase.from('user_addresses').insert({
+      user_id: userId,
+      label: label.trim(),
+      address: address.trim(),
+      institution_id: institution_id || null,
+      is_default,
+    }).select('*').maybeSingle();
+
+    if (error) {
+      console.error('[Supabase] addUserAddress error:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true, data: data as UserAddress };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to add address.' };
+  }
+}
+
+export async function updateUserAddress(addressId: string, params: {
+  label?: string;
+  address?: string;
+  is_default?: boolean;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const updates: Record<string, any> = {};
+    if (params.label !== undefined) updates.label = params.label.trim();
+    if (params.address !== undefined) updates.address = params.address.trim();
+    if (params.is_default !== undefined) updates.is_default = params.is_default;
+
+    const { error } = await supabase.from('user_addresses').update(updates).eq('id', addressId);
+    if (error) {
+      console.error('[Supabase] updateUserAddress error:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to update address.' };
+  }
+}
+
+export async function deleteUserAddress(addressId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.from('user_addresses').delete().eq('id', addressId);
+    if (error) {
+      console.error('[Supabase] deleteUserAddress error:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to delete address.' };
+  }
+}
+
+export async function setDefaultAddress(userId: string, addressId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    await supabase.from('user_addresses').update({ is_default: false }).eq('user_id', userId);
+    const { error } = await supabase.from('user_addresses').update({ is_default: true }).eq('id', addressId);
+    if (error) {
+      console.error('[Supabase] setDefaultAddress error:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to set default address.' };
+  }
+}
+
+// ==================== DIET PREFERENCE ====================
+export async function updateDietPreference(userId: string, preference: 'all' | 'veg' | 'non-veg'): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ diet_preference: preference })
+      .eq('user_id', userId);
+    if (error) {
+      console.error('[Supabase] updateDietPreference error:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to update diet preference.' };
+  }
+}
+
+// ==================== AVATAR UPLOAD ====================
+export const AVATAR_BUCKET = 'avatars';
+
+export async function uploadAvatar(userId: string, file: File): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const fileName = `${userId}/${Date.now()}.${fileExt}`;
+    const { data, error } = await supabase.storage.from(AVATAR_BUCKET).upload(fileName, file, {
+      upsert: true,
+      cacheControl: '3600',
+    });
+    if (error) {
+      console.error('[Supabase] uploadAvatar error:', error.message);
+      return { success: false, error: error.message };
+    }
+    const { data: urlData } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(data.path);
+    const avatarUrl = urlData?.publicUrl || null;
+    if (avatarUrl) {
+      await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('user_id', userId);
+    }
+    return { success: true, url: avatarUrl || undefined };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to upload avatar.' };
+  }
+}
+
+export async function removeAvatar(userId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('user_id', userId);
+    if (error) {
+      console.error('[Supabase] removeAvatar error:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to remove avatar.' };
+  }
+}
+
+// ==================== REALTIME SUBSCRIPTIONS ====================
+export function subscribeCanteens(callback: (payload: any) => void, institutionId?: string): () => void {
+  let channel: RealtimeChannel;
+  if (institutionId) {
+    channel = supabase
+      .channel(`canteens:institution=${institutionId}`)
+      .on('postgres_changes' as any, {
+        event: '*', schema: 'public', table: 'canteens',
+        filter: `institution_id=eq.${institutionId}`,
+      }, callback);
+  } else {
+    channel = supabase
+      .channel('canteens:all')
+      .on('postgres_changes' as any, {
+        event: '*', schema: 'public', table: 'canteens',
+      }, callback);
+  }
+  channel.subscribe();
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
+export function subscribeUserAddresses(userId: string, callback: (payload: any) => void): () => void {
+  const channel = supabase
+    .channel(`user_addresses:uid=${userId}`)
+    .on('postgres_changes' as any, {
+      event: '*', schema: 'public', table: 'user_addresses',
+      filter: `user_id=eq.${userId}`,
+    }, callback);
+  channel.subscribe();
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }

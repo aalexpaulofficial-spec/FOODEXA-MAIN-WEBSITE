@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   programme TEXT,
   campus_block TEXT,
   designation TEXT,
+  avatar_url TEXT,
+  diet_preference TEXT DEFAULT 'all' CHECK (diet_preference IN ('all', 'veg', 'non-veg')),
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -303,6 +305,62 @@ CREATE TABLE IF NOT EXISTS public.payments (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- 14. CANTEENS: Campus canteens / food courts linked to institutions
+CREATE TABLE IF NOT EXISTS public.canteens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  institution_id UUID REFERENCES public.institutions(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  location TEXT,
+  description TEXT,
+  image_url TEXT,
+  is_active BOOLEAN DEFAULT true,
+  is_ordering_enabled BOOLEAN DEFAULT false,
+  prep_time_minutes INTEGER DEFAULT 10,
+  rating NUMERIC(3,2) DEFAULT 4.5,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_canteens_institution ON public.canteens(institution_id);
+CREATE INDEX IF NOT EXISTS idx_canteens_active ON public.canteens(is_active);
+
+-- 15. USER_ADDRESSES: Saved delivery / pickup spots from database
+CREATE TABLE IF NOT EXISTS public.user_addresses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  institution_id UUID REFERENCES public.institutions(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  address TEXT NOT NULL,
+  is_default BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_addresses_user ON public.user_addresses(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_addresses_default ON public.user_addresses(user_id, is_default);
+
+-- 16. USER_FAVORITES: User saved favorite menu items
+CREATE TABLE IF NOT EXISTS public.user_favorites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  menu_item_id UUID REFERENCES public.menu_items(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_favorites_unique ON public.user_favorites(user_id, menu_item_id);
+
+-- 17. USER_CARTS: Persisted cart per user
+CREATE TABLE IF NOT EXISTS public.user_carts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  menu_item_id UUID REFERENCES public.menu_items(id) ON DELETE CASCADE,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_carts_unique ON public.user_carts(user_id, menu_item_id);
+
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_razorpay_order ON public.payments(razorpay_order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_user ON public.payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_order ON public.payments(order_id);
@@ -321,10 +379,16 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS razorpay_payment_id TEXT;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS razorpay_signature TEXT;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_method TEXT;
 
+-- 18. Add avatar_url and diet_preference to profiles
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS diet_preference TEXT DEFAULT 'all' CHECK (diet_preference IN ('all', 'veg', 'non-veg'));
+-- Add canteen_id to menu_items if missing
+ALTER TABLE public.menu_items ADD COLUMN IF NOT EXISTS canteen_id UUID REFERENCES public.canteens(id) ON DELETE SET NULL;
+
 -- 13. Enable Realtime for all tables
 DO $$
 DECLARE
-  tables TEXT[] := ARRAY['orders', 'order_items', 'menu_items', 'menu_categories', 'notifications', 'announcements', 'banners', 'pricing_plans', 'faq_items', 'platform_features', 'hero_stats', 'partner_universities'];
+  tables TEXT[] := ARRAY['orders', 'order_items', 'menu_items', 'menu_categories', 'notifications', 'announcements', 'banners', 'pricing_plans', 'faq_items', 'platform_features', 'hero_stats', 'partner_universities', 'canteens', 'user_addresses', 'user_favorites', 'user_carts'];
   t TEXT;
 BEGIN
   FOREACH t IN ARRAY tables

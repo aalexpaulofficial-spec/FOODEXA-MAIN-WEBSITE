@@ -12,6 +12,8 @@ interface FoodCardProps {
   trendingRank?: number;
   cartQty?: number;
   onUpdateQty?: (item: MenuItem, qty: number) => void;
+  canteenName?: string;
+  canteenOrderingEnabled?: boolean;
 }
 
 export const FoodCard: React.FC<FoodCardProps> = ({
@@ -22,13 +24,15 @@ export const FoodCard: React.FC<FoodCardProps> = ({
   trendingRank,
   cartQty = 0,
   onUpdateQty,
+  canteenName,
+  canteenOrderingEnabled = true,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [imgErr, setImgErr] = useState(false);
   const isVeg = item.is_veg !== false;
-  // Always allow add to cart — only explicitly archived/unavailable items are blocked
   const { isSoldOut } = getItemAvailability(item);
-  const canAddToCart = true; // Always enabled unless you want to block explicitly
+  const canAddToCart = canteenOrderingEnabled !== false && !isSoldOut;
+  const showComingSoon = !canteenOrderingEnabled && canteenOrderingEnabled !== undefined;
 
   const rating = item.ai_popularity_score || item.rating || 0;
 
@@ -37,11 +41,11 @@ export const FoodCard: React.FC<FoodCardProps> = ({
     if (navigator.share) {
       navigator.share({
         title: item.name,
-        text: `Check out ${item.name} at ${item.counter_name} on FOODEXA!`,
+        text: `Check out ${item.name} at ${canteenName || item.counter_name} on FOODEXA!`,
         url: window.location.href
       }).catch(() => {});
     } else {
-      navigator.clipboard.writeText(`${item.name} - ${formatINR(item.price)} at ${item.counter_name}`);
+      navigator.clipboard.writeText(`${item.name} - ${formatINR(item.price)} at ${canteenName || item.counter_name}`);
       setCopiedId(item.id);
       setTimeout(() => setCopiedId(null), 2000);
     }
@@ -115,6 +119,13 @@ export const FoodCard: React.FC<FoodCardProps> = ({
             </div>
           )}
 
+          {/* Coming Soon Badge */}
+          {showComingSoon && (
+            <div className="absolute top-3 right-3 bg-red-600/90 backdrop-blur-md text-white px-2 py-0.5 rounded-lg text-[10px] font-black border border-red-500 flex items-center gap-1">
+              COMING SOON
+            </div>
+          )}
+
           {/* Rating Badge */}
           {rating > 0 && (
             <div className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded-lg text-[10px] font-bold text-slate-900 flex items-center gap-1 shadow-sm">
@@ -142,9 +153,9 @@ export const FoodCard: React.FC<FoodCardProps> = ({
           </p>
         )}
 
-        {item.counter_name && (
+        {(canteenName || item.counter_name) && (
           <p className="text-[11px] font-medium text-blue-700 mt-1">
-            📍 {item.counter_name}
+            📍 {canteenName || item.counter_name}
           </p>
         )}
 
@@ -208,17 +219,33 @@ export const FoodCard: React.FC<FoodCardProps> = ({
           </div>
         ) : (
           <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={() => onAdd(item)}
+            whileTap={showComingSoon ? {} : { scale: 0.95 }}
+            onClick={() => {
+              if (showComingSoon) return;
+              onAdd(item);
+            }}
             disabled={!canAddToCart}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-2xl font-bold text-xs shadow-md transition-all ${
-              !canAddToCart
-                ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
-                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20'
+              showComingSoon
+                ? 'border-2 border-red-500/50 text-red-600 bg-white dark:bg-slate-800 cursor-not-allowed shadow-none'
+                : !canAddToCart
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20'
             }`}
           >
-            <Plus className="w-4 h-4" />
-            {!canAddToCart ? 'Sold Out' : 'Add to Cart'}
+            {showComingSoon ? (
+              <>
+                <Clock className="w-4 h-4" />
+                COMING SOON
+              </>
+            ) : !canAddToCart ? (
+              'Sold Out'
+            ) : (
+              <>
+                <Plus className="w-4 h-4" />
+                Add to Cart
+              </>
+            )}
           </motion.button>
         )}
       </div>

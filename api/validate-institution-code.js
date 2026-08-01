@@ -101,7 +101,8 @@ export default async function handler(req, res) {
       return res.status(500).json({
         success: false,
         valid: false,
-        message: 'Unexpected server error while verifying institution code.'
+        message: dbError.message || 'Database query failed.',
+        code: dbError.code || 'UNKNOWN_DB_ERROR'
       });
     }
 

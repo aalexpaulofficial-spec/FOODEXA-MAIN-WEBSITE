@@ -6,13 +6,6 @@ import { FoodCard } from './FoodCard';
 
 interface NutritionTabProps {
   userName?: string;
-  caloriesConsumed?: number;
-  caloriesGoal?: number;
-  proteinConsumed?: number;
-  proteinGoal?: number;
-  waterConsumed?: number;
-  waterGoal?: number;
-  healthScore?: number;
   menuItems?: MenuItem[];
   onAddCart?: (item: MenuItem) => void;
   onFavorite?: (item: MenuItem) => void;
@@ -21,23 +14,24 @@ interface NutritionTabProps {
 }
 
 export const NutritionTab: React.FC<NutritionTabProps> = ({
-  caloriesConsumed = 1480,
-  caloriesGoal = 2200,
-  proteinConsumed = 88,
-  proteinGoal = 120,
-  waterConsumed = 6,
-  waterGoal = 8,
-  healthScore = 88,
+  userName,
   menuItems = [],
   onAddCart = () => {},
   onFavorite = () => {},
   favoritedIds = new Set(),
-  setIsLxAiOpen = (v: boolean) => {}
+  setIsLxAiOpen = (_v?: boolean) => {}
 }) => {
-  const [waterGlasses, setWaterGlasses] = useState(waterConsumed);
+  const [waterGlasses, setWaterGlasses] = useState(0);
 
-  const caloriePct = Math.min(100, Math.round((caloriesConsumed / caloriesGoal) * 100));
-  const proteinPct = Math.min(100, Math.round((proteinConsumed / proteinGoal) * 100));
+  const caloriesConsumed = 0;
+  const caloriesGoal = 2200;
+  const proteinConsumed = 0;
+  const proteinGoal = 120;
+  const waterGoal = 8;
+  const healthScore = 0;
+
+  const caloriePct = 0;
+  const proteinPct = 0;
 
   const displayItems = [...menuItems].slice(0, 10); // Today's campus menu
 

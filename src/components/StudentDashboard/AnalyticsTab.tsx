@@ -37,9 +37,14 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ orders }) => {
   const avgOrderValue = completedOrders.length > 0
     ? completedOrders.reduce((s, o) => s + (o.total_amount || 0), 0) / completedOrders.length
     : 0;
-    
-  // Estimate savings (e.g. 5% if using coupons, dummy logic for UI)
-  const totalSavings = Math.round(totalSpent * 0.05);
+
+  // Compute real stats from order data
+  const totalSavings = useMemo(() => {
+    return orders.reduce((s, o) => {
+      const itemTotal = o.items.reduce((is, i) => is + i.price * i.quantity, 0);
+      return s + Math.max(0, itemTotal - (o.total_amount || 0));
+    }, 0);
+  }, [orders]);
 
   // Weekly spend — last 7 days
   const weeklyData = useMemo(() => {
@@ -56,7 +61,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ orders }) => {
     return days;
   }, [orders]);
 
-  // Monthly spend — last 6 months (mocked out partially with real data)
+  // Monthly spend — last 6 months
   const monthlyData = useMemo(() => {
     const months = Array.from({ length: 6 }, (_, i) => {
       const d = new Date();
@@ -69,6 +74,66 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ orders }) => {
       if (idx >= 0) months[idx].amount += (o.total_amount || 0);
     });
     return months;
+  }, [orders]);
+
+  // Compute real stats from order data
+  const favoriteCanteen = useMemo(() => {
+    if (orders.length === 0) return null;
+    const canteenCounts = new Map<string, number>();
+    orders.forEach(o => {
+      if (o.counter) {
+        canteenCounts.set(o.counter, (canteenCounts.get(o.counter) || 0) + 1);
+      }
+    });
+    let maxCount = 0;
+    let fav = '';
+    canteenCounts.forEach((count, name) => {
+      if (count > maxCount) { maxCount = count; fav = name; }
+    });
+    return fav ? { name: fav, orders: maxCount } : null;
+  }, [orders]);
+
+  const favoriteCategory = useMemo(() => {
+    if (orders.length === 0) return null;
+    const catCounts = new Map<string, number>();
+    orders.forEach(o => {
+      o.items.forEach(item => {
+        const cat = item.variant || item.name;
+        catCounts.set(cat, (catCounts.get(cat) || 0) + item.quantity);
+      });
+    });
+    let maxCount = 0;
+    let fav = '';
+    catCounts.forEach((count, name) => {
+      if (count > maxCount) { maxCount = count; fav = name; }
+    });
+    const pct = orders.length > 0 ? Math.round((maxCount / Math.max(orders.reduce((s, o) => s + o.items.reduce((is, i) => is + i.quantity, 0), 0), 1)) * 100) : 0;
+    return fav ? { name: fav, pct } : null;
+  }, [orders]);
+
+  const avgWaitTime = useMemo(() => {
+    const completedOrders = orders.filter(o => o.status === 'completed' && o.created_at && o.completed_at);
+    if (completedOrders.length === 0) return null;
+    const totalMinutes = completedOrders.reduce((s, o) => {
+      const diff = (new Date(o.completed_at!).getTime() - new Date(o.created_at).getTime()) / 60000;
+      return s + diff;
+    }, 0);
+    return Math.round(totalMinutes / completedOrders.length * 10) / 10;
+  }, [orders]);
+
+  const healthyMealPct = useMemo(() => {
+    if (orders.length === 0) return 0;
+    const allItems = orders.flatMap(o => o.items);
+    if (allItems.length === 0) return 0;
+    const healthyCount = allItems.filter(i => {
+      const name = i.name.toLowerCase();
+      return name.includes('salad') || name.includes('bowl') || name.includes('grilled') || name.includes('healthy') || name.includes('wrap');
+    }).length;
+    return Math.round((healthyCount / allItems.length) * 100);
+  }, [orders]);
+
+  const co2Offset = useMemo(() => {
+    return (orders.filter(o => o.status === 'completed').length * 0.4).toFixed(1);
   }, [orders]);
 
   return (
@@ -85,12 +150,12 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ orders }) => {
           <div className="bg-white/60 backdrop-blur-md border border-slate-200/60 p-4 rounded-3xl shadow-sm">
             <p className="text-[10px] text-slate-400 font-bold uppercase">Total Orders</p>
             <p className="text-2xl font-extrabold text-slate-900 mt-1">{totalOrders}</p>
-            <p className="text-[10px] text-emerald-600 font-medium mt-1">↑ This month</p>
+            <p className="text-[10px] text-emerald-600 font-medium mt-1">All time</p>
           </div>
 
           <div className="bg-white/60 backdrop-blur-md border border-slate-200/60 p-4 rounded-3xl shadow-sm">
             <p className="text-[10px] text-slate-400 font-bold uppercase">Total Money Spent</p>
-            <p className="text-2xl font-extrabold text-blue-600 mt-1">{formatINR(totalSpent).replace('₹', '₹')}</p>
+            <p className="text-2xl font-extrabold text-blue-600 mt-1">{formatINR(totalSpent)}</p>
             <p className="text-[10px] text-slate-400 mt-1">Avg {formatINR(avgOrderValue)}/order</p>
           </div>
 
@@ -102,15 +167,15 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ orders }) => {
 
           <div className="bg-white/60 backdrop-blur-md border border-slate-200/60 p-4 rounded-3xl shadow-sm">
             <p className="text-[10px] text-slate-400 font-bold uppercase">Healthy Meals %</p>
-            <p className="text-2xl font-extrabold text-teal-600 mt-1">78%</p>
-            <p className="text-[10px] text-teal-600 font-medium mt-1">High protein target</p>
+            <p className="text-2xl font-extrabold text-teal-600 mt-1">{healthyMealPct}%</p>
+            <p className="text-[10px] text-teal-600 font-medium mt-1">Based on your orders</p>
           </div>
 
           <div className="bg-white/60 backdrop-blur-md border border-slate-200/60 p-4 rounded-3xl col-span-2 sm:col-span-1 shadow-sm">
             <p className="text-[10px] text-slate-400 font-bold uppercase">CO₂ Offset</p>
             <p className="text-2xl font-extrabold text-emerald-700 mt-1 flex items-center gap-1">
               <Leaf className="w-5 h-5 text-emerald-500" />
-              12.4 kg
+              {co2Offset} kg
             </p>
             <p className="text-[10px] text-slate-400 mt-1">Zero packaging waste</p>
           </div>
@@ -144,7 +209,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ orders }) => {
           {/* Weekly Spending Trend Line Chart */}
           <div className="bg-white/60 backdrop-blur-md border border-slate-200/60 p-5 sm:p-6 rounded-3xl shadow-sm">
             <h3 className="text-base font-bold text-slate-900 mb-1">Weekly Dining Activity (₹)</h3>
-            <p className="text-xs text-slate-500 mb-4">Peak spending on Wednesday & Friday lunch slots</p>
+            <p className="text-xs text-slate-500 mb-4">Your spending pattern across the week</p>
 
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -172,8 +237,17 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ orders }) => {
               <Building2 className="w-4 h-4 text-blue-600" />
               Favorite Canteen
             </h4>
-            <p className="text-base font-extrabold text-slate-900">Tech Park Food Pavilion</p>
-            <p className="text-xs text-slate-500 mt-1">22 orders placed • Avg wait 6.5 mins</p>
+            {favoriteCanteen ? (
+              <>
+                <p className="text-base font-extrabold text-slate-900">{favoriteCanteen.name}</p>
+                <p className="text-xs text-slate-500 mt-1">{favoriteCanteen.orders} orders placed</p>
+              </>
+            ) : (
+              <>
+                <p className="text-base font-extrabold text-slate-400">No data yet</p>
+                <p className="text-xs text-slate-400 mt-1">Place orders to see your favorites</p>
+              </>
+            )}
           </div>
 
           <div className="bg-white/60 backdrop-blur-md border border-slate-200/60 p-5 rounded-3xl shadow-sm">
@@ -181,8 +255,17 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ orders }) => {
               <PieIcon className="w-4 h-4 text-emerald-600" />
               Most Ordered Category
             </h4>
-            <p className="text-base font-extrabold text-slate-900">Healthy Bowls & Wraps</p>
-            <p className="text-xs text-slate-500 mt-1">42% of total orders</p>
+            {favoriteCategory ? (
+              <>
+                <p className="text-base font-extrabold text-slate-900">{favoriteCategory.name}</p>
+                <p className="text-xs text-slate-500 mt-1">{favoriteCategory.pct}% of total orders</p>
+              </>
+            ) : (
+              <>
+                <p className="text-base font-extrabold text-slate-400">No data yet</p>
+                <p className="text-xs text-slate-400 mt-1">Place orders to see categories</p>
+              </>
+            )}
           </div>
 
           <div className="bg-white/60 backdrop-blur-md border border-slate-200/60 p-5 rounded-3xl shadow-sm">
@@ -190,8 +273,17 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ orders }) => {
               <Clock className="w-4 h-4 text-amber-600" />
               Average Waiting Time
             </h4>
-            <p className="text-base font-extrabold text-slate-900">6.2 Minutes</p>
-            <p className="text-xs text-emerald-600 font-medium mt-1">⚡ 4 mins faster than campus average</p>
+            {avgWaitTime !== null ? (
+              <>
+                <p className="text-base font-extrabold text-slate-900">{avgWaitTime} Minutes</p>
+                <p className="text-xs text-emerald-600 font-medium mt-1">Based on completed orders</p>
+              </>
+            ) : (
+              <>
+                <p className="text-base font-extrabold text-slate-400">No data yet</p>
+                <p className="text-xs text-slate-400 mt-1">Complete orders to see wait times</p>
+              </>
+            )}
           </div>
 
         </div>

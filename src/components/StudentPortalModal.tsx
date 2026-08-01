@@ -146,8 +146,6 @@ const getCategoryGradient = (idx: number) => {
   return gradients[idx % gradients.length];
 };
 
-declare global { interface Window { Razorpay: any } }
-
 const SkeletonCard = () => (
   <div className="rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden animate-pulse">
     <div className="h-36 bg-slate-800" />
@@ -284,183 +282,6 @@ const BannerCarousel = ({ banners }: { banners: any[] }) => {
         </div>
       )}
     </section>
-  );
-};
-
-const FoodCard = ({ item, onAdd, onFavorite, isFavorited = false }: {
-  key?: React.Key;
-  item: MenuItem;
-  onAdd: (item: MenuItem) => void;
-  onFavorite?: (item: MenuItem) => void;
-  isFavorited?: boolean;
-}) => {
-  const [adding, setAdding] = useState(false);
-  const [imgErr, setImgErr] = useState(false);
-  const isVeg = item.is_veg !== false;
-  const aiScore = item.ai_popularity_score || item.rating || 0;
-
-  // ── Availability logic ──
-  // Uses shared utility that matches Institution Dashboard logic
-  const { isSoldOut } = getItemAvailability(item);
-  const canAddToCart = true; // Always enabled unless explicitly blocked
-
-  const handleAdd = () => {
-    if (!canAddToCart) return;
-    setAdding(true);
-    onAdd(item);
-    setTimeout(() => setAdding(false), 600);
-  };
-
-  return (
-    <article className="group relative overflow-hidden rounded-3xl border border-slate-800/80 bg-slate-900 transition-all duration-300 hover:-translate-y-1 hover:border-slate-700 hover:shadow-xl hover:shadow-slate-950/40">
-      {/* Image */}
-      <div className="relative h-44 bg-slate-800 overflow-hidden">
-        {item.image_url && !imgErr && !item.image_url.startsWith('blob:') ? (
-          <img
-            src={item.image_url}
-            alt={item.name}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-            loading="lazy"
-            onError={() => setImgErr(true)}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 via-slate-900 to-emerald-950/30">
-            <Utensils className="w-12 h-12 text-slate-700" />
-          </div>
-        )}
-
-        {/* Overlay gradient */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-        {/* Badges - Top Left */}
-        <div className="absolute left-3 top-3 flex flex-col gap-1.5">
-          {item.popular && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/50 bg-slate-950/90 px-2 py-0.5 text-[9px] font-black text-emerald-300 backdrop-blur-sm">
-              <Flame className="w-2.5 h-2.5" /> Popular
-            </span>
-          )}
-          {item.offer_label && (
-            <span className="rounded-full border border-amber-500/50 bg-slate-950/90 px-2 py-0.5 text-[9px] font-bold text-amber-300 backdrop-blur-sm">
-              {item.offer_label}
-            </span>
-          )}
-          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black backdrop-blur-sm ${
-            isVeg
-              ? 'border-emerald-500/50 bg-emerald-950/90 text-emerald-300'
-              : 'border-red-500/50 bg-red-950/90 text-red-300'
-          }`}>
-            {isVeg ? '🟢 Veg' : '🔴 Non-Veg'}
-          </span>
-        </div>
-
-        {/* Favorite */}
-        {onFavorite && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onFavorite(item); }}
-            className="absolute right-3 top-3 p-1.5 rounded-full bg-slate-950/80 backdrop-blur-sm text-slate-400 hover:text-red-400 transition-colors"
-          >
-            <Heart className={`w-3.5 h-3.5 ${isFavorited ? 'fill-red-400 text-red-400' : ''}`} />
-          </button>
-        )}
-
-        {/* Rating */}
-        {aiScore > 0 && (
-          <div className="absolute bottom-2.5 right-3 flex items-center gap-1 rounded-full bg-slate-950/80 px-2 py-0.5 text-[9px] font-bold text-amber-300 backdrop-blur-sm">
-            <Star className="w-2.5 h-2.5 fill-amber-300" />{aiScore.toFixed(1)}
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="p-4 space-y-3">
-        <div>
-          <div className="flex items-start justify-between gap-2">
-            <h4 className="text-sm font-extrabold text-white line-clamp-1 leading-tight">{item.name}</h4>
-            <div className="shrink-0 text-right">
-              {item.offer_price ? (
-                <div>
-                  <span className="text-xs font-black text-emerald-300">{formatINR(item.offer_price)}</span>
-                  <span className="ml-1 text-[9px] text-slate-500 line-through">{formatINR(item.price)}</span>
-                </div>
-              ) : (
-                <span className="text-xs font-black text-emerald-300">{formatINR(item.price)}</span>
-              )}
-            </div>
-          </div>
-          {item.description && (
-            <p className="mt-1 text-[10px] leading-relaxed text-slate-500 line-clamp-2">{item.description}</p>
-          )}
-        </div>
-
-        {/* Nutrition row */}
-        {(item.calories || item.protein) && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {item.calories && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-semibold text-slate-400">
-                🔥 {item.calories} kcal
-              </span>
-            )}
-            {item.protein && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-semibold text-slate-400">
-                💪 {item.protein}g
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Tags */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-semibold text-slate-400">
-            <Building2 className="w-2 h-2" />{item.counter_name}
-          </span>
-          {item.category && (
-            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-semibold text-slate-400">
-              {item.category}
-            </span>
-          )}
-          {(item.prep_time || item.prep_time_minutes) && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-semibold text-slate-400">
-              <Clock className="w-2 h-2" />{item.prep_time || `~${item.prep_time_minutes}m`}
-            </span>
-          )}
-          {item.stock !== undefined && item.stock <= 5 && item.stock > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-950/50 px-2 py-0.5 text-[9px] font-bold text-amber-300">
-              <Package className="w-2 h-2" /> {item.stock} left
-            </span>
-          )}
-        </div>
-
-        {/* Sold Out overlay badge */}
-        {isSoldOut && (
-          <div className="absolute top-0 left-0 right-0 flex items-center justify-center h-44 bg-slate-950/70 backdrop-blur-sm z-10">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/50 bg-red-950/90 px-3 py-1 text-[10px] font-black text-red-300">
-              <XCircle className="w-3 h-3" /> Sold Out
-            </span>
-          </div>
-        )}
-
-        {/* Add button */}
-        <button
-          onClick={handleAdd}
-          disabled={!canAddToCart}
-          className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-extrabold shadow-sm transition-all active:scale-[0.97] ${
-            !canAddToCart
-              ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-              : adding
-                ? 'bg-emerald-500 text-slate-950 scale-[0.98]'
-                : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 hover:from-emerald-400 hover:to-teal-400 hover:shadow-emerald-950/40 hover:shadow-md'
-          }`}
-        >
-          {!canAddToCart ? (
-            'Sold Out'
-          ) : adding ? (
-            <><Check className="w-4 h-4" /> Added!</>
-          ) : (
-            <><Plus className="w-4 h-4" /> Add to Cart</>
-          )}
-        </button>
-      </div>
-    </article>
   );
 };
 
@@ -1007,46 +828,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       });
 
       if (!razorpayResult.success || !razorpayResult.order_id) {
-        // DEMO FALLBACK: Simulate successful payment (no DB writes before this)
-        const simOrderId = `pay_${Date.now()}`;
-        const simPaymentId = `pay_${Date.now()}`;
-        const simSignature = `simulated_signature_${Date.now()}`;
-
-        const createResult = await createOrderAfterPayment({
-          user_id: user.id,
-          email: profile.email,
-          role: liveRole,
-          customer_name: profile.full_name || user.email?.split('@')[0] || 'Customer',
-          phone: profile.phone || '0000000000',
-          institution_id: liveInstitutionId,
-          canteen_id: cart[0]?.item.canteen_id || cart[0]?.item.counter_id || null,
-          items: itemsForBackend,
-          itemsFull,
-          total_amount: cartGrandTotal,
-          razorpay_order_id: simOrderId,
-          razorpay_payment_id: simPaymentId,
-          razorpay_signature: simSignature,
-          payment_method: 'razorpay',
-          estimated_prep_time_minutes: estimatedPrepTime,
-          notes: kitchenNotes || null,
-        });
-
-        if (createResult.error || !createResult.data) {
-          setError(createResult.error || 'Failed to create order after payment.');
-          setActiveTab('payment_failed');
-          setSubmittingOrder(false);
-          if (triggerToast) triggerToast('Order Creation Failed', createResult.error || 'Contact support.', 'warning');
-          return;
-        }
-
-        await refreshOrders();
-        setCart([]);
-        setShowCart(false);
-        setCouponDiscount(0);
-        setCouponCode('');
-        setActiveTab('payment_success');
+        const msg = razorpayResult.error || 'Unable to connect to payment gateway. Please try again.';
+        console.error('[Payment] Razorpay order creation failed:', msg);
+        setError('We couldn\'t start the payment. Please try again.');
+        setActiveTab('payment_failed');
         setSubmittingOrder(false);
-        if (triggerToast) triggerToast('Payment Successful', 'Order placed successfully.', 'success');
+        if (triggerToast) triggerToast('Payment Unavailable', 'We couldn\'t start the payment. Please try again.', 'warning');
         return;
       }
 
@@ -1583,7 +1370,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                                 <div className="w-4 h-4 rounded-full border-2 border-slate-300" />
                                 <span className="text-sm font-bold text-slate-500">FOODEXA Wallet (Coming Soon)</span>
                               </div>
-                              <span className="text-xs font-black text-emerald-600">Bal: ₹850</span>
+                              <span className="text-xs font-black text-slate-400">N/A</span>
                             </button>
 
                             <button
@@ -1913,7 +1700,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                       <CreditCard className="w-5 h-5 text-emerald-600" />
                       <span className="text-sm font-black text-slate-900">FOODEXA Wallet (Coming Soon)</span>
                     </div>
-                    <span className="text-xs font-black text-emerald-600">Bal: ₹850</span>
+                    <span className="text-xs font-black text-slate-400">N/A</span>
                   </label>
 
                   {/* UPI / Instant Pay - Selected */}

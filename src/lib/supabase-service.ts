@@ -387,11 +387,9 @@ export async function createOrderAfterPayment(params: {
   const nowISO = now.toISOString();
   const dateStr = nowISO.slice(0, 10).replace(/-/g, '');
 
-  const { count: orderCount } = await supabase
-    .from('orders')
-    .select('id', { count: 'exact', head: true });
-  const nextSeq = (orderCount || 0) + 1;
-  const seqPadded = String(nextSeq).padStart(4, '0');
+  // Use timestamp-based unique ID to avoid race conditions on order count
+  const timestampSeq = Date.now().toString(36).toUpperCase().slice(-6);
+  const seqPadded = String(Math.floor(Math.random() * 9999) + 1).padStart(4, '0');
 
   const tokenNumber = `TKN-${seqPadded}`;
   const pickupCode = `PICKUP-${seqPadded}`;
@@ -418,7 +416,7 @@ export async function createOrderAfterPayment(params: {
     return { data: null, error: 'You must join an institution before placing an order.' };
   }
   if (!actualCanteenId) {
-    return { data: null, error: 'Failed to create order: missing canteen_id from menu item.' };
+    return { data: null, error: 'Unable to process order. Please try again.' };
   }
 
   const orderPayload: Record<string, any> = {
@@ -434,7 +432,7 @@ export async function createOrderAfterPayment(params: {
     order_status: 'Accepted',
     payment_status: 'paid',
     payment_method: params.payment_method === 'cash' ? 'cash' : 'razorpay',
-    order_number: nextSeq,
+    order_number: Date.now(),
     pickup_token: tokenNumber,
     pickup_code: pickupCode,
     qr_pickup_code: qrPickupCode,
@@ -454,7 +452,8 @@ export async function createOrderAfterPayment(params: {
 
   const { data: orderData, error: orderError } = await supabase.from('orders').insert([orderPayload]).select(SELECT_ORDER_WITH_ITEMS).single();
   if (orderError || !orderData) {
-    return { data: null, error: orderError?.message || 'Failed to create order.' };
+    console.error('[Supabase] createOrderAfterPayment order insert failed:', orderError?.message);
+    return { data: null, error: 'We couldn\'t create your order. Please try again.' };
   }
 
   // Insert order_items
@@ -824,11 +823,20 @@ export async function fetchUserCart(user_id: string): Promise<{ item: MenuItem; 
   try {
     const { data, error } = await supabase.from('user_carts').select('menu_item_id, quantity').eq('user_id', user_id);
     if (error || !data || data.length === 0) return [];
-    const menuItemIds = data.map((r: any) => r.menu_item_id);
+    const menuItemIds = data.map((r: any) => r.menu_item_id).filter(Boolean);
+    if (menuItemIds.length === 0) return [];
     const { data: menuItems } = await supabase.from('menu_items').select('*').in('id', menuItemIds);
     const menuMap = new Map((menuItems || []).map((m: any) => [m.id, mapMenuItem(m)]));
-    return data.map((r: any) => ({ item: menuMap.get(r.menu_item_id) || null, quantity: r.quantity })).filter((x: any) => x.item);
+    // Silently skip cart items whose menu_item has been deleted
+    return data
+      .map((r: any) => {
+        const item = menuMap.get(r.menu_item_id);
+        if (!item) return null;
+        return { item, quantity: r.quantity };
+      })
+      .filter((x): x is { item: MenuItem; quantity: number } => x !== null);
   } catch (err) {
+    console.error('[Supabase] fetchUserCart error:', err);
     return [];
   }
 }

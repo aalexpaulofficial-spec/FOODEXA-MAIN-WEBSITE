@@ -19,49 +19,21 @@ const BANNERS = [
     badge: 'Express Pickup',
     actionText: 'Order Now',
   },
-  {
-    id: 'b2',
-    title: 'AI-Powered Recommendations',
-    subtitle: 'Personalized meals curated by LX AI based on your preferences.',
-    gradient: 'from-emerald-600 via-teal-600 to-emerald-700',
-    icon: <Sparkles className="w-6 h-6 text-emerald-200" />,
-    badge: 'Powered by LX AI',
-    actionText: 'View Recommendations',
-  },
-  {
-    id: 'b3',
-    title: 'Campus Food Festival',
-    subtitle: 'Special offers across all dining spots on campus this week.',
-    gradient: 'from-purple-600 via-indigo-600 to-purple-700',
-    icon: <Gift className="w-6 h-6 text-purple-200" />,
-    badge: 'Student Deals',
-    actionText: 'View Offers',
-  },
-  {
-    id: 'b4',
-    title: 'Ready in 5 Minutes',
-    subtitle: '',
-    gradient: 'from-amber-500 via-orange-600 to-amber-600',
-    icon: <Zap className="w-6 h-6 text-amber-100" />,
-    badge: 'Fast Track',
-    actionText: 'Order Now',
-  },
 ];
 
-const CATEGORIES = [
-  { id: 'All', name: 'All', icon: <Utensils className="w-4 h-4" /> },
-  { id: 'Breakfast', name: 'Breakfast', icon: <Sun className="w-4 h-4" /> },
-  { id: 'Lunch', name: 'Lunch', icon: <Coffee className="w-4 h-4" /> },
-  { id: 'Dinner', name: 'Dinner', icon: <Moon className="w-4 h-4" /> },
-  { id: 'Snacks', name: 'Snacks', icon: <Cookie className="w-4 h-4" /> },
-  { id: 'Beverages', name: 'Beverages', icon: <GlassWater className="w-4 h-4" /> },
-  { id: 'Desserts', name: 'Desserts', icon: <IceCream className="w-4 h-4" /> },
-  { id: 'Healthy Meals', name: 'Healthy Meals', icon: <HeartPulse className="w-4 h-4" /> },
-  { id: 'Combos', name: 'Combos', icon: <Package className="w-4 h-4" /> },
-  { id: 'Today \'s Specials', name: 'Specials', icon: <Flame className="w-4 h-4" /> },
-  { id: 'Most Ordered', name: 'Most Ordered', icon: <Star className="w-4 h-4" /> },
-  { id: 'Favorites', name: 'Favorites', icon: <Heart className="w-4 h-4" /> },
-];
+const CATEGORY_ICONS: Record<string, React.ReactNode> = {
+  All: <Utensils className="w-4 h-4" />,
+  Breakfast: <Sun className="w-4 h-4" />,
+  Lunch: <Coffee className="w-4 h-4" />,
+  Dinner: <Moon className="w-4 h-4" />,
+  Snacks: <Cookie className="w-4 h-4" />,
+  Beverages: <GlassWater className="w-4 h-4" />,
+  Desserts: <IceCream className="w-4 h-4" />,
+  'Healthy Meals': <HeartPulse className="w-4 h-4" />,
+  Combos: <Package className="w-4 h-4" />,
+  Specials: <Flame className="w-4 h-4" />,
+  Favorites: <Heart className="w-4 h-4" />,
+};
 
 interface ExploreTabProps {
   menuItems: MenuItem[];
@@ -123,16 +95,25 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
 
   const activeBanners = useMemo(() => {
     const banners = dbBanners?.length ? dbBanners : BANNERS;
-    return banners.map(banner => {
-      if (banner.id === 'b4') {
-        return {
-          ...banner,
-          subtitle: `${institutionName || 'Your'} Campus Food Service`,
-        };
-      }
-      return banner;
-    });
-  }, [dbBanners, institutionName]);
+    return banners.map(banner => ({
+      ...banner,
+      gradient: banner.gradient || 'from-blue-600 via-indigo-600 to-blue-700',
+      icon: banner.icon || <QrCode className="w-6 h-6 text-blue-200" />,
+      badge: banner.badge || 'FOODEXA',
+      actionText: banner.actionText || 'Order Now',
+    }));
+  }, [dbBanners]);
+
+  const dynamicCategories = useMemo(() => {
+    const catSet = new Set<string>();
+    menuItems.forEach(i => { if (i.category) catSet.add(i.category); });
+    const cats = Array.from(catSet).sort();
+    return [
+      { id: 'All', name: 'All', icon: <Utensils className="w-4 h-4" /> },
+      { id: 'Favorites', name: 'Favorites', icon: <Heart className="w-4 h-4" /> },
+      ...cats.map(c => ({ id: c, name: c, icon: CATEGORY_ICONS[c] || <Utensils className="w-4 h-4" /> })),
+    ];
+  }, [menuItems]);
 
   const currentBannerData = activeBanners[currentBanner] || activeBanners[0];
 
@@ -147,8 +128,6 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
       const isFav = favoritedIds?.has(item.id);
       const matchesCat = activeCategory === 'All' ||
           (activeCategory === 'Favorites' && isFav) ||
-          (activeCategory === 'Today\'s Specials' && item.popular) ||
-          (activeCategory === 'Most Ordered' && item.popular) ||
           item.category?.toLowerCase() === activeCategory.toLowerCase();
       const matchesDiet = dietaryFilter === 'all' ||
           (dietaryFilter === 'veg' && item.is_veg !== false) ||
@@ -335,7 +314,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
           </div>
 
           <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none scroll-smooth" style={{ scrollbarWidth: 'none' }}>
-            {CATEGORIES.map((cat) => {
+            {dynamicCategories.map((cat) => {
               const isSelected = activeCategory === cat.id;
               return (
                 <motion.button
@@ -392,13 +371,13 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                       className="w-full h-48 sm:h-56 md:h-60 rounded-2xl object-cover shadow-lg ring-1 ring-white/10 group-hover:scale-[1.02] transition-all"
                     />
                     <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-md px-3 py-1 rounded-xl text-xs font-bold text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                      <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />
-                      {recommended.protein_grams || 42}g Protein
-                    </div>
-                    <div className="absolute bottom-3 right-3 bg-slate-900/80 backdrop-blur-md px-2.5 py-1 rounded-xl text-xs font-bold text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                      <Star className="w-3.5 h-3.5 fill-amber-400" />
-                      {recommended.rating?.toFixed(2) || '4.95'} ({recommended.review_count || 512})
-                    </div>
+                       <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />
+                       {recommended.protein || 0}g Protein
+                     </div>
+                     <div className="absolute bottom-3 right-3 bg-slate-900/80 backdrop-blur-md px-2.5 py-1 rounded-xl text-xs font-bold text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                       <Star className="w-3.5 h-3.5 fill-amber-400" />
+                       {recommended.rating?.toFixed(1) || '0.0'}
+                     </div>
                   </div>
 
                   <div className="md:col-span-7 flex flex-col justify-between">
@@ -418,9 +397,9 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                         </div>
                         <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/10 text-center">
                           <p className="text-[10px] text-slate-400 uppercase font-bold">Protein</p>
-                          <p className="text-sm font-bold text-emerald-300 mt-0.5 flex items-center justify-center gap-1">
-                            <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />{recommended.protein_grams || 42}g
-                          </p>
+                           <p className="text-sm font-bold text-emerald-300 mt-0.5 flex items-center justify-center gap-1">
+                             <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />{recommended.protein || 0}g
+                           </p>
                         </div>
                         <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/10 text-center">
                           <p className="text-[10px] text-slate-400 uppercase font-bold">Prep Time</p>
@@ -501,11 +480,11 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                       <div className="flex items-center gap-3 my-2 text-xs text-slate-500">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3 text-slate-400" />
-                          {item.prep_time || 10} mins
+                          {item.prep_time || '—'}
                         </span>
                         <span>•</span>
                         <span className="text-emerald-600 font-medium">
-                          {item.calories || 350} kcal
+                          {item.calories ? `${item.calories} kcal` : '—'}
                         </span>
                       </div>
                     </div>

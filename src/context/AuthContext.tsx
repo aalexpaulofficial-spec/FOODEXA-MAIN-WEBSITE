@@ -778,13 +778,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const fakeUserId = `anon_${Math.random().toString(36).substring(2, 11)}`;
       const fakeUser = { id: fakeUserId, email: `anon@${data.institution_code}.com` } as User;
       const fakeProfile: Profile = {
-        id: fakeUserId,
         user_id: fakeUserId,
         role: role,
         full_name: 'Guest User',
         email: `anon@${data.institution_code}.com`,
         institution_id: data.institution_id,
         phone: null,
+        department: null,
+        semester: null,
+        programme: null,
+        campus_block: null,
+        designation: null,
+        avatar_url: null,
+        diet_preference: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };

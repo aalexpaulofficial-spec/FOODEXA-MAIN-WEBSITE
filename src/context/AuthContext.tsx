@@ -192,23 +192,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setPendingOtpProfile(value);
     }, []);
 
-  const initializeAppSession = useCallback(async () => {
-    try {
-      const { error, restored, profile, session } = await restoreSession();
-      if (error) {
-        console.error('[Auth] Session initialization failed:', error.message);
-      } else if (restored && profile) {
-        console.info('[Auth] Session restored successfully');
-      } else {
-        console.info('[Auth] No existing session found');
-      }
-      setLoading(false);
-    } catch (err) {
-      console.error('[Auth] Critical session initialization error:', err);
-      setLoading(false);
-    }
-  }, [restoreSession]);
-
    // ── Session initialization — Supabase handles persistence natively ────────
   useEffect(() => {
     const initAuth = async () => {

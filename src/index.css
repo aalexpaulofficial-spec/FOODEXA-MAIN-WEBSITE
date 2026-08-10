@@ -16,7 +16,9 @@
   }
   
   body {
-    @apply bg-[#fcfcfc] text-black font-sans leading-relaxed selection:bg-black selection:text-white;
+    background: linear-gradient(135deg, #fcfcfc 0%, #f0fdf4 50%, #f8fafc 100%);
+    color: #000;
+    /* fonts and selection can be handled in App.tsx wrapper */
   }
 }
 
@@ -34,7 +36,7 @@
   }
 
   .codex-hero-gradient {
-    background: radial-gradient(circle at 50% -20%, rgba(59, 130, 246, 0.1) 0%, rgba(255, 255, 255, 0) 50%);
+    background: radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.15) 0%, rgba(59, 130, 246, 0.05) 40%, transparent 70%);
   }
 }
 

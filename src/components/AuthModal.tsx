@@ -35,12 +35,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onBack,
 }) => {
   const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
-  const [mode, setMode] = useState<'login' | 'create'>(initialMode);
+  const [mode, setMode] = useState<'login' | 'create' | 'quick'>(initialMode);
   const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success'>('form');
   const [loginUserId, setLoginUserId] = useState<string | null>(null);
   const selectedAccountRole: AccountRole = ACCOUNT_ROLES.includes(selectedRole as AccountRole) ? (selectedRole as AccountRole) : 'student';
 
   // Login state
+  const [quickCode, setQuickCode] = useState('');
+  const [isQuickLoading, setIsQuickLoading] = useState(false);
+  const [quickError, setQuickError] = useState<string | null>(null);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
@@ -240,7 +243,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }, 500);
   };
 
-const handleLoginInstitutionVerify = async () => {
+
+  const handleQuickAccess = async () => {
+    setQuickError(null);
+    if (!quickCode.trim()) {
+      setQuickError('Please enter an institution code');
+      return;
+    }
+    setIsQuickLoading(true);
+    const { error, profile, institution } = await anonymousSignIn(quickCode.trim(), selectedAccountRole);
+    setIsQuickLoading(false);
+    
+    if (error || !profile) {
+      setQuickError(error?.message || 'Invalid code');
+    } else {
+      setStep('success');
+      if (onLoginSuccess) {
+        onLoginSuccess({ profile, institution });
+      }
+    }
+  };
+
+  const handleLoginInstitutionVerify = async () => {
       const code = institutionVerifyCode.trim() || validatedInstitution?.institution_code || institutionData?.institution_code || '';
       if (!code) {
         setInstitutionError('Please enter a valid Institution Code.');

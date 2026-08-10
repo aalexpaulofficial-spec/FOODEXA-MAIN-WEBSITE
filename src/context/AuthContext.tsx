@@ -13,6 +13,7 @@ interface AuthContextType {
   institutionData: InstitutionData | null;
   setInstitutionData: (data: InstitutionData | null) => void;
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
+  anonymousSignIn: (institutionCode: string, role: UserRole) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
   signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; institutionId?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
@@ -768,6 +769,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { error: error ? new Error(error.message) : null };
   };
 
+    const anonymousSignIn = async (code: string, role: UserRole) => {
+      const { data, error } = await validateInstitutionCode(code);
+      if (error || !data) {
+        return { error: new Error(error || 'Invalid Institution Code'), profile: null, institution: null };
+      }
+      
+      const fakeUserId = `anon_${Math.random().toString(36).substring(2, 11)}`;
+      const fakeUser = { id: fakeUserId, email: `anon@${data.institution_code}.com` } as User;
+      const fakeProfile: Profile = {
+        id: fakeUserId,
+        user_id: fakeUserId,
+        role: role,
+        full_name: 'Guest User',
+        email: `anon@${data.institution_code}.com`,
+        institution_id: data.institution_id,
+        phone: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      setUser(fakeUser);
+      setProfile(fakeProfile);
+      setInstitutionData(data);
+      
+      return { error: null, profile: fakeProfile, institution: data };
+    };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -779,6 +807,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       institutionData,
       setInstitutionData,
       validateInstitutionCode,
+      anonymousSignIn,
       signIn,
       signUpWithPassword,
       verifyOtp,

@@ -1,9 +1,7 @@
-# Task: Codex-Style Redesign for Modals & Dashboards
+# Task: Dual Auth & Landing Page Gradient
 
-- [x] Update `RoleSelectionModal.tsx`
-- [ ] Update `AuthModal.tsx`
-- [ ] Update `InstitutionRegistrationModal.tsx`
-- [ ] Update `StudentPortalModal.tsx`
-- [ ] Update `InstitutionDashboardModal.tsx`
-- [ ] Update `KitchenDashboardModal.tsx`
-- [ ] Update `SuperAdminDashboardModal.tsx`
+- [ ] Add `anonymousSignIn` method to `AuthContext.tsx`.
+- [ ] Add "Quick Access" UI to `AuthModal.tsx`.
+- [ ] Add mesh gradient to landing page (`index.css` and `Hero.tsx`).
+- [ ] Sync changes to `foodexa` submodule.
+- [ ] Push to Github for Vercel deployment.

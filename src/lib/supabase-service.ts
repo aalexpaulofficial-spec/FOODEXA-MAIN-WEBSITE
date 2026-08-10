@@ -256,7 +256,7 @@ export async function fetchMenuCategories(params?: { institution_id?: string }):
 }
 
 // ==================== ORDERS ====================
-const SELECT_ORDER_WITH_ITEMS = '*, order_items(id, order_id, menu_item_id, quantity, price, name, menu_items(id, food_name, item_name, name, image_url, is_veg, price))';
+const SELECT_ORDER_WITH_ITEMS = '*, order_items(id, order_id, menu_item_id, quantity, price, name, menu_items(id, food_name, image_url, is_veg, price))';
 
 export async function fetchOrders(params: { user_id?: string; institution_id?: string; status?: OrderStatus }): Promise<Order[]> {
   let query = supabase.from('orders').select(SELECT_ORDER_WITH_ITEMS);

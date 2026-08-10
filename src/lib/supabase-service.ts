@@ -129,7 +129,7 @@ export async function fetchMenuItems(params?: {
     const s = `%${params.search.toLowerCase()}%`;
     query = query.or(`food_name.ilike.${s},food_type.ilike.${s},description.ilike.${s}`);
   }
-  
+
   switch (params?.sortBy) {
     case 'popular': query = query.order('ai_popularity_score', { ascending: false }).order('rating', { ascending: false }); break;
     case 'newest': query = query.order('created_at', { ascending: false }); break;
@@ -139,9 +139,9 @@ export async function fetchMenuItems(params?: {
     case 'rating': query = query.order('rating', { ascending: false }); break;
     default: query = query.order('food_name', { ascending: true });
   }
-  
+
   if (params?.limit) query = query.limit(params.limit);
-  
+
   const { data } = await query;
   return (data || []).map(mapMenuItem);
 }
@@ -154,7 +154,7 @@ export function getItemAvailability(item: MenuItem): {
   // Default: always allow adding to cart
   const explicitlyArchived = item.is_archived === true;
   const explicitlyUnavailable = item.is_available === false;
-  
+
   const canAddToCart = !explicitlyArchived && !explicitlyUnavailable;
   return {
     isSoldOut: !canAddToCart,
@@ -563,7 +563,7 @@ export async function placeOrder(params: {
   const tokenNumber = `TKN-${seqPadded}`;
   const pickupCode = `PICKUP-${seqPadded}`;
   const qrPickupCode = `QR-FDX-${dateStr}-${seqPadded}`;
-  
+
   const isPaid = Boolean(params.razorpay_payment_id && params.razorpay_signature);
   const customerName = params.customer_name || params.email?.split('@')[0] || 'Customer';
   const phone = params.phone || '0000000000';
@@ -580,7 +580,7 @@ export async function placeOrder(params: {
       .select('canteen_id')
       .eq('id', firstItemId)
       .single();
-      
+
     if (!itemError && itemData) {
       actualCanteenId = itemData.canteen_id;
     }
@@ -748,7 +748,7 @@ export async function fetchOrderById(orderId: string): Promise<Order | null> {
 
 export async function cancelOrder(orderId: string): Promise<{ success: boolean; error?: string }> {
   const now = new Date().toISOString();
-  
+
   // Update order to cancelled state
   const { error } = await supabase.from('orders').update({
     status: 'cancelled',
@@ -1086,10 +1086,10 @@ export async function fetchCounters(institutionId?: string): Promise<any[]> {
 export async function searchMenuItems(query: string, institutionId?: string): Promise<MenuItem[]> {
   let q = supabase.from('menu_items').select('*').neq('status', 'archived');
   if (institutionId) q = q.eq('institution_id', institutionId);
-  
+
   const searchTerm = `%${query.toLowerCase()}%`;
   q = q.or(`food_name.ilike.${searchTerm},food_type.ilike.${searchTerm},description.ilike.${searchTerm}`);
-  
+
   const { data } = await q.order('food_name', { ascending: true }).limit(50);
   return (data || []).map(mapMenuItem);
 }
@@ -1097,7 +1097,7 @@ export async function searchMenuItems(query: string, institutionId?: string): Pr
 export async function filterMenuItems(filters: FoodFilters, institutionId?: string): Promise<MenuItem[]> {
   let query = supabase.from('menu_items').select('*').neq('status', 'archived');
   if (institutionId) query = query.eq('institution_id', institutionId);
-  
+
   if (filters.search) {
     const searchTerm = `%${filters.search.toLowerCase()}%`;
     query = query.or(`food_name.ilike.${searchTerm},food_type.ilike.${searchTerm},description.ilike.${searchTerm}`);
@@ -1117,7 +1117,7 @@ export async function filterMenuItems(filters: FoodFilters, institutionId?: stri
   if (filters.counter && filters.counter !== 'ALL') {
     query = query.eq('canteen_id', filters.counter);
   }
-  
+
   switch (filters.sortBy) {
     case 'popular':
       query = query.order('ai_popularity_score', { ascending: false }).order('rating', { ascending: false });
@@ -1137,7 +1137,7 @@ export async function filterMenuItems(filters: FoodFilters, institutionId?: stri
     default:
       query = query.order('food_name', { ascending: true });
   }
-  
+
   const { data } = await query.limit(100);
   return (data || []).map(mapMenuItem);
 }
@@ -1204,7 +1204,7 @@ export async function fetchNutritionInfo(menuItemId: string): Promise<any> {
 export async function fetchAIRecommendations(userId: string, institutionId: string, type: 'healthy' | 'trending' | 'personalized' | 'popular_today' | 'fast_pickup' | 'offers'): Promise<MenuItem[]> {
   try {
     let query = supabase.from('menu_items').select('*').eq('institution_id', institutionId).neq('status', 'archived').eq('is_available', true);
-    
+
     switch (type) {
       case 'healthy':
         query = query.order('rating', { ascending: false });
@@ -1226,7 +1226,7 @@ export async function fetchAIRecommendations(userId: string, institutionId: stri
         query = query.order('rating', { ascending: false });
         break;
     }
-    
+
     const { data } = await query.limit(10);
     return (data || []).map(mapMenuItem);
   } catch {
@@ -1252,7 +1252,7 @@ export function getOrderProgress(status: OrderStatus): { step: number; total: nu
     { key: 'ready', label: 'Ready for Pickup' },
     { key: 'completed', label: 'Completed' },
   ];
-  
+
   const currentIndex = steps.findIndex(s => s.key === status);
   return steps.map((step, index) => ({
     step: index + 1,
@@ -1265,7 +1265,7 @@ export function getOrderProgress(status: OrderStatus): { step: number; total: nu
 export function getEstimatedTimeRemaining(order: Order): number {
   if (order.status === 'completed' || order.status === 'cancelled') return 0;
   if (!order.ready_at) return 0;
-  
+
   const readyTime = new Date(order.ready_at).getTime();
   const now = Date.now();
   return Math.max(0, Math.round((readyTime - now) / 1000 / 60)); // minutes
@@ -1284,17 +1284,17 @@ export function generateReceipt(order: Order): string {
     'ITEMS:',
     '------',
   ];
-  
+
   order.items.forEach((item, idx) => {
     lines.push(`${idx + 1}. ${item.name} x${item.quantity} - ${formatINR(item.price * item.quantity)}`);
   });
-  
+
   lines.push('', `Total: ${formatINR(order.total_amount)}`, '');
-  
+
   if (order.pickup_code) lines.push(`Pickup Code: ${order.pickup_code}`);
   if (order.canteen_id) lines.push(`Counter: ${order.canteen_id}`);
-  
-   lines.push('', 'Thank you for ordering with FOODEXA!');
+
+  lines.push('', 'Thank you for ordering with FOODEXA!');
   return lines.join('\n');
 }
 
@@ -1568,7 +1568,7 @@ export function subscribeCanteens(callback: (payload: any) => void, institutionI
 }
 
 export function subscribeUserAddresses(userId: string, callback: (payload: any) => void): () => void {
-  if (userAddressesSupported !== true) return () => {};
+  if (userAddressesSupported !== true) return () => { };
   const channel = supabase
     .channel(`user_addresses:uid=${userId}`)
     .on('postgres_changes' as any, {

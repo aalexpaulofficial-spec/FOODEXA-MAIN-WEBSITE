@@ -35,43 +35,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onBack,
 }) => {
   const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile, anonymousSignIn } = useAuth();
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { X, Lock, User, ArrowRight, ArrowLeft, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2, RefreshCw } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
-import type { UserRole, Profile } from '../types';
-
-interface InstitutionData {
-  institution_id: string;
-  institution_name: string;
-  campus: string;
-  city: string;
-  state: string;
-  country: string;
-  institution_code: string;
-}
-
-interface AuthModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  initialMode?: 'login' | 'create';
-  selectedRole?: UserRole;
-  onLoginSuccess?: (data: { profile: Profile; institution: InstitutionData | null }) => void;
-  onBack?: () => void;
-}
-
-type AccountRole = 'student' | 'faculty' | 'guest';
-const ACCOUNT_ROLES: AccountRole[] = ['student', 'faculty', 'guest'];
-
-export const AuthModal: React.FC<AuthModalProps> = ({
-  isOpen,
-  onClose,
-  initialMode = 'login',
-  selectedRole = 'student',
-  onLoginSuccess,
-  onBack,
-}) => {
-  const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile, anonymousSignIn } = useAuth();
   const [mode, setMode] = useState<'login' | 'create' | 'quick'>(initialMode);
   const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success'>('form');
   const [loginUserId, setLoginUserId] = useState<string | null>(null);
@@ -82,7 +45,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [isQuickLoading, setIsQuickLoading] = useState(false);
   const [quickError, setQuickError] = useState<string | null>(null);
   const [loginInstitutionCode, setLoginInstitutionCode] = useState('');
-  const [loginEmail, setLoginEmail] = useState('');
+    const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -404,18 +367,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   if (!isOpen) return null;
 
    const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const instCode = loginInstitutionCode.trim();
-    if (!instCode) {
-      setLoginError('Please enter your Institution Code.');
-      return;
-    }
-    const { data: instData, error: instErr } = await validateInstitutionCode(instCode);
-    if (instErr || !instData) {
-      setLoginError(instErr || 'Invalid Institution Code');
-      return;
-    }
-    const normalizedLoginEmail = (loginEmail || '').trim().toLowerCase();
+     e.preventDefault();
+     const normalizedLoginEmail = (loginEmail || '').trim().toLowerCase();
      setCurrentEmail(normalizedLoginEmail);
      setLoginError(null);
      setInstitutionError(null);
@@ -452,11 +405,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setLoginUserId(authUser.id);
 
-    let institution: InstitutionData | null = instData;
-    setInstitutionData(institution);
-    setVerifiedInstitution(institution);
-    setValidatedInstitution(institution);
-    setInstitutionVerifyCode(institution.institution_code);
+    let institution: InstitutionData | null = null;
+    if (liveProfile.institution_id) {
+       const { data: instData } = await supabase
+         .from('institutions')
+         .select('id, name, campus, city, state, country, institution_code')
+         .eq('id', liveProfile.institution_id)
+         .maybeSingle();
+
+      if (instData) {
+        institution = {
+          institution_id: instData.id,
+          institution_name: instData.name,
+          campus: instData.campus || '',
+          city: instData.city || '',
+          state: instData.state || '',
+          country: instData.country || '',
+          institution_code: instData.institution_code,
+        };
+        setInstitutionData(institution);
+        setVerifiedInstitution(institution);
+        setValidatedInstitution(institution);
+        setInstitutionVerifyCode(institution.institution_code);
+      }
+    }
 
      const role = liveProfile.role;
 
@@ -474,12 +446,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
          setInstitutionData(institution);
          setStep('success');
          if (onLoginSuccess) {
-           if (liveProfile && instData && liveProfile.institution_id !== instData.id) {
-             console.info('[Auth] User logged in with different institution code, updating profile...');
-             await updateProfile({ institution_id: instData.id });
-             liveProfile.institution_id = instData.id;
-             institution = instData;
-           }
            onLoginSuccess({ profile: liveProfile, institution });
          }
          return;
@@ -490,12 +456,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
      setStep('success');
      if (onLoginSuccess) {
-       if (liveProfile && instData && liveProfile.institution_id !== instData.id) {
-         console.info('[Auth] User logged in with different institution code, updating profile...');
-         await updateProfile({ institution_id: instData.id });
-         liveProfile.institution_id = instData.id;
-         institution = instData;
-       }
        onLoginSuccess({ profile: liveProfile, institution });
      }
    };
@@ -741,6 +701,11 @@ if (validateError || !validatedInst) {
                       className="w-full px-4 py-3 rounded-2xl bg-[#F5F5F7] border-0 text-[#1D1D1F] focus:ring-2 focus:ring-[#0066CC] focus:bg-white transition-all placeholder:text-[#86868B]"
                       placeholder="e.g. CHRIST-BGR"
                     />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#86868B] mb-1 block">University Email</label>
+                    <input
+                      type="email"
                       required
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}

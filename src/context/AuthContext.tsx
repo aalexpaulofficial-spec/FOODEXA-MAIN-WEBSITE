@@ -15,7 +15,7 @@ interface AuthContextType {
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
   anonymousSignIn: (institutionCode: string, role: UserRole) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
-  signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; institutionId?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; designation?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
+  signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; institutionId?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
   signOut: () => Promise<void>;
   clearAllSessionData: () => void;
@@ -152,6 +152,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           semester: authUser.user_metadata?.semester || null,
           programme: authUser.user_metadata?.programme || null,
           campus_block: authUser.user_metadata?.campus_block || null,
+
         });
 
         if (upsertError) {
@@ -257,7 +258,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       semester?: string;
       programme?: string;
       campusBlock?: string;
-      designation?: string;
       facultyId?: string;
     }
   ) => {
@@ -298,7 +298,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           semester: metadata?.semester?.trim() || null,
           programme: metadata?.programme?.trim() || null,
           campus_block: metadata?.campusBlock?.trim() || null,
-          designation: metadata?.designation?.trim() || null,
           faculty_id: metadata?.facultyId?.trim() || null,
         },
       },
@@ -787,7 +786,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         semester: null,
         programme: null,
         campus_block: null,
-        designation: null,
+
         avatar_url: null,
         diet_preference: null,
         created_at: new Date().toISOString(),

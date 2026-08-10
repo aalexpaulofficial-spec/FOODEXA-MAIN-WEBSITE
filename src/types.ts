@@ -60,7 +60,7 @@ export interface Profile {
   semester: string | null;
   programme: string | null;
   campus_block: string | null;
-  designation: string | null;
+  designation?: string | null;
   avatar_url: string | null;
   diet_preference: 'all' | 'veg' | 'non-veg' | null;
   wallet_balance?: number;

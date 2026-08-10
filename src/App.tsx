@@ -424,8 +424,10 @@ export default function App() {
           setIsAuthOpen(false);
           sessionStorage.removeItem('foodexa_role');
           restoredDashboardRef.current = true;
-          openDashboardForProfile(liveProfile);
-          const dashRoute = getDashboardRoute(liveProfile.role) || '/student-dashboard';
+          if (liveProfile) {
+            openDashboardForProfile(liveProfile);
+          }
+          const dashRoute = getDashboardRoute(liveProfile?.role || null) || '/student-dashboard';
           navigate(dashRoute, { replace: true });
         }}
       />

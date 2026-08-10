@@ -147,12 +147,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           full_name: fullName,
           phone,
           role,
-          institution_id: null,
-          department: null,
-          semester: null,
-          programme: null,
-          campus_block: null,
-          designation: null,
+          institution_id: authUser.user_metadata?.institution_id || null,
+          department: authUser.user_metadata?.department || null,
+          semester: authUser.user_metadata?.semester || null,
+          programme: authUser.user_metadata?.programme || null,
+          campus_block: authUser.user_metadata?.campus_block || null,
+          designation: authUser.user_metadata?.designation || null,
         });
 
         if (upsertError) {

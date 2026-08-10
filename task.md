@@ -4,4 +4,4 @@
 - [x] Update `AuthModal.tsx` (Apple inputs, buttons, typography)
 - [x] Update `StudentPortalModal.tsx` and Tabs (Apple cards, glassmorphism)
 - [x] Replace emojis with real icons/images (especially payment/UPI)
-- [ ] Sync `foodexa` submodule and push to Vercel
+- [x] Sync `foodexa` submodule and push to Vercel

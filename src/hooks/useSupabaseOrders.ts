@@ -37,8 +37,8 @@ function mapJoinedItems(orderRow: any): OrderItem[] {
         id: String(oi.id || ''),
         order_id: String(oi.order_id || ''),
         menu_item_id: String(oi.menu_item_id || ''),
-        name: String(mi?.food_name || mi?.item_name || mi?.name || oi.name || 'Item'),
-        variant: String(oi.name || mi?.category || mi?.food_type || mi?.counter_name || ''),
+        name: String(mi?.food_name || 'Item'),
+        variant: String(mi?.category_name || mi?.food_type || ''),
         quantity: Number(oi.quantity || 1),
         price: Number(oi.price || 0),
         image_url: mi?.image_url || null,
@@ -110,7 +110,7 @@ function mapOrderRow(r: any): Order {
   };
 }
 
-const SELECT_WITH_ITEMS = '*, order_items(id, order_id, menu_item_id, quantity, price, name, menu_items(id, food_name, item_name, name, image_url, is_veg, price))';
+const SELECT_WITH_ITEMS = '*, order_items(id, order_id, menu_item_id, quantity, price, menu_items(id, food_name, food_type, category_name, image_url, is_veg, price))';
 
 export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersOptions): UseSupabaseOrdersReturn {
   const [orders, setOrders] = useState<Order[]>([]);

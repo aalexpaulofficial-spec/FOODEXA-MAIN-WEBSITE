@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Sparkles, Building2, Clock, Calendar } from 'lucide-react';
+import { Bell, Sparkles, Building2, Clock, Calendar, Hand } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { UserRole } from '../../types';
 
@@ -89,7 +89,7 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
             {/* Row 1: Greeting + Institution pill */}
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg sm:text-2xl font-semibold tracking-tight text-[#1D1D1F] whitespace-nowrap">
-                {greeting}, {name} <span className="inline-block animate-wave">👋</span>
+                {greeting}, {name} <Hand className="inline-block w-5 h-5 text-[#0071E3] align-[-2px]" />
               </h1>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold glass-card text-blue-700 whitespace-nowrap">
                 <Building2 className="w-3 h-3 text-[#0071E3] shrink-0" />
@@ -97,7 +97,7 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
               </span>
             </div>
 
-            {/* Row 2: Campus, City • Time • Date */}
+            {/* Row 2: Campus, City, Time, Date */}
             <div className="flex items-center gap-1.5 text-xs text-[#86868B] mt-0.5 flex-wrap">
               {(institutionCampus || institutionCity) && (
                 <span className="font-medium text-[#6E6E73]">

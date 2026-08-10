@@ -14,7 +14,7 @@ const BANNERS = [
     id: 'b1',
     title: 'Skip the Line',
     subtitle: 'Pre-order on FOODEXA and collect instantly at the counter with QR.',
-    gradient: 'from-blue-600 via-indigo-600 to-blue-700',
+    gradient: '',
     icon: <QrCode className="w-6 h-6 text-blue-200" />,
     badge: 'Express Pickup',
     actionText: 'Order Now',
@@ -97,7 +97,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
     const banners = dbBanners?.length ? dbBanners : BANNERS;
     return banners.map(banner => ({
       ...banner,
-      gradient: banner.gradient || 'from-blue-600 via-indigo-600 to-blue-700',
+      gradient: banner.gradient || '',
       icon: banner.icon || <QrCode className="w-6 h-6 text-blue-200" />,
       badge: banner.badge || 'FOODEXA',
       actionText: banner.actionText || 'Order Now',
@@ -221,7 +221,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -50 }}
               transition={{ duration: 0.4, ease: 'easeOut' }}
-              className={`p-6 sm:p-8 bg-gradient-to-r ${currentBannerData.gradient} text-white relative overflow-hidden flex flex-col justify-between min-h-[160px] sm:min-h-[180px]`}
+              className="p-6 sm:p-8 bg-[#1D1D1F] text-white relative overflow-hidden flex flex-col justify-between min-h-[160px] sm:min-h-[180px]"
             >
               <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
               <div className="absolute right-1/3 -top-12 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none"></div>

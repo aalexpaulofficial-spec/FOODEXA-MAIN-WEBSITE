@@ -786,6 +786,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         semester: null,
         programme: null,
         campus_block: null,
+        designation: null,
 
         avatar_url: null,
         diet_preference: null,

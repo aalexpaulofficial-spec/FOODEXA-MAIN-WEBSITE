@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Star, Send, Loader2, CheckCircle2 } from 'lucide-react';
+import { X, Star, Send, Loader2, CheckCircle2, Utensils, Smile, Handshake, PackageCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import type { Order } from '../../types';
 
@@ -13,11 +13,11 @@ interface OrderRatingModalProps {
 }
 
 const RATING_CATEGORIES = [
-  { key: 'food', label: 'Food Quality', emoji: '🍽️' },
-  { key: 'taste', label: 'Taste', emoji: '😋' },
-  { key: 'service', label: 'Service', emoji: '🤝' },
-  { key: 'delivery', label: 'Pickup Experience', emoji: '📦' },
-  { key: 'overall', label: 'Overall', emoji: '⭐' },
+  { key: 'food', label: 'Food Quality', icon: Utensils },
+  { key: 'taste', label: 'Taste', icon: Smile },
+  { key: 'service', label: 'Service', icon: Handshake },
+  { key: 'delivery', label: 'Pickup Experience', icon: PackageCheck },
+  { key: 'overall', label: 'Overall', icon: Star },
 ] as const;
 
 type RatingKey = typeof RATING_CATEGORIES[number]['key'];
@@ -147,15 +147,20 @@ export const OrderRatingModal: React.FC<OrderRatingModalProps> = ({ isOpen, onCl
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           {/* Rating Categories */}
-          {RATING_CATEGORIES.map((cat) => (
-            <div key={cat.key} className="flex items-center justify-between py-2">
-              <div className="flex items-center gap-2.5">
-                <span className="text-lg">{cat.emoji}</span>
-                <span className="text-sm font-bold text-slate-900">{cat.label}</span>
+          {RATING_CATEGORIES.map((cat) => {
+            const Icon = cat.icon;
+            return (
+              <div key={cat.key} className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-8 h-8 rounded-xl bg-[#F5F5F7] border border-slate-200 flex items-center justify-center">
+                    <Icon className="w-4 h-4 text-[#1D1D1F]" />
+                  </span>
+                  <span className="text-sm font-bold text-slate-900">{cat.label}</span>
+                </div>
+                <StarRating count={ratings[cat.key]} onRate={(v) => setRating(cat.key, v)} />
               </div>
-              <StarRating count={ratings[cat.key]} onRate={(v) => setRating(cat.key, v)} />
-            </div>
-          ))}
+            );
+          })}
 
           {/* Review */}
           <div>
@@ -175,7 +180,7 @@ export const OrderRatingModal: React.FC<OrderRatingModalProps> = ({ isOpen, onCl
           <button
             onClick={handleSubmit}
             disabled={submitting || ratings.overall === 0}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-sm shadow-lg shadow-amber-500/25 disabled:opacity-50 disabled:cursor-not-allowed hover:from-amber-400 hover:to-orange-400 transition-all active:scale-[0.98]"
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-[#0071E3] text-white font-bold text-sm shadow-lg shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0066CC] transition-all active:scale-[0.98]"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             {submitting ? 'Submitting...' : 'Submit Rating'}

@@ -1,7 +1,7 @@
 # Task: Apple Style Premium Redesign
 
-- [ ] Update `RoleSelectionModal.tsx` (Apple aesthetic, remove cyan gradients)
-- [ ] Update `AuthModal.tsx` (Apple inputs, buttons, typography)
-- [ ] Update `StudentPortalModal.tsx` and Tabs (Apple cards, glassmorphism)
-- [ ] Replace emojis with real icons/images (especially payment/UPI)
+- [x] Update `RoleSelectionModal.tsx` (Apple aesthetic, remove cyan gradients)
+- [x] Update `AuthModal.tsx` (Apple inputs, buttons, typography)
+- [x] Update `StudentPortalModal.tsx` and Tabs (Apple cards, glassmorphism)
+- [x] Replace emojis with real icons/images (especially payment/UPI)
 - [ ] Sync `foodexa` submodule and push to Vercel

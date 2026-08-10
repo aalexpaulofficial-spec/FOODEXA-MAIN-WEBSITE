@@ -256,7 +256,23 @@ export async function fetchMenuCategories(params?: { institution_id?: string }):
 }
 
 // ==================== ORDERS ====================
-const SELECT_ORDER_WITH_ITEMS = '*, order_items(id, order_id, menu_item_id, quantity, price, name, menu_items(id, food_name, image_url, is_veg, price))';
+const SELECT_ORDER_WITH_ITEMS = '*, order_items(id, order_id, menu_item_id, quantity, price, menu_items(id, food_name, food_type, category_name, image_url, is_veg, price))';
+
+let userAddressesSupported: boolean | null = null;
+
+function isMissingSchemaError(error: any): boolean {
+  const message = String(error?.message || '').toLowerCase();
+  return ['schema cache', 'could not find the table', 'does not exist', 'not found'].some((text) => message.includes(text));
+}
+
+function createOrderItemsPayload(orderId: string, items: { id: string; quantity: number; price: number }[]) {
+  return items.map((item) => ({
+    order_id: orderId,
+    menu_item_id: item.id,
+    quantity: item.quantity,
+    price: item.price,
+  }));
+}
 
 export async function fetchOrders(params: { user_id?: string; institution_id?: string; status?: OrderStatus }): Promise<Order[]> {
   let query = supabase.from('orders').select(SELECT_ORDER_WITH_ITEMS);
@@ -277,8 +293,8 @@ function resolveOrderItems(row: any): OrderItem[] {
         id: String(oi.id || ''),
         order_id: String(oi.order_id || ''),
         menu_item_id: String(oi.menu_item_id || ''),
-        name: String(mi?.food_name || mi?.item_name || mi?.name || oi.name || 'Item'),
-        variant: String(oi.name || mi?.category || mi?.food_type || mi?.counter_name || ''),
+        name: String(mi?.food_name || 'Item'),
+        variant: String(mi?.category_name || mi?.food_type || ''),
         quantity: Number(oi.quantity || 1),
         price: Number(oi.price || 0),
         image_url: mi?.image_url || null,
@@ -419,6 +435,16 @@ export async function createOrderAfterPayment(params: {
     return { data: null, error: 'Unable to process order. Please try again.' };
   }
 
+  const existingOrderQuery = await supabase
+    .from('orders')
+    .select(SELECT_ORDER_WITH_ITEMS)
+    .or(`razorpay_payment_id.eq.${params.razorpay_payment_id},razorpay_order_id.eq.${params.razorpay_order_id}`)
+    .maybeSingle();
+
+  if (existingOrderQuery.data) {
+    return { data: mapOrder(existingOrderQuery.data), error: null };
+  }
+
   const orderPayload: Record<string, any> = {
     student_id: params.user_id,
     email: params.email,
@@ -426,6 +452,17 @@ export async function createOrderAfterPayment(params: {
     phone,
     institution_id: actualInstitutionId,
     canteen_id: actualCanteenId,
+    items: params.itemsFull.map((item) => ({
+      menu_item_id: item.id,
+      item_name: item.name,
+      name: item.name,
+      variant: item.variant || null,
+      quantity: item.quantity,
+      price: item.price,
+      subtotal: item.subtotal ?? item.price * item.quantity,
+      image_url: item.image_url || null,
+      is_veg: item.is_veg ?? null,
+    })),
     total_amount: params.total_amount,
     transaction_amount: params.total_amount,
     status: 'accepted',
@@ -457,14 +494,7 @@ export async function createOrderAfterPayment(params: {
   }
 
   // Insert order_items
-  const orderItemsPayload = params.itemsFull.map((item) => ({
-    order_id: orderData.id,
-    menu_item_id: item.id,
-    quantity: item.quantity,
-    price: item.price,
-    name: item.name,
-    variant: item.variant || null,
-  }));
+  const orderItemsPayload = createOrderItemsPayload(orderData.id, params.itemsFull);
   const { error: itemsError } = await supabase.from('order_items').insert(orderItemsPayload);
   if (itemsError) {
     console.error('[Supabase] Failed to create order_items:', itemsError);
@@ -479,7 +509,7 @@ export async function createOrderAfterPayment(params: {
       razorpay_signature: params.razorpay_signature,
       amount: params.total_amount,
       currency: 'INR',
-      status: 'paid',
+      payment_status: 'paid',
       payment_method: 'razorpay',
       created_at: nowISO,
       updated_at: nowISO,
@@ -608,14 +638,7 @@ export async function placeOrder(params: {
     console.error('[Supabase] CRITICAL: Inserted order has missing required fields!', orderData);
   }
 
-  const orderItemsPayload = params.itemsFull.map((item) => ({
-    order_id: orderData.id,
-    menu_item_id: item.id,
-    name: item.name,
-    variant: item.variant || null,
-    quantity: item.quantity,
-    price: item.price,
-  }));
+  const orderItemsPayload = createOrderItemsPayload(orderData.id, params.itemsFull);
   const { error: itemsError } = await supabase.from('order_items').insert(orderItemsPayload);
   if (itemsError) {
     console.error('[Supabase] Failed to create order_items:', itemsError);
@@ -687,7 +710,7 @@ export async function updateOrderAfterPayment(params: {
       razorpay_signature: params.razorpay_signature,
       amount: params.total_amount || finalOrder.total_amount || 0,
       currency: 'INR',
-      status: 'paid',
+      payment_status: 'paid',
       payment_method: 'razorpay',
       created_at: now,
       updated_at: now,
@@ -1278,14 +1301,28 @@ export function generateReceipt(order: Order): string {
 // ==================== CANTEENS ====================
 export async function fetchCanteens(institutionId?: string): Promise<Canteen[]> {
   try {
-    let query = supabase.from('canteens').select('*').eq('is_active', true).order('name', { ascending: true });
+    let query = supabase.from('canteens').select('*').order('name', { ascending: true });
     if (institutionId) query = query.eq('institution_id', institutionId);
     const { data, error } = await query;
     if (error) {
       console.error('[Supabase] fetchCanteens error:', error.message);
       return [];
     }
-    return (data || []) as Canteen[];
+    return (data || [])
+      .filter((canteen: any) => {
+        if ('is_active' in canteen) return canteen.is_active !== false;
+        if ('available' in canteen) return canteen.available !== false;
+        if ('availability' in canteen) return canteen.availability !== false;
+        if ('status' in canteen) return !['inactive', 'disabled', 'archived', 'closed'].includes(String(canteen.status || '').toLowerCase());
+        return true;
+      })
+      .map((canteen: any) => ({
+        ...canteen,
+        is_active: canteen.is_active !== false,
+        is_ordering_enabled: canteen.is_ordering_enabled ?? canteen.available ?? canteen.availability ?? true,
+        prep_time_minutes: Number(canteen.prep_time_minutes || canteen.preparation_time || 10),
+        rating: Number(canteen.rating || 0),
+      })) as Canteen[];
   } catch (err) {
     console.error('[Supabase] fetchCanteens exception:', err);
     return [];
@@ -1308,6 +1345,7 @@ export async function fetchCanteenById(canteenId: string): Promise<Canteen | nul
 
 // ==================== USER ADDRESSES ====================
 export async function fetchUserAddresses(userId: string): Promise<UserAddress[]> {
+  if (userAddressesSupported === false) return [];
   try {
     const { data, error } = await supabase
       .from('user_addresses')
@@ -1316,9 +1354,15 @@ export async function fetchUserAddresses(userId: string): Promise<UserAddress[]>
       .order('is_default', { ascending: false })
       .order('created_at', { ascending: false });
     if (error) {
-      console.error('[Supabase] fetchUserAddresses error:', error.message);
+      if (isMissingSchemaError(error)) {
+        userAddressesSupported = false;
+        console.info('[Supabase] Saved delivery spots are not enabled in this project schema.');
+      } else {
+        console.error('[Supabase] fetchUserAddresses error:', error.message);
+      }
       return [];
     }
+    userAddressesSupported = true;
     return (data || []) as UserAddress[];
   } catch (err) {
     console.error('[Supabase] fetchUserAddresses exception:', err);
@@ -1332,6 +1376,9 @@ export async function addUserAddress(userId: string, params: {
   institution_id?: string | null;
   is_default?: boolean;
 }): Promise<{ success: boolean; error?: string; data?: UserAddress }> {
+  if (userAddressesSupported === false) {
+    return { success: false, error: 'Saved delivery spots are not available for this institution yet.' };
+  }
   try {
     const { label, address, institution_id, is_default = false } = params;
     if (!label.trim() || !address.trim()) {
@@ -1351,6 +1398,10 @@ export async function addUserAddress(userId: string, params: {
     }).select('*').maybeSingle();
 
     if (error) {
+      if (isMissingSchemaError(error)) {
+        userAddressesSupported = false;
+        return { success: false, error: 'Saved delivery spots are not available for this institution yet.' };
+      }
       console.error('[Supabase] addUserAddress error:', error.message);
       return { success: false, error: error.message };
     }
@@ -1365,6 +1416,9 @@ export async function updateUserAddress(addressId: string, params: {
   address?: string;
   is_default?: boolean;
 }): Promise<{ success: boolean; error?: string }> {
+  if (userAddressesSupported === false) {
+    return { success: false, error: 'Saved delivery spots are not available for this institution yet.' };
+  }
   try {
     const updates: Record<string, any> = {};
     if (params.label !== undefined) updates.label = params.label.trim();
@@ -1373,6 +1427,10 @@ export async function updateUserAddress(addressId: string, params: {
 
     const { error } = await supabase.from('user_addresses').update(updates).eq('id', addressId);
     if (error) {
+      if (isMissingSchemaError(error)) {
+        userAddressesSupported = false;
+        return { success: false, error: 'Saved delivery spots are not available for this institution yet.' };
+      }
       console.error('[Supabase] updateUserAddress error:', error.message);
       return { success: false, error: error.message };
     }
@@ -1383,9 +1441,16 @@ export async function updateUserAddress(addressId: string, params: {
 }
 
 export async function deleteUserAddress(addressId: string): Promise<{ success: boolean; error?: string }> {
+  if (userAddressesSupported === false) {
+    return { success: false, error: 'Saved delivery spots are not available for this institution yet.' };
+  }
   try {
     const { error } = await supabase.from('user_addresses').delete().eq('id', addressId);
     if (error) {
+      if (isMissingSchemaError(error)) {
+        userAddressesSupported = false;
+        return { success: false, error: 'Saved delivery spots are not available for this institution yet.' };
+      }
       console.error('[Supabase] deleteUserAddress error:', error.message);
       return { success: false, error: error.message };
     }
@@ -1396,10 +1461,17 @@ export async function deleteUserAddress(addressId: string): Promise<{ success: b
 }
 
 export async function setDefaultAddress(userId: string, addressId: string): Promise<{ success: boolean; error?: string }> {
+  if (userAddressesSupported === false) {
+    return { success: false, error: 'Saved delivery spots are not available for this institution yet.' };
+  }
   try {
     await supabase.from('user_addresses').update({ is_default: false }).eq('user_id', userId);
     const { error } = await supabase.from('user_addresses').update({ is_default: true }).eq('id', addressId);
     if (error) {
+      if (isMissingSchemaError(error)) {
+        userAddressesSupported = false;
+        return { success: false, error: 'Saved delivery spots are not available for this institution yet.' };
+      }
       console.error('[Supabase] setDefaultAddress error:', error.message);
       return { success: false, error: error.message };
     }
@@ -1496,6 +1568,7 @@ export function subscribeCanteens(callback: (payload: any) => void, institutionI
 }
 
 export function subscribeUserAddresses(userId: string, callback: (payload: any) => void): () => void {
+  if (userAddressesSupported !== true) return () => {};
   const channel = supabase
     .channel(`user_addresses:uid=${userId}`)
     .on('postgres_changes' as any, {

@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertCircle, ArrowRight, Award, Bell, BookOpen, Building2, CheckCircle2, ChefHat, Clock,
-  CreditCard, Heart, Home, Loader2, LogOut, MapPin, QrCode, Receipt, Search, Settings,
+  AlertCircle, ArrowRight, Award, BadgeIndianRupee, Bell, BookOpen, Building2, CheckCircle2, ChefHat, Clock,
+  CreditCard, Heart, Home, Landmark, Loader2, LogOut, MapPin, QrCode, Receipt, Search, Settings,
   ShoppingBag, Sparkles, Star, Tag, TrendingUp, User, Utensils, X, Zap, Edit3, Save,
   Phone, Mail, Hash, Shield, ChevronRight, Flame, Package, RefreshCw, Filter, Wifi,
   WifiOff, Coffee, Pizza, Sandwich, Salad, ChevronLeft, Check, ShoppingCart, Plus, Minus,
@@ -102,6 +102,17 @@ const roleColor = (role: UserRole | null | undefined) => {
   if (role === 'guest') return 'text-amber-300 border-amber-500/40 bg-amber-950/60';
   return 'text-gray-600 border-gray-300 bg-gray-50';
 };
+
+const isCanteenVisible = (canteen: any) => {
+  if (!canteen) return false;
+  if ('is_active' in canteen) return canteen.is_active !== false;
+  if ('available' in canteen) return canteen.available !== false;
+  if ('availability' in canteen) return canteen.availability !== false;
+  if ('status' in canteen) return !['inactive', 'disabled', 'archived', 'closed'].includes(String(canteen.status || '').toLowerCase());
+  return true;
+};
+
+const paymentMessage = (fallback = 'We could not complete your payment. Please try again.') => fallback;
 
 const formatDate = (d: string) => {
   if (!d) return '';
@@ -218,7 +229,7 @@ const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => v
           <button onClick={copyCode} className="w-full py-3 bg-white rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
             <Copy className="w-4 h-4" /> Copy Code
           </button>
-          <button onClick={downloadQR} className="w-full py-3 bg-[#0071E3] rounded-xl text-sm font-bold text-black hover:bg-blue-700 shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
+          <button onClick={downloadQR} className="w-full py-3 bg-[#0071E3] rounded-xl text-sm font-bold text-white hover:bg-[#0066CC] shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
             <Download className="w-4 h-4" /> Download QR
           </button>
         </div>
@@ -561,10 +572,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
      const unsubCanteens = subscribeCanteens((payload: any) => {
        const currentInstId = profile?.institution_id;
        if (!currentInstId) return;
-       if (payload.eventType === 'INSERT' && payload.new?.institution_id === currentInstId && payload.new?.is_active) {
+       if (payload.eventType === 'INSERT' && payload.new?.institution_id === currentInstId && isCanteenVisible(payload.new)) {
          setCanteens((prev) => [...prev, payload.new]);
        } else if (payload.eventType === 'UPDATE') {
-         setCanteens((prev) => prev.map((c) => c.id === payload.new.id ? payload.new : c));
+         setCanteens((prev) => {
+           const next = prev.map((c) => c.id === payload.new.id ? payload.new : c);
+           return isCanteenVisible(payload.new) ? next : next.filter((c) => c.id !== payload.new.id);
+         });
        } else if (payload.eventType === 'DELETE') {
          setCanteens((prev) => prev.filter((c) => c.id !== payload.old.id));
        }
@@ -863,7 +877,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
             if (!verifyResult.success) {
               // Payment failed — NO order was created in Supabase
-              setError(verifyResult.error || 'Payment verification failed.');
+              console.error('[Payment] Verification failed:', verifyResult.error);
+              setError(paymentMessage('We could not verify your payment. Any amount debited will be reconciled automatically.'));
               setActiveTab('payment_failed');
               setSubmittingOrder(false);
               if (triggerToast) triggerToast('Payment Verification Failed', verifyResult.error || 'Contact support.', 'warning');
@@ -892,7 +907,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             });
 
             if (createResult.error || !createResult.data) {
-              setError(createResult.error || 'Payment succeeded but order creation failed. Contact support.');
+              console.error('[Payment] Order creation failed after verification:', createResult.error);
+              setError(paymentMessage('Payment was verified, but we could not confirm your FOODEXA order. Please contact support before retrying.'));
               setActiveTab('payment_failed');
               setSubmittingOrder(false);
               if (triggerToast) triggerToast('Order Creation Failed', createResult.error || 'Contact support.', 'warning');
@@ -911,7 +927,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             if (triggerToast) triggerToast('Order Placed!', 'Your order is being prepared.', 'success');
 
           } catch (verifyErr: any) {
-            setError('Payment completed but order creation failed. Contact support.');
+            console.error('[Payment] Verification/order confirmation exception:', verifyErr);
+            setError(paymentMessage('Payment completed, but order confirmation needs support review.'));
             setActiveTab('payment_failed');
             setSubmittingOrder(false);
             if (triggerToast) triggerToast('Verification Error', 'Payment completed but order confirmation failed.', 'warning');
@@ -933,7 +950,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       const razorpay = new window.Razorpay(options);
       razorpay.on('payment.failed', async function (response: any) {
         // NO order was created in Supabase — nothing to update
-        setError(`Payment failed: ${response?.error?.description || 'Please try again.'}`);
+        console.warn('[Payment] Razorpay checkout failed:', response?.error);
+        setError(paymentMessage());
         setActiveTab('payment_failed');
         setSubmittingOrder(false);
         if (triggerToast) triggerToast('Payment Failed', response?.error?.description || 'Please try again.', 'warning');
@@ -941,7 +959,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       razorpay.open();
 
     } catch (err: any) {
-      setError(err?.message || 'Failed to initiate payment.');
+      console.error('[Payment] Initiation exception:', err);
+      setError(paymentMessage('We could not start the payment. Please try again.'));
       setActiveTab('payment_failed');
       setSubmittingOrder(false);
       if (triggerToast) triggerToast('Payment Error', err?.message || 'Failed to initiate payment.', 'warning');
@@ -1009,7 +1028,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 text-slate-900 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#F5F5F7] text-slate-900 overflow-hidden">
       <QRModal isOpen={!!qrOrder} onClose={() => setQrOrder(null)} order={qrOrder} />
 
       {/* Order Detail Modals */}
@@ -1303,8 +1322,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                                 <span>{formatINR(cartSubtotal)}</span>
                               </div>
                                <div className="flex justify-between text-xs text-gray-400">
-                                 <span>CONVINENCE FEE</span>
-                                 <span>₹0</span>
+                                 <span>Convenience Fee</span>
+                                 <span>{formatINR(0)}</span>
                                </div>
                                {cartDiscount > 0 && (
                                 <div className="flex justify-between text-xs text-emerald-600 font-medium">
@@ -1346,17 +1365,18 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                       <div className="space-y-6">
                         <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 space-y-4 shadow-sm">
                           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                            <CreditCard className="w-4 h-4 text-emerald-600" /> Payment Method
+                            <CreditCard className="w-4 h-4 text-[#0071E3]" /> Payment Method
                           </h3>
                           <div className="space-y-3">
                             <button
                               onClick={() => setPaymentMethod('razorpay')}
-                              className={`w-full flex items-center justify-between p-4 rounded-xl border ${paymentMethod === 'razorpay' ? 'border-black bg-emerald-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'} transition-all`}
+                              className={`w-full flex items-center justify-between p-4 rounded-xl border ${paymentMethod === 'razorpay' ? 'border-[#0071E3] bg-[#F5F5F7] shadow-sm' : 'border-slate-200 bg-white hover:bg-slate-50'} transition-all`}
                             >
                               <div className="flex items-center gap-3">
-                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'razorpay' ? 'border-black' : 'border-slate-300'}`}>
-                                  {paymentMethod === 'razorpay' && <div className="w-2 h-2 rounded-full bg-black" />}
+                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'razorpay' ? 'border-[#0071E3]' : 'border-slate-300'}`}>
+                                  {paymentMethod === 'razorpay' && <div className="w-2 h-2 rounded-full bg-[#0071E3]" />}
                                 </div>
+                                <BadgeIndianRupee className="w-5 h-5 text-[#0071E3]" />
                                 <span className="text-sm font-bold text-slate-900">UPI / Instant Pay (Zero Fee)</span>
                               </div>
                             </button>
@@ -1368,6 +1388,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                             >
                               <div className="flex items-center gap-3">
                                 <div className="w-4 h-4 rounded-full border-2 border-slate-300" />
+                                <CreditCard className="w-5 h-5 text-slate-400" />
                                 <span className="text-sm font-bold text-gray-400">FOODEXA Wallet (Coming Soon)</span>
                               </div>
                               <span className="text-xs font-black text-gray-500">N/A</span>
@@ -1375,12 +1396,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
                             <button
                               onClick={() => setPaymentMethod('cash')}
-                              className={`w-full flex items-center justify-between p-4 rounded-xl border ${paymentMethod === 'cash' ? 'border-black bg-emerald-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'} transition-all`}
+                              className={`w-full flex items-center justify-between p-4 rounded-xl border ${paymentMethod === 'cash' ? 'border-[#0071E3] bg-[#F5F5F7] shadow-sm' : 'border-slate-200 bg-white hover:bg-slate-50'} transition-all`}
                             >
                               <div className="flex items-center gap-3">
-                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'cash' ? 'border-black' : 'border-slate-300'}`}>
-                                  {paymentMethod === 'cash' && <div className="w-2 h-2 rounded-full bg-black" />}
+                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'cash' ? 'border-[#0071E3]' : 'border-slate-300'}`}>
+                                  {paymentMethod === 'cash' && <div className="w-2 h-2 rounded-full bg-[#0071E3]" />}
                                 </div>
+                                <Landmark className="w-5 h-5 text-slate-700" />
                                 <span className="text-sm font-bold text-slate-900">Pay at Counter (Cash)</span>
                               </div>
                             </button>
@@ -1391,7 +1413,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                         <button
                           onClick={handlePlaceOrder}
                           disabled={submittingOrder}
-                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-4 text-base font-black text-black shadow-lg shadow-emerald-500/30 disabled:opacity-50 hover:scale-[1.02] hover:shadow-emerald-500/40 transition-all"
+                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#0071E3] py-4 text-base font-black text-white shadow-lg shadow-blue-500/25 disabled:opacity-50 hover:bg-[#0066CC] transition-all active:scale-[0.98]"
                         >
                           {submittingOrder ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
                           {submittingOrder ? 'Processing...' : `Pay ${formatINR(cartGrandTotal)}`}
@@ -1519,7 +1541,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                                  <div className="flex flex-col items-center">
                                    <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 font-bold text-xs transition-all duration-500 z-10 ${
                                      isPast ? 'border-red-500/40 bg-red-950/30' :
-                                     isDone ? 'bg-[#0071E3] border-blue-600 text-black' :
+                                     isDone ? 'bg-[#0071E3] border-blue-600 text-white' :
                                      isActive ? 'bg-white border-blue-600 text-[#0071E3] shadow-[0_0_10px_rgba(37,99,235,0.3)]' :
                                      'bg-white border-slate-200 text-gray-600'
                                    }`}>
@@ -1544,7 +1566,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                        {/* Actions */}
                        <div className="pt-2 space-y-3">
                          {o && (stage >= 2) && (
-                           <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-[#0071E3] text-black font-bold text-sm shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition-colors">
+                           <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-[#0071E3] text-white font-bold text-sm shadow-lg shadow-blue-600/30 hover:bg-[#0066CC] transition-colors">
                              <QrCode className="w-5 h-5" /> Show Pickup QR
                            </button>
                          )}
@@ -1697,7 +1719,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                   <label className="flex items-center justify-between p-4 rounded-2xl border border-blue-500/0 bg-[#E2E8F0] shadow-sm cursor-not-allowed opacity-60">
                     <div className="flex items-center gap-3">
                       <div className="w-4 h-4 rounded-full border-2 border-slate-400 flex items-center justify-center" />
-                      <CreditCard className="w-5 h-5 text-emerald-600" />
+                      <CreditCard className="w-5 h-5 text-slate-500" />
                       <span className="text-sm font-black text-slate-900">FOODEXA Wallet (Coming Soon)</span>
                     </div>
                     <span className="text-xs font-black text-gray-500">N/A</span>
@@ -1709,7 +1731,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                       <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'razorpay' ? 'border-blue-500' : 'border-slate-300'}`}>
                         {paymentMethod === 'razorpay' && <div className="w-2 h-2 rounded-full bg-blue-500" />}
                       </div>
-                      <CreditCard className="w-5 h-5 text-[#0071E3]" />
+                      <BadgeIndianRupee className="w-5 h-5 text-[#0071E3]" />
                       <span className="text-sm font-black text-slate-900">UPI / Instant Pay</span>
                     </div>
                     <span className="text-xs font-medium text-gray-400">Zero Fee</span>
@@ -1727,8 +1749,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 <span className="font-bold text-slate-900">{formatINR(cartSubtotal)}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-600 font-medium border-b border-slate-200 pb-3">
-                <span>CONVINENCE FEE</span>
-                <span className="font-bold text-slate-900">₹0</span>
+                <span>Convenience Fee</span>
+                <span className="font-bold text-slate-900">{formatINR(0)}</span>
               </div>
               <div className="flex justify-between text-base font-black text-slate-900 pt-1">
                 <span>Total Amount</span>
@@ -1737,10 +1759,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               <button
                 onClick={handlePlaceOrder}
                 disabled={submittingOrder}
-                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#1D4ED8] py-4 text-sm font-black text-black shadow-md shadow-blue-500/20 hover:bg-[#0071E3] transition-all disabled:opacity-50 mt-2"
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#0071E3] py-4 text-sm font-black text-white shadow-md shadow-blue-500/20 hover:bg-[#0066CC] transition-all disabled:opacity-50 mt-2 active:scale-[0.98]"
               >
                 {submittingOrder ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                {submittingOrder ? 'Processing...' : `Pay ${formatINR(cartGrandTotal)} & Place Order →`}
+                {submittingOrder ? 'Processing...' : `Pay ${formatINR(cartGrandTotal)} & Place Order`}
               </button>
             </div>
           )}
@@ -1785,7 +1807,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             <button
               onClick={handleSaveProfile}
               disabled={savingProfile}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3 text-sm font-black text-black shadow-lg shadow-emerald-500/30 disabled:opacity-50 transition-all hover:scale-[1.02]"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#0071E3] py-3 text-sm font-black text-white shadow-lg shadow-blue-500/25 disabled:opacity-50 transition-all hover:bg-[#0066CC] active:scale-[0.98]"
             >
               {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {savingProfile ? 'Saving...' : 'Save Changes'}
@@ -1841,7 +1863,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 <button
                   onClick={handleLeaveInstitution}
                   disabled={leavingInstitution}
-                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black text-xs font-black hover:from-amber-400 hover:to-orange-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-md shadow-amber-500/20"
+                  className="flex-1 py-3 rounded-xl bg-[#1D1D1F] text-white text-xs font-black hover:bg-black transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-md"
                 >
                   {leavingInstitution ? <Loader2 className="w-4 h-4 animate-spin" /> : <Building2 className="w-4 h-4" />}
                   {leavingInstitution ? 'Leaving...' : 'Leave Institution'}
@@ -1855,10 +1877,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       {/* ── FLOATING LX AI BUTTON ────────────────────────────────────────── */}
       <button
         onClick={() => triggerToast && triggerToast('LX AI', 'AI Assistant coming soon!', 'ai')}
-        className="fixed bottom-24 right-5 z-40 p-3.5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-black shadow-md shadow-blue-600/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 border border-white/20"
+        className="fixed bottom-24 right-5 z-40 p-3.5 rounded-full bg-[#1D1D1F] text-white shadow-md hover:bg-black active:scale-95 transition-all flex items-center gap-2 border border-white/20"
         title="Chat with LX AI Food Assistant"
       >
-        <Sparkles className="w-5 h-5 text-cyan-200 animate-spin" />
+        <Sparkles className="w-5 h-5 text-white" />
         <span className="text-xs font-bold hidden sm:inline">Ask LX AI</span>
       </button>
 

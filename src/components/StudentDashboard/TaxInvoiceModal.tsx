@@ -9,9 +9,10 @@ interface TaxInvoiceModalProps {
   onClose: () => void;
   order: Order;
   institutionName: string;
+  studentName?: string;
 }
 
-export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClose, order, institutionName }) => {
+export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClose, order, institutionName, studentName }) => {
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen) return null;
@@ -26,6 +27,9 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
     : order.payment_method === 'cash' ? 'Cash at Counter'
     : order.payment_method === 'wallet' ? 'FOODEXA Wallet'
     : order.payment_method || 'N/A';
+  const paymentId = order.razorpay_payment_id || '';
+  const orderDate = order.created_at ? formatDateTime(order.created_at) : '';
+  const studentDisplayName = studentName || order.customer_name || 'Student';
 
   const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const convenienceFee = 0;
@@ -87,6 +91,10 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
             <div class="info-value"><span class="status-badge">${order.status.toUpperCase()}</span></div>
           </div>
           <div class="info-box">
+            <div class="info-label">Student</div>
+            <div class="info-value">${studentDisplayName}</div>
+          </div>
+          <div class="info-box">
             <div class="info-label">Institution</div>
             <div class="info-value">${institutionName}</div>
           </div>
@@ -100,9 +108,10 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
             <div class="info-label">Payment Method</div>
             <div class="info-value">${paymentMethod}</div>
           </div>
+          ${paymentId ? `<div class="info-box"><div class="info-label">Payment ID</div><div class="info-value" style="font-size:11px;word-break:break-all">${paymentId}</div></div>` : ''}
           <div class="info-box">
-            <div class="info-label">Completion Time</div>
-            <div class="info-value">${order.completed_at ? formatDateTime(order.completed_at) : formatDateTime(order.created_at)}</div>
+            <div class="info-label">Order Date</div>
+            <div class="info-value">${orderDate}</div>
           </div>
         </div>
         <table class="items-table">
@@ -201,63 +210,74 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
 
             {/* Info Grid */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Order Number</p>
-                <p className="text-sm font-bold text-slate-900">{orderNumber}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{orderNumber}</p>
               </div>
-              <div className="rounded-xl bg-emerald-50 p-3 border border-emerald-100">
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 p-3 border border-emerald-100 dark:border-emerald-900/40">
                 <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider mb-0.5">Status</p>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
-                  <CheckCircle2 className="w-3 h-3" /> Completed
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                  <CheckCircle2 className="w-3 h-3" /> {order.status === 'completed' ? 'Completed' : order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                 </span>
               </div>
-              <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Student</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{studentDisplayName}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-1 mb-0.5">
                   <Building2 className="w-3 h-3 text-slate-400" />
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Institution</p>
                 </div>
-                <p className="text-sm font-bold text-slate-900 truncate">{institutionName}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{institutionName}</p>
               </div>
-              <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-1 mb-0.5">
                   <MapPin className="w-3 h-3 text-slate-400" />
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Canteen</p>
                 </div>
-                <p className="text-sm font-bold text-slate-900 truncate">{order.counter || 'N/A'}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{order.counter || 'N/A'}</p>
               </div>
               {pickupCode && (
-                <div className="rounded-xl bg-blue-50 p-3 border border-blue-100">
+                <div className="rounded-xl bg-blue-50 dark:bg-blue-950/30 p-3 border border-blue-100 dark:border-blue-900/40">
                   <div className="flex items-center gap-1 mb-0.5">
                     <QrCode className="w-3 h-3 text-blue-400" />
                     <p className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Pickup Code</p>
                   </div>
-                  <p className="text-sm font-black text-blue-700">{pickupCode}</p>
+                  <p className="text-sm font-black text-blue-700 dark:text-blue-400">{pickupCode}</p>
                 </div>
               )}
               {tokenNumber && (
-                <div className="rounded-xl bg-amber-50 p-3 border border-amber-100">
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 p-3 border border-amber-100 dark:border-amber-900/40">
                   <div className="flex items-center gap-1 mb-0.5">
                     <Hash className="w-3 h-3 text-amber-400" />
                     <p className="text-[9px] font-bold text-amber-500 uppercase tracking-wider">Token Number</p>
                   </div>
-                  <p className="text-sm font-black text-amber-700">{tokenNumber}</p>
+                  <p className="text-sm font-black text-amber-700 dark:text-amber-400">{tokenNumber}</p>
                 </div>
               )}
-              <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-1 mb-0.5">
                   <CreditCard className="w-3 h-3 text-slate-400" />
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Payment Method</p>
                 </div>
-                <p className="text-sm font-bold text-slate-900">{paymentMethod}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{paymentMethod}</p>
               </div>
-              <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+              {paymentId && (
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <CreditCard className="w-3 h-3 text-slate-400" />
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Payment ID</p>
+                  </div>
+                  <p className="text-[10px] font-mono font-bold text-slate-900 dark:text-slate-100 break-all">{paymentId}</p>
+                </div>
+              )}
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-1 mb-0.5">
                   <Calendar className="w-3 h-3 text-slate-400" />
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Completion Time</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Order Date</p>
                 </div>
-                <p className="text-sm font-bold text-slate-900">
-                  {order.completed_at ? formatDateTime(order.completed_at) : formatDateTime(order.created_at)}
-                </p>
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{orderDate}</p>
               </div>
             </div>
 

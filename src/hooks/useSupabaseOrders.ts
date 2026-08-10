@@ -135,7 +135,7 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
       const { data, error: fetchError } = await supabase
         .from('orders')
         .select(SELECT_WITH_ITEMS)
-        .eq('student_id', userId)
+        .or(`student_id.eq.${userId},user_id.eq.${userId}`)
         .order('created_at', { ascending: false });
       if (fetchError) { setError(fetchError.message); return; }
       if (mountedRef.current) {

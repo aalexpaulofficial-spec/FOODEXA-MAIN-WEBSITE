@@ -35,6 +35,7 @@ import { NutritionTab } from './StudentDashboard/NutritionTab';
 import { AnalyticsTab } from './StudentDashboard/AnalyticsTab';
 import { HistoryTab } from './StudentDashboard/HistoryTab';
 import { ProfileTab } from './StudentDashboard/ProfileTab';
+import { SwitchInstitutionModal } from './StudentDashboard/SwitchInstitutionModal';
 import { OffersTab } from './StudentDashboard/OffersTab';
 import { OrderCompletionScreen } from './StudentDashboard/OrderCompletionScreen';
 import { OrderDetailsModal } from './StudentDashboard/OrderDetailsModal';
@@ -299,7 +300,7 @@ const BannerCarousel = ({ banners }: { banners: any[] }) => {
 // ── Main Component ──────────────────────────────────────────────────────────
 
 export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, onClose, role, triggerToast }) => {
-  const { user, profile, refreshProfile, signOut, updateProfile, leaveInstitution, institutionData } = useAuth();
+  const { user, profile, refreshProfile, signOut, updateProfile, leaveInstitution, institutionData, switchInstitution } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<PortalTab>('explore');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -347,6 +348,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [showLeaveInstitution, setShowLeaveInstitution] = useState(false);
   const [leavingInstitution, setLeavingInstitution] = useState(false);
   const [leaveInstitutionMessage, setLeaveInstitutionMessage] = useState<string | null>(null);
+  const [showSwitchInstitution, setShowSwitchInstitution] = useState(false);
   
    // Checkout States
    const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'wallet' | 'cash'>('razorpay');
@@ -1036,7 +1038,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         <OrderDetailsModal isOpen={true} onClose={() => setDetailsOrder(null)} order={detailsOrder} institutionName={institutionName} />
       )}
       {invoiceOrder && (
-        <TaxInvoiceModal isOpen={true} onClose={() => setInvoiceOrder(null)} order={invoiceOrder} institutionName={institutionName} />
+        <TaxInvoiceModal isOpen={true} onClose={() => setInvoiceOrder(null)} order={invoiceOrder} institutionName={institutionName} studentName={profile?.full_name || user?.email} />
       )}
       {ratingOrder && (
         <OrderRatingModal isOpen={true} onClose={() => setRatingOrder(null)} order={ratingOrder} userId={user?.id || ''} triggerToast={triggerToast} />
@@ -1161,6 +1163,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     pastOrders={pastOrders}
                     institutionName={institutionName}
                     userId={user?.id || ''}
+                    studentName={profile?.full_name || user?.email}
                     triggerToast={triggerToast}
                     onReorder={(order) => {
                       order.items.forEach((item) => {
@@ -1272,6 +1275,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                       }
                     }}
                     refreshProfile={refreshProfile}
+                    onSwitchInstitution={() => setShowSwitchInstitution(true)}
                     triggerToast={triggerToast}
                   />
                 )}
@@ -1838,6 +1842,24 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           </div>
         </div>
       )}
+
+      {/* ── SWITCH INSTITUTION MODAL ──────────────────────────────── */}
+      <SwitchInstitutionModal
+        isOpen={showSwitchInstitution}
+        onClose={() => setShowSwitchInstitution(false)}
+        onSwitch={async (code) => {
+          const result = await switchInstitution(code);
+          if (!result.error) {
+            triggerToast?.('Switched', 'Institution updated successfully.', 'success');
+            // Refresh all data
+            setTimeout(() => {
+              window.location.reload();
+            }, 1500);
+          }
+          return result;
+        }}
+        currentInstitutionName={institutionName}
+      />
 
       {/* ── LEAVE INSTITUTION MODAL ──────────────────────────────── */}
       {showLeaveInstitution && (

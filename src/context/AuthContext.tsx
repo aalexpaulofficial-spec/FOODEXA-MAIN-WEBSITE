@@ -22,6 +22,7 @@ interface AuthContextType {
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
   leaveInstitution: () => Promise<{ error: Error | null }>;
+  switchInstitution: (institutionCode: string) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -767,6 +768,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { error: error ? new Error(error.message) : null };
   };
 
+  const switchInstitution = async (institutionCode: string): Promise<{ error: string | null }> => {
+    const activeUser = user || (await supabase.auth.getUser()).data.user;
+    if (!activeUser) return { error: 'Not authenticated.' };
+
+    const trimmedCode = institutionCode.trim();
+    if (!trimmedCode) return { error: 'Institution Code is required.' };
+
+    try {
+      const result = await validateInstitutionCode(trimmedCode);
+      if (result.error || !result.data) {
+        return { error: result.error || 'Invalid Institution Code.' };
+      }
+
+      const newInstitutionId = result.data.institution_id;
+
+      const { error: updateError } = await upsertProfileSafely({
+        user_id: activeUser.id,
+        institution_id: newInstitutionId,
+      });
+
+      if (updateError) {
+        return { error: 'Failed to switch institution. Please try again.' };
+      }
+
+      setInstitutionData(result.data);
+      await fetchProfile(activeUser.id);
+
+      return { error: null };
+    } catch (err: any) {
+      console.error('[Auth] switchInstitution error:', err);
+      return { error: 'Something went wrong. Please try again.' };
+    }
+  };
+
     const anonymousSignIn = async (code: string, role: UserRole) => {
       const { data, error } = await validateInstitutionCode(code);
       if (error || !data) {
@@ -821,6 +856,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       updateProfile,
       refreshProfile,
       leaveInstitution,
+      switchInstitution,
     }}>
       {children}
     </AuthContext.Provider>

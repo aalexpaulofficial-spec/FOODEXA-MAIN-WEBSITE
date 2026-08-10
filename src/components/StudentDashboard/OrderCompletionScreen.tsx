@@ -106,7 +106,7 @@ export const OrderCompletionScreen: React.FC<OrderCompletionScreenProps> = ({
           transition={{ delay: 0.4 }}
           className="text-center space-y-2"
         >
-          <h1 className="text-3xl font-black text-[#1D1D1F]">Thank You for Ordering!</h1>
+          <h1 className="text-3xl font-black text-[#1D1D1F]">ORDER AGAIN, COME AGAIN!</h1>
           <p className="text-base text-[#6E6E73] font-medium">
             Your order has been successfully collected.
           </p>

@@ -401,28 +401,8 @@ notes: {
 
       await supabaseQuery('payments', 'PATCH', paymentUpdate, { razorpay_order_id: razorpay_order_id });
 
-       // Update the order in Supabase
-       const now = new Date();
-       const orderUpdate: any = {
-         payment_status: 'paid',
-         status: 'accepted',
-         order_status: 'Accepted',
-         razorpay_order_id: razorpay_order_id,
-         razorpay_payment_id: razorpay_payment_id,
-         razorpay_signature: razorpay_signature,
-         payment_method: 'razorpay',
-         paid_at: now.toISOString(),
-         accepted_at: now.toISOString(),
-         updated_at: now.toISOString(),
-         estimated_ready_at: new Date(now.getTime() + 15 * 60000).toISOString(),
-         kitchen_status: 'Pending',
-         counter_status: 'Incoming',
-       };
-
-      const { error: orderUpdateError } = await supabaseQuery('orders', 'PATCH', orderUpdate, { id: order_id });
-      if (orderUpdateError) {
-        console.error("[Razorpay] Failed to update order:", orderUpdateError);
-      }
+       // NOTE: Order creation happens client-side via createOrderAfterPayment after this endpoint returns.
+       // The client inserts the order into Supabase with all Razorpay fields after signature verification succeeds.
 
       return res.json({
         success: true,

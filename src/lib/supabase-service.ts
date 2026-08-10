@@ -419,6 +419,11 @@ export async function createOrderAfterPayment(params: {
   const actualInstitutionId = params.institution_id;
   let actualCanteenId = params.canteen_id;
 
+  if (!actualInstitutionId) {
+    return { data: null, error: 'You must join an institution before placing an order.' };
+  }
+
+  // Resolve canteen_id: try from first item's menu_item, then fall back to first active canteen for the institution
   if (params.itemsFull && params.itemsFull.length > 0) {
     const firstItemId = params.itemsFull[0].id;
     const { data: itemData } = await supabase
@@ -426,14 +431,23 @@ export async function createOrderAfterPayment(params: {
       .select('canteen_id')
       .eq('id', firstItemId)
       .single();
-    if (itemData) actualCanteenId = itemData.canteen_id;
+    if (itemData?.canteen_id) actualCanteenId = itemData.canteen_id;
   }
 
-  if (!actualInstitutionId) {
-    return { data: null, error: 'You must join an institution before placing an order.' };
-  }
   if (!actualCanteenId) {
-    return { data: null, error: 'Unable to process order. Please try again.' };
+    const { data: fallbackCanteen } = await supabase
+      .from('canteens')
+      .select('id')
+      .eq('institution_id', actualInstitutionId)
+      .eq('status', 'active')
+      .order('name', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (fallbackCanteen?.id) actualCanteenId = fallbackCanteen.id;
+  }
+
+  if (!actualCanteenId) {
+    return { data: null, error: 'No active canteen found for your institution. Please contact support.' };
   }
 
   const existingOrderQuery = await supabase
@@ -563,6 +577,10 @@ export async function placeOrder(params: {
   const actualInstitutionId = params.institution_id;
   let actualCanteenId = params.canteen_id;
 
+  if (!actualInstitutionId) {
+    return { data: null, error: 'You must join an institution before placing an order.' };
+  }
+
   if (params.itemsFull && params.itemsFull.length > 0) {
     const firstItemId = params.itemsFull[0].id;
     const { data: itemData, error: itemError } = await supabase
@@ -571,16 +589,25 @@ export async function placeOrder(params: {
       .eq('id', firstItemId)
       .single();
 
-    if (!itemError && itemData) {
+    if (!itemError && itemData?.canteen_id) {
       actualCanteenId = itemData.canteen_id;
     }
   }
 
-  if (!actualInstitutionId) {
-    return { data: null, error: 'You must join an institution before placing an order.' };
-  }
   if (!actualCanteenId) {
-    return { data: null, error: 'Failed to create order: missing canteen_id from menu item.' };
+    const { data: fallbackCanteen } = await supabase
+      .from('canteens')
+      .select('id')
+      .eq('institution_id', actualInstitutionId)
+      .eq('status', 'active')
+      .order('name', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (fallbackCanteen?.id) actualCanteenId = fallbackCanteen.id;
+  }
+
+  if (!actualCanteenId) {
+    return { data: null, error: 'No active canteen found for your institution. Please contact support.' };
   }
 
   const payload: Record<string, any> = {

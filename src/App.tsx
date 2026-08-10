@@ -271,7 +271,7 @@ export default function App() {
   const isDashboardOpen = isStudentPortalOpen || isInstitutionDashboardOpen || isKitchenDashboardOpen || isSuperAdminDashboardOpen;
 
   return (
-    <div className={`min-h-screen max-w-full overflow-x-hidden bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500 selection:text-slate-950 ${isDashboardOpen ? 'overflow-hidden' : ''}`}>
+    <div className={`min-h-screen max-w-full overflow-x-hidden bg-[#fcfcfc] text-black font-sans selection:bg-black selection:text-white ${isDashboardOpen ? 'overflow-hidden' : ''}`}>
       
       {/* Toast Notifications Container */}
       <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
@@ -356,29 +356,26 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <Footer
-        onOpenBookDemo={() => setIsBookDemoOpen(true)}
-        onOpenLxDrawer={() => setIsLxDrawerOpen(true)}
-      />
+      <Footer />
 
       {/* Floating Corner Buttons */}
       <div className="fixed bottom-6 right-6 z-40 flex items-center gap-3">
         {/* Floating Mic Button */}
         <button
           onClick={() => setIsVoiceModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-3 rounded-full bg-slate-900 border-2 border-emerald-500 text-emerald-300 font-bold text-xs shadow-2xl hover:scale-105 active:scale-95 transition-all cursor-pointer backdrop-blur-md"
+          className="flex items-center gap-2 px-4 py-3 rounded-full bg-white border border-gray-200 text-black font-medium text-xs shadow-lg hover:bg-gray-50 active:scale-95 transition-all cursor-pointer"
           title="Talk to LX Voice"
         >
-          <Mic className="w-4 h-4 text-emerald-400 animate-pulse" />
+          <Mic className="w-4 h-4 text-black animate-pulse" />
           <span className="hidden sm:inline">Talk to LX</span>
         </button>
 
         {/* Floating Ask LX AI Button */}
         <button
           onClick={() => setIsLxDrawerOpen(true)}
-          className="flex items-center gap-2 px-4 py-3 rounded-full bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-bold text-xs shadow-2xl shadow-emerald-500/40 hover:scale-105 active:scale-95 transition-all cursor-pointer border border-emerald-300"
+          className="flex items-center gap-2 px-4 py-3 rounded-full bg-black text-white font-medium text-xs shadow-lg hover:bg-gray-800 active:scale-95 transition-all cursor-pointer"
         >
-          <Sparkles className="w-4 h-4 text-slate-950 animate-bounce" />
+          <Sparkles className="w-4 h-4 text-white" />
           <span>Ask LX</span>
         </button>
       </div>

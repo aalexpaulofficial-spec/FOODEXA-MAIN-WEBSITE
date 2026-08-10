@@ -1,5 +1,5 @@
 import React from 'react';
-import { UserCircle, QrCode, ArrowRight } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 
 interface ForGuestsProps {
   onOpenCreateAccount: () => void;
@@ -7,37 +7,45 @@ interface ForGuestsProps {
 
 export const ForGuests: React.FC<ForGuestsProps> = ({ onOpenCreateAccount }) => {
   return (
-    <section className="py-20 bg-slate-950 relative border-t border-slate-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="bg-gradient-to-r from-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-8 sm:p-12 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8">
+    <section className="py-24 md:py-32 bg-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid lg:grid-cols-2 gap-16 items-center">
           
-          <div className="space-y-4 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400 font-mono">
-              <UserCircle className="w-3.5 h-3.5" />
-              <span>Campus Visitors</span>
-            </div>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-white">
-              Visiting campus? Order like a local.
-            </h3>
-            <p className="text-slate-300 text-sm leading-relaxed">
-              Parents, visiting speakers, and prospective students can easily access the FOODEXA guest experience. Browse available public food courts and place eligible orders without pretending to be a permanent institution member.
+          {/* Text */}
+          <div className="max-w-lg">
+            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-black leading-tight mb-6">
+              Guests order without an account
+            </h2>
+            <p className="text-gray-500 text-lg leading-relaxed mb-8">
+              Visitors, parents, and event attendees can scan a QR code at any campus canteen to browse the menu and place an order — no sign-up needed.
             </p>
-          </div>
-          
-          <div className="shrink-0 flex flex-col items-center gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-800/80 w-full md:w-auto">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
-              <QrCode className="w-8 h-8 text-amber-400" />
-            </div>
-            <div className="text-center">
-              <div className="text-sm font-bold text-white">Scan & Order</div>
-              <div className="text-xs text-slate-400 mt-1">Scan QR codes at participating cafes.</div>
-            </div>
-            <button onClick={onOpenCreateAccount} className="w-full mt-2 px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer">
-              <span>Continue as Guest</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+            <button onClick={onOpenCreateAccount} className="btn-secondary flex items-center gap-2 cursor-pointer">
+              Learn more <ArrowUpRight className="w-4 h-4" />
             </button>
           </div>
           
+          {/* Mockup */}
+          <div className="relative">
+            <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-teal-100/60 via-cyan-100/40 to-blue-100/30 scale-105 blur-2xl"></div>
+            <div className="relative bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                <span className="ml-3 text-xs text-gray-400 font-mono">foodexa.app / guest</span>
+              </div>
+              <div className="flex flex-col items-center py-6 space-y-4">
+                <div className="w-24 h-24 bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300 flex items-center justify-center">
+                  <span className="text-3xl">📷</span>
+                </div>
+                <p className="text-sm text-gray-500 text-center">Scan any campus QR code to start ordering</p>
+                <div className="w-full max-w-xs bg-green-50 border border-green-100 rounded-xl px-4 py-3 text-center">
+                  <div className="text-sm font-medium text-green-700">✓ Menu loaded — Central Canteen</div>
+                  <div className="text-xs text-green-600 mt-1">12 items available</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>

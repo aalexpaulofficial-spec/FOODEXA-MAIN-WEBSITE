@@ -1,0 +1,22 @@
+# Task: Codex-Style Redesign for FOODEXA
+
+- [x] Update `index.css` with Codex light theme tokens
+- [x] Update `App.tsx` global container styles
+- [x] Redesign `Navbar.tsx`
+- [x] Redesign `Hero.tsx`
+- [x] Redesign `PlatformFeatures.tsx`
+- [x] Redesign `ForStudents.tsx`
+- [x] Redesign `ForFaculty.tsx`
+- [x] Redesign `ForGuests.tsx`
+- [x] Redesign `ForInstitutions.tsx`
+- [x] Redesign `OrderTrackingSection.tsx`
+- [x] Redesign `QrPickupSection.tsx`
+- [x] Redesign `AiSection.tsx`
+- [x] Redesign `AnalyticsDashboard.tsx`
+- [x] Redesign `SecuritySection.tsx`
+- [x] Redesign `HowItWorksSection.tsx`
+- [x] Redesign `SuperAdminSection.tsx`
+- [x] Redesign `Pricing.tsx`
+- [x] Redesign `Faq.tsx`
+- [x] Redesign `FinalCtaSection.tsx`
+- [x] Redesign `Footer.tsx`

@@ -43,10 +43,10 @@ export const PortalAccessModal: React.FC<PortalAccessModalProps> = ({
   const colorMap = {
     emerald: {
       bg: 'bg-emerald-950',
-      border: 'border-emerald-500/30',
-      text: 'text-emerald-400',
+      border: 'border-gray-300',
+      text: 'text-black',
       hover: 'hover:border-emerald-400',
-      iconBg: 'bg-emerald-500/20',
+      iconBg: 'bg-black/20',
       iconText: 'text-emerald-300',
     },
     blue: {
@@ -68,19 +68,19 @@ export const PortalAccessModal: React.FC<PortalAccessModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
-      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-white/90 backdrop-blur-md">
+      <div className="relative w-full max-w-lg bg-gray-50 border border-gray-200 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
 
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-full bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+          className="absolute top-5 right-5 p-2 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-black transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
         <div className="space-y-1.5">
-          <h3 className="text-2xl font-extrabold text-white">Create Your Account</h3>
-          <p className="text-xs text-slate-300">Choose your role</p>
+          <h3 className="text-2xl font-extrabold text-black">Create Your Account</h3>
+          <p className="text-xs text-gray-600">Choose your role</p>
         </div>
 
         <div className="space-y-3">
@@ -101,7 +101,7 @@ export const PortalAccessModal: React.FC<PortalAccessModalProps> = ({
                     <h4 className={`text-sm font-bold ${c.text}`}>
                       {role.title}
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                    <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
                       {role.description}
                     </p>
                   </div>
@@ -112,13 +112,13 @@ export const PortalAccessModal: React.FC<PortalAccessModalProps> = ({
           })}
         </div>
 
-        <div className="pt-3 border-t border-slate-800/80 text-center text-xs text-slate-400">
+        <div className="pt-3 border-t border-gray-200/80 text-center text-xs text-gray-500">
           <span>Institution Administrator? </span>
           <a
             href="https://foodexa-institution-platform.vercel.app/"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-emerald-400 font-bold hover:underline inline-flex items-center gap-1 ml-1"
+            className="text-black font-bold hover:underline inline-flex items-center gap-1 ml-1"
           >
             <span>Open Institution Portal</span>
           </a>

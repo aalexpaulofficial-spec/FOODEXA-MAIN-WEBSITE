@@ -136,42 +136,42 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
   };
 
   const QueueCard = ({ label, icon: Icon, count, color }: { label: string; icon: React.ElementType; count: number; color: string }) => (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4">
       <Icon className={`w-5 h-5 ${color}`} />
-      <p className="mt-4 text-3xl font-black text-white">{count}</p>
-      <p className="text-xs font-bold text-slate-500">{label}</p>
+      <p className="mt-4 text-3xl font-black text-black">{count}</p>
+      <p className="text-xs font-bold text-gray-400">{label}</p>
     </div>
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100">
+    <div className="fixed inset-0 z-50 bg-white text-gray-900">
       <div className="flex h-full min-h-0 flex-col">
-        <header className="shrink-0 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur-xl sm:px-6">
+        <header className="shrink-0 border-b border-gray-200 bg-white/95 px-4 py-3 backdrop-blur-xl sm:px-6">
           <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-500 text-sm font-black text-slate-950 shadow-lg shadow-emerald-950">FX</div>
               <div className="min-w-0">
-                <h2 className="truncate text-base font-black tracking-tight text-white sm:text-lg">Institution Dashboard</h2>
-                <p className="truncate text-[11px] text-slate-400">{institutionData?.institution_code ? `Code: ${institutionData.institution_code}` : 'Institution sync pending'}</p>
+                <h2 className="truncate text-base font-black tracking-tight text-black sm:text-lg">Institution Dashboard</h2>
+                <p className="truncate text-[11px] text-gray-500">{institutionData?.institution_code ? `Code: ${institutionData.institution_code}` : 'Institution sync pending'}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={handleSignOut} className="rounded-full border border-slate-800 bg-slate-900 p-2 text-slate-400 transition hover:text-white"><LogOut className="w-5 h-5" /></button>
-              <button onClick={onClose} className="rounded-full border border-slate-800 bg-slate-900 p-2 text-slate-400 transition hover:text-white"><X className="w-5 h-5" /></button>
+              <button onClick={handleSignOut} className="rounded-full border border-gray-200 bg-gray-50 p-2 text-gray-500 transition hover:text-black"><LogOut className="w-5 h-5" /></button>
+              <button onClick={onClose} className="rounded-full border border-gray-200 bg-gray-50 p-2 text-gray-500 transition hover:text-black"><X className="w-5 h-5" /></button>
             </div>
           </div>
 
           {/* Tab navigation */}
-          <div className="flex gap-1 mt-3 border-t border-slate-800 pt-3">
+          <div className="flex gap-1 mt-3 border-t border-gray-200 pt-3">
             <button
               onClick={() => setMenuTab('orders')}
-              className={`rounded-lg px-4 py-2 text-xs font-bold transition-all ${menuTab === 'orders' ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`rounded-lg px-4 py-2 text-xs font-bold transition-all ${menuTab === 'orders' ? 'bg-black/20 border border-black/40 text-emerald-300' : 'text-gray-400 hover:text-gray-600'}`}
             >
               Orders
             </button>
             <button
               onClick={() => setMenuTab('inventory')}
-              className={`rounded-lg px-4 py-2 text-xs font-bold transition-all ${menuTab === 'inventory' ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`rounded-lg px-4 py-2 text-xs font-bold transition-all ${menuTab === 'inventory' ? 'bg-black/20 border border-black/40 text-emerald-300' : 'text-gray-400 hover:text-gray-600'}`}
             >
               Inventory
               {outOfStockCount > 0 && (
@@ -182,7 +182,7 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
         </header>
         <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 xl:p-8">
           {loading ? (
-            <div className="flex items-center justify-center py-20 text-sm font-bold text-slate-300"><Loader2 className="w-5 h-5 animate-spin text-emerald-400 mr-2" />Loading institution data...</div>
+            <div className="flex items-center justify-center py-20 text-sm font-bold text-gray-600"><Loader2 className="w-5 h-5 animate-spin text-black mr-2" />Loading institution data...</div>
           ) : (
             <div className="mx-auto w-full max-w-[1800px] space-y-6">
 
@@ -191,11 +191,11 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                 <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
                   <QueueCard label="Incoming Queue" icon={Inbox} count={counts.incoming} color="text-amber-400" />
                   <QueueCard label="Preparing" icon={ChefHat} count={counts.preparing} color="text-violet-400" />
-                  <QueueCard label="Ready for Pickup" icon={QrCode} count={counts.ready} color="text-emerald-400" />
-                  <QueueCard label="Completed" icon={CheckCircle2} count={counts.completed} color="text-slate-400" />
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4"><Utensils className="w-5 h-5 text-emerald-400" /><p className="mt-4 text-3xl font-black text-white">{stats.menuItems}</p><p className="text-xs font-bold text-slate-500">Menu Items</p></div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4"><ClipboardList className="w-5 h-5 text-emerald-400" /><p className="mt-4 text-3xl font-black text-white">{stats.orders}</p><p className="text-xs font-bold text-slate-500">Total Orders</p></div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4"><Users className="w-5 h-5 text-emerald-400" /><p className="mt-4 text-3xl font-black text-white">{stats.counters}</p><p className="text-xs font-bold text-slate-500">Active Counters</p></div>
+                  <QueueCard label="Ready for Pickup" icon={QrCode} count={counts.ready} color="text-black" />
+                  <QueueCard label="Completed" icon={CheckCircle2} count={counts.completed} color="text-gray-500" />
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4"><Utensils className="w-5 h-5 text-black" /><p className="mt-4 text-3xl font-black text-black">{stats.menuItems}</p><p className="text-xs font-bold text-gray-400">Menu Items</p></div>
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4"><ClipboardList className="w-5 h-5 text-black" /><p className="mt-4 text-3xl font-black text-black">{stats.orders}</p><p className="text-xs font-bold text-gray-400">Total Orders</p></div>
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4"><Users className="w-5 h-5 text-black" /><p className="mt-4 text-3xl font-black text-black">{stats.counters}</p><p className="text-xs font-bold text-gray-400">Active Counters</p></div>
                 </div>
               )}
 
@@ -204,25 +204,25 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                        <Package className="w-4 h-4 text-emerald-400" /> Menu Inventory
+                      <h3 className="text-sm font-extrabold text-black flex items-center gap-2">
+                        <Package className="w-4 h-4 text-black" /> Menu Inventory
                       </h3>
-                      <p className="text-[10px] text-slate-500 mt-1">
+                      <p className="text-[10px] text-gray-400 mt-1">
                         {menuItems.length} items · {outOfStockCount} out of stock · {lowStockCount} low stock
                       </p>
                     </div>
                     <button
                       onClick={load}
-                      className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-[10px] font-bold text-slate-400 hover:text-white hover:border-slate-600 transition-colors"
+                      className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-[10px] font-bold text-gray-500 hover:text-black hover:border-slate-600 transition-colors"
                     >
                       <RefreshCw className="w-3 h-3" /> Refresh
                     </button>
                   </div>
 
                   {menuItems.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/50 p-10 text-center">
+                    <div className="rounded-2xl border border-dashed border-gray-300 bg-white/50 p-10 text-center">
                       <Package className="w-10 h-10 mx-auto text-slate-600 mb-3" />
-                      <p className="text-sm font-bold text-slate-400">No menu items yet</p>
+                      <p className="text-sm font-bold text-gray-500">No menu items yet</p>
                       <p className="text-xs text-slate-600 mt-1">Add items in Supabase to see them here.</p>
                     </div>
                   ) : (
@@ -230,17 +230,17 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                       {menuItems.map((item) => {
                         const { isSoldOut } = getItemAvailability(item);
                         return (
-                          <div key={item.id} className={`rounded-2xl border p-4 transition-all ${isSoldOut ? 'border-red-500/30 bg-red-950/20' : 'border-slate-800 bg-slate-950 hover:border-slate-700'}`}>
+                          <div key={item.id} className={`rounded-2xl border p-4 transition-all ${isSoldOut ? 'border-red-500/30 bg-red-950/20' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-1.5">
-                                  <h4 className="text-sm font-extrabold text-white truncate">{item.name}</h4>
+                                  <h4 className="text-sm font-extrabold text-black truncate">{item.name}</h4>
                                   {item.is_veg !== false && item.is_veg !== null && (
-                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                                    <span className="w-2.5 h-2.5 rounded-full bg-black shrink-0" />
                                   )}
                                 </div>
                                 {item.description && (
-                                  <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">{item.description}</p>
+                                  <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{item.description}</p>
                                 )}
                               </div>
                               <span className="shrink-0 text-xs font-black text-emerald-300">{formatINR(item.price)}</span>
@@ -249,54 +249,54 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                             {/* Tags row */}
                             <div className="flex flex-wrap items-center gap-1.5 mt-2">
                               {item.counter_name && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-semibold text-slate-400">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-semibold text-gray-500">
                                   <Building2 className="w-2 h-2" />{item.counter_name}
                                 </span>
                               )}
                               {item.category && (
-                                <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-semibold text-slate-400">
+                                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-semibold text-gray-500">
                                   {item.category}
                                 </span>
                               )}
                             </div>
 
                             {/* Stock section */}
-                            <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-800 pt-3">
+                            <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-200 pt-3">
                               <div className="flex items-center gap-2">
-                                <Package className={`w-3.5 h-3.5 ${isSoldOut ? 'text-red-400' : item.stock !== undefined && item.stock <= 5 ? 'text-amber-400' : 'text-emerald-400'}`} />
+                                <Package className={`w-3.5 h-3.5 ${isSoldOut ? 'text-red-400' : item.stock !== undefined && item.stock <= 5 ? 'text-amber-400' : 'text-black'}`} />
                                 {editingStockId === item.id ? (
                                   <div className="flex items-center gap-1">
                                     <button
                                       onClick={() => setStockInput((v) => Math.max(0, v - 1))}
-                                      className="p-0.5 rounded bg-slate-800 text-slate-400 hover:text-white"
+                                      className="p-0.5 rounded bg-gray-100 text-gray-500 hover:text-black"
                                     ><Minus className="w-3 h-3" /></button>
                                     <input
                                       type="number"
                                       min={0}
                                       value={stockInput}
                                       onChange={(e) => setStockInput(Math.max(0, parseInt(e.target.value) || 0))}
-                                      className="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-xs font-bold text-white text-center outline-none focus:border-emerald-500/60"
+                                      className="w-16 rounded border border-gray-300 bg-gray-50 px-2 py-0.5 text-xs font-bold text-black text-center outline-none focus:border-black/60"
                                     />
                                     <button
                                       onClick={() => setStockInput((v) => v + 1)}
-                                      className="p-0.5 rounded bg-slate-800 text-slate-400 hover:text-white"
+                                      className="p-0.5 rounded bg-gray-100 text-gray-500 hover:text-black"
                                     ><Plus className="w-3 h-3" /></button>
                                     <button
                                       onClick={() => handleStockUpdate(item.id, stockInput)}
                                       disabled={savingStock}
-                                      className="p-0.5 rounded bg-emerald-950 text-emerald-400 hover:bg-emerald-900"
+                                      className="p-0.5 rounded bg-emerald-950 text-black hover:bg-emerald-900"
                                     ><Save className="w-3 h-3" /></button>
                                     <button
                                       onClick={() => setEditingStockId(null)}
-                                      className="p-0.5 rounded bg-slate-800 text-slate-500 hover:text-slate-300"
+                                      className="p-0.5 rounded bg-gray-100 text-gray-400 hover:text-gray-600"
                                     ><X className="w-3 h-3" /></button>
                                   </div>
                                 ) : (
                                   <>
-                                    <span className={`text-xs font-bold ${isSoldOut ? 'text-red-400' : 'text-white'}`}>
+                                    <span className={`text-xs font-bold ${isSoldOut ? 'text-red-400' : 'text-black'}`}>
                                       {item.stock !== undefined ? item.stock : '∞'}
                                     </span>
-                                    <span className="text-[9px] text-slate-500">in stock</span>
+                                    <span className="text-[9px] text-gray-400">in stock</span>
                                   </>
                                 )}
                               </div>
@@ -310,14 +310,14 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                                     <AlertCircle className="w-2.5 h-2.5" /> Unavailable
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/50 bg-emerald-950/80 px-2 py-0.5 text-[9px] font-bold text-emerald-300">
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-black/50 bg-emerald-950/80 px-2 py-0.5 text-[9px] font-bold text-emerald-300">
                                     <CheckCircle2 className="w-2.5 h-2.5" /> Available
                                   </span>
                                 )}
                                 {editingStockId !== item.id && (
                                   <button
                                     onClick={() => { setEditingStockId(item.id); setStockInput(item.stock ?? 0); }}
-                                    className="p-1 rounded-full text-slate-500 hover:text-white hover:bg-slate-800 transition-colors"
+                                    className="p-1 rounded-full text-gray-400 hover:text-black hover:bg-gray-100 transition-colors"
                                   >
                                     <Package className="w-3 h-3" />
                                   </button>
@@ -335,20 +335,20 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
               {/* ── ORDERS TAB ── */}
               {menuTab === 'orders' && (
                 <section className="space-y-4">
-                  <h3 className="text-sm font-extrabold text-white">Live Order Feed</h3>
+                  <h3 className="text-sm font-extrabold text-black">Live Order Feed</h3>
                   {orders.length === 0 ? (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 text-center text-xs text-slate-500">No orders yet.</div>
+                    <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center text-xs text-gray-400">No orders yet.</div>
                   ) : (
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {orders.slice(0, 50).map((o: any) => (
-                        <div key={o.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                        <div key={o.id} className="rounded-2xl border border-gray-200 bg-white p-4">
                           <div className="flex items-center justify-between">
                             <p className="text-xs font-black text-emerald-300">{o.order_id} {o.token_number && <span className="ml-1 text-amber-300">· {o.token_number}</span>}</p>
                             <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${o.status === 'completed' ? 'text-emerald-300' : o.status === 'preparing' ? 'text-indigo-300' : o.status === 'ready' ? 'text-emerald-300' : 'text-yellow-300'}`}>{o.status}</span>
                           </div>
-                          <p className="mt-2 text-xs text-slate-300">Counter: {o.canteen_id || o.counter_status || ''}</p>
-                          <p className="text-xs text-slate-300">Items: {o.items?.length || 0}</p>
-                          <p className="text-xs text-slate-300">Total: {o.total_amount}</p>
+                          <p className="mt-2 text-xs text-gray-600">Counter: {o.canteen_id || o.counter_status || ''}</p>
+                          <p className="text-xs text-gray-600">Items: {o.items?.length || 0}</p>
+                          <p className="text-xs text-gray-600">Total: {o.total_amount}</p>
                           {o.pickup_code && <p className="text-xs text-cyan-400 font-mono mt-1">Code: {o.pickup_code}</p>}
                           {o.estimated_ready_at && <p className="text-xs text-amber-400 font-bold mt-1">~{Math.round((new Date(o.estimated_ready_at).getTime() - Date.now()) / 60000) || 15} mins est.</p>}
                         </div>

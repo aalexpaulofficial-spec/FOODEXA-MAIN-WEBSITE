@@ -118,13 +118,13 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl my-8 space-y-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-white/90 backdrop-blur-md overflow-y-auto">
+      <div className="relative w-full max-w-2xl bg-gray-50 border border-gray-200 rounded-3xl p-6 sm:p-8 shadow-2xl my-8 space-y-6">
         
         {/* Close Button */}
         <button
           onClick={handleClose}
-          className="absolute top-5 right-5 p-2 rounded-full bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+          className="absolute top-5 right-5 p-2 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-black transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
@@ -137,10 +137,10 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                 <Building2 className="w-3.5 h-3.5 text-indigo-400" />
                 <span>Enterprise Partner Onboarding</span>
               </div>
-              <h3 className="text-2xl font-extrabold text-white">
+              <h3 className="text-2xl font-extrabold text-black">
                 Register Your Institution
               </h3>
-              <p className="text-xs text-slate-300">
+              <p className="text-xs text-gray-600">
                 Digitize your entire campus food court ecosystem with Foodexa AI &amp; Smart Pickups.
               </p>
             </div>
@@ -155,8 +155,8 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
             <div className="grid sm:grid-cols-2 gap-4">
               {/* Institution Name */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                  Institution Name <span className="text-emerald-400">*</span>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                  Institution Name <span className="text-black">*</span>
                 </label>
                 <input
                   type="text"
@@ -164,14 +164,14 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   value={formData.institutionName}
                   onChange={(e) => setFormData({ ...formData, institutionName: e.target.value })}
                   placeholder="e.g. Christ (Deemed to be University)"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                  className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
                 />
               </div>
 
               {/* Campus */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                  Campus <span className="text-emerald-400">*</span>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                  Campus <span className="text-black">*</span>
                 </label>
                 <input
                   type="text"
@@ -179,14 +179,14 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   value={formData.campus}
                   onChange={(e) => setFormData({ ...formData, campus: e.target.value })}
                   placeholder="e.g. Kengeri Campus"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                  className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
                 />
               </div>
 
               {/* City */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                  City <span className="text-emerald-400">*</span>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                  City <span className="text-black">*</span>
                 </label>
                 <input
                   type="text"
@@ -194,14 +194,14 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   placeholder="e.g. Bengaluru"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                  className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
                 />
               </div>
 
               {/* State */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                  State <span className="text-emerald-400">*</span>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                  State <span className="text-black">*</span>
                 </label>
                 <input
                   type="text"
@@ -209,14 +209,14 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   value={formData.state}
                   onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                   placeholder="e.g. Karnataka"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                  className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
                 />
               </div>
 
               {/* Country */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                  Country <span className="text-emerald-400">*</span>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                  Country <span className="text-black">*</span>
                 </label>
                 <input
                   type="text"
@@ -224,14 +224,14 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   value={formData.country}
                   onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                   placeholder="India"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                  className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
                 />
               </div>
 
               {/* Institution Email */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                  Institution Email <span className="text-emerald-400">*</span>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                  Institution Email <span className="text-black">*</span>
                 </label>
                 <input
                   type="email"
@@ -239,14 +239,14 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   value={formData.institutionEmail}
                   onChange={(e) => setFormData({ ...formData, institutionEmail: e.target.value })}
                   placeholder="e.g. admin@christuniversity.in"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                  className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
                 />
               </div>
 
               {/* Contact Person */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                  Contact Person <span className="text-emerald-400">*</span>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                  Contact Person <span className="text-black">*</span>
                 </label>
                 <input
                   type="text"
@@ -254,19 +254,19 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   value={formData.contactPerson}
                   onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
                   placeholder="e.g. Alex Paul"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                  className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
                 />
               </div>
 
               {/* Role */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                  Role <span className="text-emerald-400">*</span>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                  Role <span className="text-black">*</span>
                 </label>
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
+                  className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black focus:outline-none"
                 >
                   <option value="Institution Administrator">Institution Administrator</option>
                   <option value="Campus Director">Campus Director</option>
@@ -279,8 +279,8 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
 
               {/* Phone Number */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                  Phone Number <span className="text-emerald-400">*</span>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                  Phone Number <span className="text-black">*</span>
                 </label>
                 <input
                   type="tel"
@@ -288,13 +288,13 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   value={formData.phoneNumber}
                   onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
                   placeholder="e.g. +91 98765 43210"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                  className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
                 />
               </div>
 
               {/* Institution Website */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">
                   Institution Website
                 </label>
                 <input
@@ -302,19 +302,19 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                   value={formData.institutionWebsite}
                   onChange={(e) => setFormData({ ...formData, institutionWebsite: e.target.value })}
                   placeholder="e.g. https://christuniversity.in"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                  className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
                 />
               </div>
 
               {/* Student Population */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                  Student Population <span className="text-emerald-400">*</span>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                  Student Population <span className="text-black">*</span>
                 </label>
                 <select
                   value={formData.studentPopulation}
                   onChange={(e) => setFormData({ ...formData, studentPopulation: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
+                  className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black focus:outline-none"
                 >
                   <option value="Below 1,000">Below 1,000</option>
                   <option value="1,000–5,000">1,000–5,000</option>
@@ -327,8 +327,8 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
               {/* Number of Food Courts & Vendors */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                    Food Courts <span className="text-emerald-400">*</span>
+                  <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                    Food Courts <span className="text-black">*</span>
                   </label>
                   <input
                     type="number"
@@ -336,12 +336,12 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                     min={1}
                     value={formData.foodCourtsCount}
                     onChange={(e) => setFormData({ ...formData, foodCourtsCount: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                    className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 mb-1 block">
-                    Vendors <span className="text-emerald-400">*</span>
+                  <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                    Vendors <span className="text-black">*</span>
                   </label>
                   <input
                     type="number"
@@ -349,7 +349,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                     min={1}
                     value={formData.vendorsCount}
                     onChange={(e) => setFormData({ ...formData, vendorsCount: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                    className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -358,7 +358,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
 
             {/* Message */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 mb-1 block">
+              <label className="text-xs font-semibold text-gray-600 mb-1 block">
                 Message / Institution Requirements
               </label>
               <textarea
@@ -366,7 +366,7 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                 value={formData.message}
                 onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                 placeholder="Describe your campus dining layout, goals, or specific requirements..."
-                className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
               />
             </div>
 
@@ -378,9 +378,9 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
                 required
                 checked={formData.termsAgreed}
                 onChange={(e) => setFormData({ ...formData, termsAgreed: e.target.checked })}
-                className="w-4 h-4 rounded bg-slate-950 border-slate-800 text-emerald-400 focus:ring-emerald-500"
+                className="w-4 h-4 rounded bg-white border-gray-200 text-black focus:ring-black"
               />
-              <label htmlFor="agree-terms" className="text-xs text-slate-300 cursor-pointer">
+              <label htmlFor="agree-terms" className="text-xs text-gray-600 cursor-pointer">
                 I agree to Foodexa Terms &amp; Conditions and Privacy Policy.
               </label>
             </div>
@@ -407,16 +407,16 @@ export const InstitutionRegistrationModal: React.FC<InstitutionRegistrationModal
           </form>
         ) : (
           <div className="text-center py-8 space-y-4">
-            <div className="w-16 h-16 mx-auto rounded-full bg-emerald-950 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shadow-xl">
+            <div className="w-16 h-16 mx-auto rounded-full bg-emerald-950 border border-black/50 flex items-center justify-center text-black shadow-xl">
               <CheckCircle2 className="w-9 h-9" />
             </div>
-            <h3 className="text-2xl font-extrabold text-white">Registration Submitted Successfully.</h3>
-            <p className="text-xs text-slate-300 leading-relaxed max-w-md mx-auto">
-              Our team will review your institution and contact you at <strong className="text-emerald-400">{formData.institutionEmail}</strong> to configure your customized campus portal.
+            <h3 className="text-2xl font-extrabold text-black">Registration Submitted Successfully.</h3>
+            <p className="text-xs text-gray-600 leading-relaxed max-w-md mx-auto">
+              Our team will review your institution and contact you at <strong className="text-black">{formData.institutionEmail}</strong> to configure your customized campus portal.
             </p>
             <button
               onClick={handleClose}
-              className="px-6 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white"
+              className="px-6 py-2.5 rounded-xl bg-white border border-gray-200 text-xs font-semibold text-gray-600 hover:text-black"
             >
               Close
             </button>

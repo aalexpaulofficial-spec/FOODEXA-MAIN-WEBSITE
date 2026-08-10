@@ -66,11 +66,11 @@ const statusColor = (s: OrderStatus) => {
     cooking: 'text-orange-300 border-orange-500/40 bg-orange-950/50',
     quality_check: 'text-indigo-300 border-indigo-500/40 bg-indigo-950/50',
     packed: 'text-teal-300 border-teal-500/40 bg-teal-950/50',
-    ready: 'text-emerald-300 border-emerald-500/40 bg-emerald-950/60',
-    completed: 'text-slate-400 border-slate-700 bg-slate-900',
+    ready: 'text-emerald-300 border-black/40 bg-emerald-950/60',
+    completed: 'text-gray-500 border-gray-300 bg-gray-50',
     cancelled: 'text-red-300 border-red-500/40 bg-red-950/50',
   };
-  return map[s] || 'text-slate-300 border-slate-700 bg-slate-900';
+  return map[s] || 'text-gray-600 border-gray-300 bg-gray-50';
 };
 
 const statusDot = (s: OrderStatus) => {
@@ -97,10 +97,10 @@ const roleGradient = (role: UserRole | null | undefined) => {
 };
 
 const roleColor = (role: UserRole | null | undefined) => {
-  if (role === 'student') return 'text-emerald-300 border-emerald-500/40 bg-emerald-950/60';
+  if (role === 'student') return 'text-emerald-300 border-black/40 bg-emerald-950/60';
   if (role === 'faculty') return 'text-cyan-300 border-cyan-500/40 bg-cyan-950/60';
   if (role === 'guest') return 'text-amber-300 border-amber-500/40 bg-amber-950/60';
-  return 'text-slate-300 border-slate-700 bg-slate-900';
+  return 'text-gray-600 border-gray-300 bg-gray-50';
 };
 
 const formatDate = (d: string) => {
@@ -134,7 +134,7 @@ const getCategoryEmoji = (cat: string): string => {
 
 const getCategoryGradient = (idx: number) => {
   const gradients = [
-    'from-emerald-600/60 to-teal-700/60 border-emerald-500/30',
+    'from-emerald-600/60 to-teal-700/60 border-gray-300',
     'from-orange-600/60 to-red-700/60 border-orange-500/30',
     'from-violet-600/60 to-purple-700/60 border-violet-500/30',
     'from-pink-600/60 to-rose-700/60 border-pink-500/30',
@@ -147,12 +147,12 @@ const getCategoryGradient = (idx: number) => {
 };
 
 const SkeletonCard = () => (
-  <div className="rounded-2xl border border-slate-800 bg-slate-900/50 overflow-hidden animate-pulse">
-    <div className="h-36 bg-slate-800" />
+  <div className="rounded-2xl border border-gray-200 bg-gray-50/50 overflow-hidden animate-pulse">
+    <div className="h-36 bg-gray-100" />
     <div className="p-3 space-y-2">
-      <div className="h-3 bg-slate-800 rounded-full w-3/4" />
-      <div className="h-2 bg-slate-800 rounded-full w-1/2" />
-      <div className="h-7 bg-slate-800 rounded-xl mt-3" />
+      <div className="h-3 bg-gray-100 rounded-full w-3/4" />
+      <div className="h-2 bg-gray-100 rounded-full w-1/2" />
+      <div className="h-7 bg-gray-100 rounded-xl mt-3" />
     </div>
   </div>
 );
@@ -177,12 +177,12 @@ const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => v
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-slate-950/90 backdrop-blur-xl p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-white/90 backdrop-blur-xl p-4" onClick={onClose}>
       <div
         className="bg-[#DCE1E7] rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
       >
-        <button onClick={onClose} className="absolute right-4 top-4 p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 transition-colors">
+        <button onClick={onClose} className="absolute right-4 top-4 p-1 text-gray-500 hover:text-slate-600 rounded-full hover:bg-slate-200 transition-colors">
           <X className="w-5 h-5" />
         </button>
 
@@ -191,7 +191,7 @@ const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => v
         </div>
 
         <h3 className="text-2xl font-black text-slate-800 mb-1">Express QR Pickup</h3>
-        <p className="text-sm font-medium text-slate-500 mb-6">{counterName}</p>
+        <p className="text-sm font-medium text-gray-400 mb-6">{counterName}</p>
 
         <div className="bg-white rounded-2xl p-4 mx-auto max-w-[220px] shadow-lg flex flex-col items-center border-[3px] border-blue-400/50 relative">
           <div className="absolute inset-0 rounded-2xl ring-4 ring-blue-400/20 shadow-[0_0_20px_rgba(59,130,246,0.3)] pointer-events-none" />
@@ -205,11 +205,11 @@ const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => v
 
         <div className="bg-white rounded-2xl p-4 mt-6 text-left shadow-sm">
           <div className="flex justify-between items-center mb-3">
-            <span className="text-xs font-bold text-slate-400 uppercase">Counter Number</span>
+            <span className="text-xs font-bold text-gray-500 uppercase">Counter Number</span>
             <span className="text-sm font-black text-slate-900">{counterName}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-xs font-bold text-slate-400 uppercase">Pickup Code</span>
+            <span className="text-xs font-bold text-gray-500 uppercase">Pickup Code</span>
             <span className="text-base font-black text-blue-600 uppercase">{qrValue}</span>
           </div>
         </div>
@@ -218,7 +218,7 @@ const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => v
           <button onClick={copyCode} className="w-full py-3 bg-white rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
             <Copy className="w-4 h-4" /> Copy Code
           </button>
-          <button onClick={downloadQR} className="w-full py-3 bg-blue-600 rounded-xl text-sm font-bold text-white hover:bg-blue-700 shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
+          <button onClick={downloadQR} className="w-full py-3 bg-blue-600 rounded-xl text-sm font-bold text-black hover:bg-blue-700 shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
             <Download className="w-4 h-4" /> Download QR
           </button>
         </div>
@@ -231,16 +231,16 @@ const EmptyState = ({ icon: Icon, title, message, action }: {
   icon: React.ElementType; title: string; message: string;
   action?: { label: string; onClick: () => void }
 }) => (
-  <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/30 p-8 text-center">
-    <div className="w-12 h-12 mx-auto rounded-full bg-slate-800 flex items-center justify-center mb-3">
-      <Icon className="w-6 h-6 text-slate-500" />
+  <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50/30 p-8 text-center">
+    <div className="w-12 h-12 mx-auto rounded-full bg-gray-100 flex items-center justify-center mb-3">
+      <Icon className="w-6 h-6 text-gray-400" />
     </div>
-    <h4 className="text-sm font-bold text-slate-200 mb-1">{title}</h4>
-    <p className="text-xs text-slate-500 mb-4 max-w-xs mx-auto">{message}</p>
+    <h4 className="text-sm font-bold text-gray-800 mb-1">{title}</h4>
+    <p className="text-xs text-gray-400 mb-4 max-w-xs mx-auto">{message}</p>
     {action && (
       <button
         onClick={action.onClick}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-950/80 border border-emerald-500/30 text-emerald-300 text-xs font-bold hover:bg-emerald-950 transition-colors"
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-950/80 border border-gray-300 text-emerald-300 text-xs font-bold hover:bg-emerald-950 transition-colors"
       >
         {action.label} <ArrowRight className="w-3.5 h-3.5" />
       </button>
@@ -260,14 +260,14 @@ const BannerCarousel = ({ banners }: { banners: any[] }) => {
   const banner = banners[current];
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 h-40 sm:h-52">
+    <section className="relative overflow-hidden rounded-3xl border border-gray-200 bg-gray-50 h-40 sm:h-52">
       {banner.image_url && (
         <img src={banner.image_url} alt={banner.title} className="absolute inset-0 w-full h-full object-cover" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
       )}
       <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/60 to-transparent" />
       <div className="relative z-10 flex flex-col justify-center h-full p-6 sm:p-8 max-w-lg">
-        {banner.title && <h3 className="text-lg sm:text-2xl font-black text-white leading-tight">{banner.title}</h3>}
-        {banner.subtitle && <p className="mt-1 text-xs sm:text-sm text-slate-300 line-clamp-2">{banner.subtitle}</p>}
+        {banner.title && <h3 className="text-lg sm:text-2xl font-black text-black leading-tight">{banner.title}</h3>}
+        {banner.subtitle && <p className="mt-1 text-xs sm:text-sm text-gray-600 line-clamp-2">{banner.subtitle}</p>}
         {banner.cta_label && (
           <button className="mt-3 inline-flex items-center gap-2 w-fit rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 text-xs font-black text-slate-950 shadow-lg shadow-emerald-950/30 hover:from-emerald-400 hover:to-teal-400 transition-all">
             {banner.cta_label} <ArrowRight className="w-3 h-3" />
@@ -1064,17 +1064,17 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               <div className="rounded-2xl border border-[#E2E8F0] bg-white overflow-hidden shadow-sm">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
                   <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Bell className="w-4 h-4 text-emerald-600" /> Notifications</h3>
-                  <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-700"><X className="w-4 h-4" /></button>
+                  <button onClick={() => setShowNotifications(false)} className="text-gray-500 hover:text-slate-700"><X className="w-4 h-4" /></button>
                 </div>
                 <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto bg-white">
                   {notifications.length ? notifications.slice(0, 8).map(n => (
                     <div key={n.id} className="px-4 py-3 hover:bg-slate-50 transition-colors">
                       <p className="text-xs font-bold text-slate-900">{n.title}</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
-                      <p className="text-[9px] text-slate-400 mt-1">{formatDateTime(n.created_at)}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-2">{n.message}</p>
+                      <p className="text-[9px] text-gray-500 mt-1">{formatDateTime(n.created_at)}</p>
                     </div>
                   )) : (
-                    <div className="px-4 py-8 text-center text-xs text-slate-500">No notifications yet</div>
+                    <div className="px-4 py-8 text-center text-xs text-gray-400">No notifications yet</div>
                   )}
                 </div>
               </div>
@@ -1083,9 +1083,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             {loading ? (
               /* Skeleton */
               <div className="space-y-6">
-                <div className="h-48 rounded-3xl bg-slate-800 animate-pulse" />
+                <div className="h-48 rounded-3xl bg-gray-100 animate-pulse" />
                 <div className="flex gap-3">
-                  {[1,2,3,4].map(i => <div key={i} className="h-20 flex-1 rounded-2xl bg-slate-800 animate-pulse" />)}
+                  {[1,2,3,4].map(i => <div key={i} className="h-20 flex-1 rounded-2xl bg-gray-100 animate-pulse" />)}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                   {[1,2,3,4,5,6,7,8].map(i => <SkeletonCard key={i} />)}
@@ -1261,10 +1261,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 {activeTab === 'checkout' && (
                   <div className="max-w-3xl mx-auto space-y-6">
                     <div className="flex items-center gap-3">
-                      <button onClick={() => setActiveTab('explore')} className="p-2 -ml-2 text-slate-400 hover:text-white rounded-full hover:bg-slate-800 transition-colors">
+                      <button onClick={() => setActiveTab('explore')} className="p-2 -ml-2 text-gray-500 hover:text-black rounded-full hover:bg-gray-100 transition-colors">
                         <ChevronLeft className="w-5 h-5" />
                       </button>
-                      <h2 className="text-2xl font-black text-white">Checkout</h2>
+                      <h2 className="text-2xl font-black text-black">Checkout</h2>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1276,7 +1276,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           </h3>
                           <div className="rounded-xl bg-slate-50 p-4 border border-slate-200">
                             <p className="text-xs font-bold text-slate-900">{institutionName}</p>
-                            <p className="text-[10px] text-slate-500 mt-1">Counter: <span className="font-bold text-slate-900">{firstItemCounter}</span></p>
+                            <p className="text-[10px] text-gray-400 mt-1">Counter: <span className="font-bold text-slate-900">{firstItemCounter}</span></p>
                             <div className="mt-3 flex items-center gap-2 text-[10px] text-amber-700 font-semibold bg-amber-50 w-max px-3 py-1.5 rounded-full border border-amber-200">
                               <Clock className="w-3 h-3" /> Ready in ~{estimatedPrepTime} mins
                             </div>
@@ -1298,11 +1298,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           </div>
                           
                             <div className="pt-4 border-t border-slate-100 space-y-2">
-                              <div className="flex justify-between text-xs text-slate-500">
+                              <div className="flex justify-between text-xs text-gray-400">
                                 <span>Subtotal</span>
                                 <span>{formatINR(cartSubtotal)}</span>
                               </div>
-                               <div className="flex justify-between text-xs text-slate-500">
+                               <div className="flex justify-between text-xs text-gray-400">
                                  <span>CONVINENCE FEE</span>
                                  <span>₹0</span>
                                </div>
@@ -1328,7 +1328,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                               placeholder="COUPON CODE (E.G. AS26)"
                               className="w-full rounded-full border border-blue-500 bg-white py-4 pl-5 pr-28 text-xs font-bold text-slate-900 placeholder-slate-400 cursor-not-allowed outline-none shadow-sm"
                             />
-                            <div className="absolute right-2 top-2 bottom-2 rounded-full bg-slate-900 px-4 flex items-center text-xs font-black text-white cursor-not-allowed shadow-md">
+                            <div className="absolute right-2 top-2 bottom-2 rounded-full bg-gray-50 px-4 flex items-center text-xs font-black text-black cursor-not-allowed shadow-md">
                               Coming Soon
                             </div>
                           </div>
@@ -1351,11 +1351,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           <div className="space-y-3">
                             <button
                               onClick={() => setPaymentMethod('razorpay')}
-                              className={`w-full flex items-center justify-between p-4 rounded-xl border ${paymentMethod === 'razorpay' ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'} transition-all`}
+                              className={`w-full flex items-center justify-between p-4 rounded-xl border ${paymentMethod === 'razorpay' ? 'border-black bg-emerald-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'} transition-all`}
                             >
                               <div className="flex items-center gap-3">
-                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'razorpay' ? 'border-emerald-500' : 'border-slate-300'}`}>
-                                  {paymentMethod === 'razorpay' && <div className="w-2 h-2 rounded-full bg-emerald-500" />}
+                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'razorpay' ? 'border-black' : 'border-slate-300'}`}>
+                                  {paymentMethod === 'razorpay' && <div className="w-2 h-2 rounded-full bg-black" />}
                                 </div>
                                 <span className="text-sm font-bold text-slate-900">UPI / Instant Pay (Zero Fee)</span>
                               </div>
@@ -1368,18 +1368,18 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                             >
                               <div className="flex items-center gap-3">
                                 <div className="w-4 h-4 rounded-full border-2 border-slate-300" />
-                                <span className="text-sm font-bold text-slate-500">FOODEXA Wallet (Coming Soon)</span>
+                                <span className="text-sm font-bold text-gray-400">FOODEXA Wallet (Coming Soon)</span>
                               </div>
-                              <span className="text-xs font-black text-slate-400">N/A</span>
+                              <span className="text-xs font-black text-gray-500">N/A</span>
                             </button>
 
                             <button
                               onClick={() => setPaymentMethod('cash')}
-                              className={`w-full flex items-center justify-between p-4 rounded-xl border ${paymentMethod === 'cash' ? 'border-emerald-500 bg-emerald-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'} transition-all`}
+                              className={`w-full flex items-center justify-between p-4 rounded-xl border ${paymentMethod === 'cash' ? 'border-black bg-emerald-50/50' : 'border-slate-200 bg-white hover:bg-slate-50'} transition-all`}
                             >
                               <div className="flex items-center gap-3">
-                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'cash' ? 'border-emerald-500' : 'border-slate-300'}`}>
-                                  {paymentMethod === 'cash' && <div className="w-2 h-2 rounded-full bg-emerald-500" />}
+                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'cash' ? 'border-black' : 'border-slate-300'}`}>
+                                  {paymentMethod === 'cash' && <div className="w-2 h-2 rounded-full bg-black" />}
                                 </div>
                                 <span className="text-sm font-bold text-slate-900">Pay at Counter (Cash)</span>
                               </div>
@@ -1391,12 +1391,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                         <button
                           onClick={handlePlaceOrder}
                           disabled={submittingOrder}
-                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-4 text-base font-black text-white shadow-lg shadow-emerald-500/30 disabled:opacity-50 hover:scale-[1.02] hover:shadow-emerald-500/40 transition-all"
+                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-4 text-base font-black text-black shadow-lg shadow-emerald-500/30 disabled:opacity-50 hover:scale-[1.02] hover:shadow-emerald-500/40 transition-all"
                         >
                           {submittingOrder ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
                           {submittingOrder ? 'Processing...' : `Pay ${formatINR(cartGrandTotal)}`}
                         </button>
-                        <p className="text-center text-[10px] text-slate-500 font-semibold flex items-center justify-center gap-1">
+                        <p className="text-center text-[10px] text-gray-400 font-semibold flex items-center justify-center gap-1">
                           <Lock className="w-3 h-3" /> Secure Payment via Razorpay
                         </p>
                       </div>
@@ -1435,9 +1435,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                    return (
                      <div className="max-w-md mx-auto space-y-4 pb-20">
                        {/* Top Status Card */}
-                       <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
+                       <div className="bg-gray-50 rounded-3xl p-6 text-black shadow-xl relative overflow-hidden">
                          <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
-                         <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                         <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-black/20 rounded-full blur-3xl pointer-events-none"></div>
                          
                          <div className="relative z-10">
                            <div className="flex items-start justify-between mb-4">
@@ -1446,8 +1446,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                                <h2 className="text-3xl font-black">{orderNumber}</h2>
                              </div>
                              <div className="text-right">
-                               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">Pickup Code</p>
-                               <p className="text-xl font-black text-emerald-400 tracking-wider">
+                               <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1">Pickup Code</p>
+                               <p className="text-xl font-black text-black tracking-wider">
                                  {pickupCode || 'Generating...'}
                                </p>
                              </div>
@@ -1458,8 +1458,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                                <Clock className="w-5 h-5 text-blue-300" />
                              </div>
                              <div>
-                               <p className="text-slate-300 text-xs">Estimated Ready Time</p>
-                               <p className="font-bold text-white">
+                               <p className="text-gray-600 text-xs">Estimated Ready Time</p>
+                               <p className="font-bold text-black">
                                  {estimatedReadyAt 
                                    ? new Date(estimatedReadyAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
                                    : 'Calculating...'}
@@ -1474,27 +1474,27 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                          <h3 className="font-bold text-slate-900 mb-4">Order Details</h3>
                          <div className="grid grid-cols-2 gap-3 text-xs">
                            <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-slate-400 font-bold uppercase">Token Number</p>
+                             <p className="text-[10px] text-gray-500 font-bold uppercase">Token Number</p>
                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.token_number || o?.pickup_token || '—'}</p>
                            </div>
                            <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-slate-400 font-bold uppercase">Kitchen Status</p>
+                             <p className="text-[10px] text-gray-500 font-bold uppercase">Kitchen Status</p>
                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.kitchen_status || '—'}</p>
                            </div>
                            <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-slate-400 font-bold uppercase">Counter Status</p>
+                             <p className="text-[10px] text-gray-500 font-bold uppercase">Counter Status</p>
                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.counter_status || '—'}</p>
                            </div>
                            <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-slate-400 font-bold uppercase">Order Status</p>
+                             <p className="text-[10px] text-gray-500 font-bold uppercase">Order Status</p>
                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.order_status || o?.status || '—'}</p>
                            </div>
                            <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-slate-400 font-bold uppercase">Completion Time</p>
+                             <p className="text-[10px] text-gray-500 font-bold uppercase">Completion Time</p>
                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.completed_at ? new Date(o.completed_at).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'}</p>
                            </div>
                            <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-slate-400 font-bold uppercase">Items</p>
+                             <p className="text-[10px] text-gray-500 font-bold uppercase">Items</p>
                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.items?.length ?? 0} item(s)</p>
                            </div>
                          </div>
@@ -1505,7 +1505,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                          <div className="flex items-center justify-between mb-5">
                            <h3 className="font-bold text-slate-900">Live Timeline</h3>
                            <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold border border-emerald-100 flex items-center gap-1">
-                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                             <span className="w-1.5 h-1.5 rounded-full bg-black animate-pulse"></span>
                              Live
                            </span>
                          </div>
@@ -1519,9 +1519,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                                  <div className="flex flex-col items-center">
                                    <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 font-bold text-xs transition-all duration-500 z-10 ${
                                      isPast ? 'border-red-500/40 bg-red-950/30' :
-                                     isDone ? 'bg-blue-600 border-blue-600 text-white' :
+                                     isDone ? 'bg-blue-600 border-blue-600 text-black' :
                                      isActive ? 'bg-white border-blue-600 text-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.3)]' :
-                                     'bg-white border-slate-200 text-slate-300'
+                                     'bg-white border-slate-200 text-gray-600'
                                    }`}>
                                      {isPast ? <XCircle className="w-4 h-4 text-red-500" /> : isDone ? <Check className="w-4 h-4" /> : i + 1}
                                    </div>
@@ -1531,9 +1531,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                                  </div>
                                  <div className={`pt-1 flex-1 min-w-0 ${i < STUDENT_TIMELINE_LABELS.length - 1 ? 'pb-3' : 'pb-0'}`}>
                                    <div className="flex items-center gap-2">
-                                     <p className={`text-sm font-bold ${isActive ? 'text-blue-600' : isDone || isPast ? 'text-slate-800' : 'text-slate-400'}`}>{stepLabel}</p>
+                                     <p className={`text-sm font-bold ${isActive ? 'text-blue-600' : isDone || isPast ? 'text-slate-800' : 'text-gray-500'}`}>{stepLabel}</p>
                                    </div>
-                                   <p className={`text-[11px] mt-0.5 ${isActive || isDone ? 'text-slate-500' : 'text-slate-300'}`}>{STUDENT_TIMELINE_DESCRIPTIONS[i]}</p>
+                                   <p className={`text-[11px] mt-0.5 ${isActive || isDone ? 'text-gray-400' : 'text-gray-600'}`}>{STUDENT_TIMELINE_DESCRIPTIONS[i]}</p>
                                  </div>
                                </div>
                              );
@@ -1544,7 +1544,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                        {/* Actions */}
                        <div className="pt-2 space-y-3">
                          {o && (stage >= 2) && (
-                           <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-blue-600 text-white font-bold text-sm shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition-colors">
+                           <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-blue-600 text-black font-bold text-sm shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition-colors">
                              <QrCode className="w-5 h-5" /> Show Pickup QR
                            </button>
                          )}
@@ -1598,7 +1598,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                       </button>
                       <button
                         onClick={() => { setError(null); setActiveTab('explore'); }}
-                        className="flex-1 rounded-2xl border border-slate-200 bg-white py-4 text-sm font-black text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-all shadow-sm"
+                        className="flex-1 rounded-2xl border border-slate-200 bg-white py-4 text-sm font-black text-gray-400 hover:bg-slate-50 hover:text-slate-800 transition-all shadow-sm"
                       >
                         Cancel
                       </button>
@@ -1612,7 +1612,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
         {/* ── CART DRAWER ────────────────────────────────────────────── */}
         {showCart && (
-          <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowCart(false)} />
+          <div className="fixed inset-0 z-40 bg-gray-50/40 backdrop-blur-sm" onClick={() => setShowCart(false)} />
         )}
         <aside className={`fixed bottom-0 right-0 top-0 z-50 w-full max-w-md bg-[#E2E8F0] flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${showCart ? 'translate-x-0' : 'translate-x-full'}`}>
           
@@ -1624,10 +1624,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               </div>
               <div>
                 <h3 className="text-xl font-black text-slate-900">Your Cart</h3>
-                <p className="text-xs text-slate-500 font-medium">{cartCount} item types selected</p>
+                <p className="text-xs text-gray-400 font-medium">{cartCount} item types selected</p>
               </div>
             </div>
-            <button onClick={() => setShowCart(false)} className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-200 rounded-full transition-colors">
+            <button onClick={() => setShowCart(false)} className="p-2 text-gray-500 hover:text-slate-800 hover:bg-slate-200 rounded-full transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -1643,12 +1643,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                       {entry.item.image_url ? (
                         <img src={entry.item.image_url} alt={entry.item.name} className="w-full h-full object-cover" onError={() => {}} />
                       ) : (
-                        <Utensils className="w-6 h-6 text-slate-300" />
+                        <Utensils className="w-6 h-6 text-gray-600" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
                       <p className="text-sm font-black text-slate-900 truncate pr-8">{entry.item.name}</p>
-                      <p className="text-xs text-slate-500">{formatINR(entry.item.offer_price || entry.item.price)} each</p>
+                      <p className="text-xs text-gray-400">{formatINR(entry.item.offer_price || entry.item.price)} each</p>
                       <p className="text-[10px] text-blue-600 font-bold mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3 text-red-500" /> {entry.item.counter_name}</p>
                     </div>
                     
@@ -1663,7 +1663,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           <Plus className="w-3 h-3" />
                         </button>
                       </div>
-                      <button onClick={() => updateQuantity(entry.item.id, -entry.quantity)} className="p-1.5 text-slate-400 hover:text-red-500 transition-colors">
+                      <button onClick={() => updateQuantity(entry.item.id, -entry.quantity)} className="p-1.5 text-gray-500 hover:text-red-500 transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -1684,7 +1684,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     placeholder="COUPON CODE (E.G. AS26)"
                     className="w-full rounded-full border border-blue-500 bg-white py-4 pl-5 pr-28 text-xs font-bold text-slate-900 placeholder-slate-400 cursor-not-allowed outline-none shadow-sm"
                   />
-                  <button disabled className="absolute right-2 top-2 bottom-2 rounded-full bg-slate-900 px-4 text-xs font-black text-white cursor-not-allowed shadow-md">
+                  <button disabled className="absolute right-2 top-2 bottom-2 rounded-full bg-gray-50 px-4 text-xs font-black text-black cursor-not-allowed shadow-md">
                     Coming Soon
                   </button>
                 </div>
@@ -1700,7 +1700,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                       <CreditCard className="w-5 h-5 text-emerald-600" />
                       <span className="text-sm font-black text-slate-900">FOODEXA Wallet (Coming Soon)</span>
                     </div>
-                    <span className="text-xs font-black text-slate-400">N/A</span>
+                    <span className="text-xs font-black text-gray-500">N/A</span>
                   </label>
 
                   {/* UPI / Instant Pay - Selected */}
@@ -1712,7 +1712,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                       <CreditCard className="w-5 h-5 text-blue-600" />
                       <span className="text-sm font-black text-slate-900">UPI / Instant Pay</span>
                     </div>
-                    <span className="text-xs font-medium text-slate-500">Zero Fee</span>
+                    <span className="text-xs font-medium text-gray-400">Zero Fee</span>
                   </label>
                 </div>
               </>
@@ -1737,7 +1737,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               <button
                 onClick={handlePlaceOrder}
                 disabled={submittingOrder}
-                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#1D4ED8] py-4 text-sm font-black text-white shadow-xl shadow-blue-500/20 hover:bg-blue-600 transition-all disabled:opacity-50 mt-2"
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#1D4ED8] py-4 text-sm font-black text-black shadow-xl shadow-blue-500/20 hover:bg-blue-600 transition-all disabled:opacity-50 mt-2"
               >
                 {submittingOrder ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
                 {submittingOrder ? 'Processing...' : `Pay ${formatINR(cartGrandTotal)} & Place Order →`}
@@ -1749,11 +1749,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
       {/* ── EDIT PROFILE MODAL ─────────────────────────────────────── */}
       {editingProfile && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" onClick={() => setEditingProfile(false)}>
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-gray-50/40 backdrop-blur-sm p-4" onClick={() => setEditingProfile(false)}>
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-black text-slate-900">Edit Profile</h3>
-              <button onClick={() => setEditingProfile(false)} className="p-1.5 text-slate-400 hover:text-slate-800 rounded-full hover:bg-slate-100 transition-colors">
+              <button onClick={() => setEditingProfile(false)} className="p-1.5 text-gray-500 hover:text-slate-800 rounded-full hover:bg-slate-100 transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1772,12 +1772,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 { label: 'Campus Block', key: 'campus_block' as const, placeholder: 'e.g. Block A' },
               ].map(({ label, key, placeholder }) => (
                 <div key={key}>
-                  <label className="text-[10px] font-bold text-slate-500 mb-1 block uppercase tracking-wide">{label}</label>
+                  <label className="text-[10px] font-bold text-gray-400 mb-1 block uppercase tracking-wide">{label}</label>
                   <input
                     value={profileForm[key]}
                     onChange={(e) => setProfileForm({ ...profileForm, [key]: e.target.value })}
                     placeholder={placeholder}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500/60 transition-colors"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-black/60 transition-colors"
                   />
                 </div>
               ))}
@@ -1785,7 +1785,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             <button
               onClick={handleSaveProfile}
               disabled={savingProfile}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3 text-sm font-black text-white shadow-lg shadow-emerald-500/30 disabled:opacity-50 transition-all hover:scale-[1.02]"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3 text-sm font-black text-black shadow-lg shadow-emerald-500/30 disabled:opacity-50 transition-all hover:scale-[1.02]"
             >
               {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {savingProfile ? 'Saving...' : 'Save Changes'}
@@ -1796,7 +1796,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
       {/* ── LEAVE INSTITUTION MODAL ──────────────────────────────── */}
       {showLeaveInstitution && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" onClick={() => { setShowLeaveInstitution(false); setLeaveInstitutionMessage(null); }}>
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-gray-50/40 backdrop-blur-sm p-4" onClick={() => { setShowLeaveInstitution(false); setLeaveInstitutionMessage(null); }}>
           <div className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-6 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1805,7 +1805,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 </div>
                 <h3 className="text-lg font-black text-slate-900">Leave Institution</h3>
               </div>
-              <button onClick={() => { setShowLeaveInstitution(false); setLeaveInstitutionMessage(null); }} className="p-1.5 text-slate-400 hover:text-slate-800 rounded-full hover:bg-slate-100 transition-colors">
+              <button onClick={() => { setShowLeaveInstitution(false); setLeaveInstitutionMessage(null); }} className="p-1.5 text-gray-500 hover:text-slate-800 rounded-full hover:bg-slate-100 transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1824,7 +1824,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     <li>Allow you to join another institution with a new code</li>
                   </ul>
                 </div>
-                <p className="text-[11px] text-slate-500 text-center">
+                <p className="text-[11px] text-gray-400 text-center">
                   Your account, orders, and profile data will be preserved.
                 </p>
               </>
@@ -1841,7 +1841,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 <button
                   onClick={handleLeaveInstitution}
                   disabled={leavingInstitution}
-                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-black hover:from-amber-400 hover:to-orange-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-md shadow-amber-500/20"
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black text-xs font-black hover:from-amber-400 hover:to-orange-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-md shadow-amber-500/20"
                 >
                   {leavingInstitution ? <Loader2 className="w-4 h-4 animate-spin" /> : <Building2 className="w-4 h-4" />}
                   {leavingInstitution ? 'Leaving...' : 'Leave Institution'}
@@ -1855,7 +1855,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       {/* ── FLOATING LX AI BUTTON ────────────────────────────────────────── */}
       <button
         onClick={() => triggerToast && triggerToast('LX AI', 'AI Assistant coming soon!', 'ai')}
-        className="fixed bottom-24 right-5 z-40 p-3.5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white shadow-xl shadow-blue-600/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 border border-white/20"
+        className="fixed bottom-24 right-5 z-40 p-3.5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-black shadow-xl shadow-blue-600/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 border border-white/20"
         title="Chat with LX AI Food Assistant"
       >
         <Sparkles className="w-5 h-5 text-cyan-200 animate-spin" />

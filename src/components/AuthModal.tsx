@@ -627,12 +627,12 @@ if (validateError || !validatedInst) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl my-8 space-y-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-white/90 backdrop-blur-md overflow-y-auto">
+      <div className="relative w-full max-w-lg bg-gray-50 border border-gray-200 rounded-3xl p-6 sm:p-8 shadow-2xl my-8 space-y-6">
         
         <button
           onClick={handleReset}
-          className="absolute top-5 right-5 p-2 rounded-full bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+          className="absolute top-5 right-5 p-2 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-black transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
@@ -640,7 +640,7 @@ if (validateError || !validatedInst) {
         {(step === 'otp' || step === 'institution_verify' || step === 'counter_verify' || (mode === 'create' && step === 'form')) && (
           <button
             onClick={handleBack}
-            className="absolute top-5 left-5 p-2 rounded-full bg-slate-950 border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="absolute top-5 left-5 p-2 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-black transition-colors cursor-pointer"
             title="Back"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -654,12 +654,12 @@ if (validateError || !validatedInst) {
                 
                 {/* Header */}
                 <div className="space-y-1.5">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 text-emerald-400 border border-emerald-500/30 text-[11px] font-mono">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-black border border-gray-300 text-[11px] font-mono">
                     <Lock className="w-3.5 h-3.5" />
                     <span>Student Portal Login</span>
                   </div>
-                  <h3 className="text-2xl font-extrabold text-white">Welcome Back</h3>
-                  <p className="text-xs text-slate-300 leading-relaxed">
+                  <h3 className="text-2xl font-extrabold text-black">Welcome Back</h3>
+                  <p className="text-xs text-gray-600 leading-relaxed">
                     Sign in to your FOODEXA account to order food, manage orders, access QR pickup, and use LX AI.
                   </p>
                 </div>
@@ -667,43 +667,43 @@ if (validateError || !validatedInst) {
                 {/* Login Form */}
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1 block">University Email</label>
+                    <label className="text-xs font-semibold text-gray-600 mb-1 block">University Email</label>
                     <input
                       type="email"
                       required
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       placeholder="e.g. alex@christuniversity.in"
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                      className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1 block">Password</label>
+                    <label className="text-xs font-semibold text-gray-600 mb-1 block">Password</label>
                     <input
                       type="password"
                       required
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
                       placeholder="••••••••••••"
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+                      className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2.5 text-xs text-black placeholder-slate-500 focus:outline-none"
                     />
                   </div>
 
                   <div className="flex items-center justify-between text-xs">
-                    <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
+                    <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
-                        className="w-4 h-4 rounded bg-slate-950 border-slate-800 text-emerald-400 focus:ring-emerald-500"
+                        className="w-4 h-4 rounded bg-white border-gray-200 text-black focus:ring-black"
                       />
                       <span>Remember Me</span>
                     </label>
                     <button
                       type="button"
                       onClick={() => {}}
-                      className="text-emerald-400 font-medium hover:underline cursor-pointer"
+                      className="text-black font-medium hover:underline cursor-pointer"
                     >
                       Forgot Password?
                     </button>
@@ -730,13 +730,13 @@ if (validateError || !validatedInst) {
                   </button>
 
                   {/* Institution Login Link */}
-                  <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl text-center text-xs text-slate-400">
+                  <div className="p-3 bg-white/80 border border-gray-200 rounded-xl text-center text-xs text-gray-500">
                     <span>Institution Login? </span>
                     <a
                       href="https://foodexa-institution-platform.vercel.app/"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-emerald-400 font-bold hover:underline inline-flex items-center gap-1 ml-1"
+                      className="text-black font-bold hover:underline inline-flex items-center gap-1 ml-1"
                     >
                       <span>Open Institution Portal</span>
                       <ExternalLink className="w-3 h-3" />
@@ -749,16 +749,16 @@ if (validateError || !validatedInst) {
               /* Create Account View */
               <div className="space-y-5">
                 <div className="space-y-1">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950 text-emerald-400 border border-emerald-500/30 text-[11px] font-mono">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-black border border-gray-300 text-[11px] font-mono">
                     <User className="w-3.5 h-3.5" />
                     <span>
                       {selectedAccountRole === 'student' ? 'Student Pass Registration' : selectedAccountRole === 'faculty' ? 'Faculty Registration' : 'Guest Registration'}
                     </span>
                   </div>
-                  <h3 className="text-2xl font-extrabold text-white">
+                  <h3 className="text-2xl font-extrabold text-black">
                     Register as {selectedAccountRole === 'student' ? 'Student' : selectedAccountRole === 'faculty' ? 'Faculty' : 'Guest'}
                   </h3>
-                  <p className="text-xs text-slate-300">
+                  <p className="text-xs text-gray-600">
                     {selectedAccountRole === 'student' ? 'Sign up for instant queue skipping, express pickup, and LX AI dining recommendations.' : 'Sign up to access campus dining services.'}
                   </p>
                 </div>
@@ -766,7 +766,7 @@ if (validateError || !validatedInst) {
                 <form onSubmit={handleCreateSubmit} className="space-y-3">
                   {/* Institution Code - TOP OF ALL FORMS (required by spec) */}
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code <span className="text-emerald-400">*</span></label>
+                    <label className="text-xs font-semibold text-gray-600 mb-1 block">Institution Code <span className="text-black">*</span></label>
                     <div className="relative">
                       <input
                         type="text"
@@ -779,27 +779,27 @@ onChange={(e) => {
                            handleInstitutionCodeChange(e.target.value);
                          }}
                          placeholder="e.g. YAWEHH264881"
-                         className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+                         className="w-full bg-white border border-black/50 focus:border-black rounded-xl px-3.5 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
                       />
                       {validatingCode && (
-                        <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <Loader2 className="w-4 h-4 animate-spin text-black absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       )}
                     </div>
 {institutionError && !validatingCode && (
                        <p className="text-[10px] text-red-400 mt-1">✗ {institutionError}</p>
                      )}
                      {!institutionError && validatedInstitution && !validatingCode && (
-                       <div className="text-[10px] text-emerald-400 mt-1 space-y-0.5">
+                       <div className="text-[10px] text-black mt-1 space-y-0.5">
                          <p>✓ Institution Verified</p>
-                         <p className="text-emerald-500">{validatedInstitution.institution_name}</p>
-                         <p className="text-emerald-500">Campus: {validatedInstitution.campus || 'N/A'}</p>
-                         <p className="text-emerald-500">Status: Active</p>
+                         <p className="text-black">{validatedInstitution.institution_name}</p>
+                         <p className="text-black">Campus: {validatedInstitution.campus || 'N/A'}</p>
+                         <p className="text-black">Status: Active</p>
                        </div>
                      )}
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1 block">Full Name</label>
+                    <label className="text-xs font-semibold text-gray-600 mb-1 block">Full Name</label>
                     <input
                       type="text"
                       required
@@ -810,13 +810,13 @@ onChange={(e) => {
                         else setGuestForm({ ...guestForm, fullName: e.target.value });
                       }}
                       placeholder="e.g. Alex Paul"
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                      className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3.5 py-2 text-xs text-black placeholder-slate-500 focus:outline-none"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Email Address</label>
+                      <label className="text-xs font-semibold text-gray-600 mb-1 block">Email Address</label>
                       <input
                         type="email"
                         required
@@ -827,11 +827,11 @@ onChange={(e) => {
                           else setGuestForm({ ...guestForm, universityEmail: e.target.value });
                         }}
                         placeholder="e.g. alex@university.in"
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                        className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs text-black placeholder-slate-500 focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Phone Number</label>
+                      <label className="text-xs font-semibold text-gray-600 mb-1 block">Phone Number</label>
                       <input
                         type="tel"
                         required
@@ -842,14 +842,14 @@ onChange={(e) => {
                           else setGuestForm({ ...guestForm, phone: e.target.value });
                         }}
                         placeholder="+91 9876543210"
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                        className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs text-black placeholder-slate-500 focus:outline-none"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Password</label>
+                      <label className="text-xs font-semibold text-gray-600 mb-1 block">Password</label>
                       <input
                         type="password"
                         required
@@ -861,11 +861,11 @@ onChange={(e) => {
                           else setGuestForm({ ...guestForm, password: e.target.value });
                         }}
                         placeholder="Minimum 8 characters"
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                        className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs text-black placeholder-slate-500 focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 mb-1 block">Confirm Password</label>
+                      <label className="text-xs font-semibold text-gray-600 mb-1 block">Confirm Password</label>
                       <input
                         type="password"
                         required
@@ -877,7 +877,7 @@ onChange={(e) => {
                           else setGuestForm({ ...guestForm, confirmPassword: e.target.value });
                         }}
                         placeholder="Repeat password"
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                        className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs text-black placeholder-slate-500 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -886,50 +886,50 @@ onChange={(e) => {
                     <>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Programme</label>
+                          <label className="text-xs font-semibold text-gray-600 mb-1 block">Programme</label>
                           <input
                             type="text"
                             required
                             value={studentForm.programme}
                             onChange={(e) => setStudentForm({ ...studentForm, programme: e.target.value })}
                             placeholder="e.g. B.Tech Computer Science"
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                            className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs text-black placeholder-slate-500 focus:outline-none"
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Department</label>
+                          <label className="text-xs font-semibold text-gray-600 mb-1 block">Department</label>
                           <input
                             type="text"
                             required
                             value={studentForm.department}
                             onChange={(e) => setStudentForm({ ...studentForm, department: e.target.value })}
                             placeholder="e.g. Computer Science"
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                            className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs text-black placeholder-slate-500 focus:outline-none"
                           />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Semester</label>
+                          <label className="text-xs font-semibold text-gray-600 mb-1 block">Semester</label>
                           <input
                             type="text"
                             required
                             value={studentForm.semester}
                             onChange={(e) => setStudentForm({ ...studentForm, semester: e.target.value })}
                             placeholder="e.g. 3"
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                            className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs text-black placeholder-slate-500 focus:outline-none"
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Campus Block</label>
+                          <label className="text-xs font-semibold text-gray-600 mb-1 block">Campus Block</label>
                           <input
                             type="text"
                             required
                             value={studentForm.campusBlock}
                             onChange={(e) => setStudentForm({ ...studentForm, campusBlock: e.target.value })}
                             placeholder="e.g. Block A"
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                            className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs text-black placeholder-slate-500 focus:outline-none"
                           />
                         </div>
                       </div>
@@ -940,38 +940,38 @@ onChange={(e) => {
                     <>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Department</label>
+                          <label className="text-xs font-semibold text-gray-600 mb-1 block">Department</label>
                           <input
                             type="text"
                             required
                             value={facultyForm.department}
                             onChange={(e) => setFacultyForm({ ...facultyForm, department: e.target.value })}
                             placeholder="e.g. Computer Science"
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                            className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs text-black placeholder-slate-500 focus:outline-none"
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-300 mb-1 block">Designation</label>
+                          <label className="text-xs font-semibold text-gray-600 mb-1 block">Designation</label>
                           <input
                             type="text"
                             required
                             value={facultyForm.designation}
                             onChange={(e) => setFacultyForm({ ...facultyForm, designation: e.target.value })}
                             placeholder="e.g. Assistant Professor"
-                            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                            className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs text-black placeholder-slate-500 focus:outline-none"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="text-xs font-semibold text-slate-300 mb-1 block">Faculty ID</label>
+                        <label className="text-xs font-semibold text-gray-600 mb-1 block">Faculty ID</label>
                         <input
                           type="text"
                           required
                           value={facultyForm.facultyId}
                           onChange={(e) => setFacultyForm({ ...facultyForm, facultyId: e.target.value })}
                           placeholder="e.g. FAC-2024-001"
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                          className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs text-black placeholder-slate-500 focus:outline-none"
                         />
                       </div>
                     </>
@@ -1019,22 +1019,22 @@ onChange={(e) => {
         {step === 'otp' && (
           <div className="space-y-5">
             <div className="space-y-1 text-center">
-              <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-950 border border-black/40 flex items-center justify-center text-black">
                 <KeyRound className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-extrabold text-white">Verify Your Email OTP</h3>
-               <p className="text-xs text-slate-300 leading-relaxed">
+              <h3 className="text-xl font-extrabold text-black">Verify Your Email OTP</h3>
+               <p className="text-xs text-gray-600 leading-relaxed">
                  We sent a security code to{' '}
-                 <strong className="text-emerald-400">{currentEmail || ''}</strong>
+                 <strong className="text-black">{currentEmail || ''}</strong>
                  . Check your inbox (and spam folder) and enter the code below.
                </p>
             </div>
 
             {validatedInstitution && (
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center gap-2 text-xs text-slate-400">
-                <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div className="p-3 bg-white border border-gray-200 rounded-xl flex items-center gap-2 text-xs text-gray-500">
+                <Building2 className="w-4 h-4 text-black shrink-0" />
                 <span>
-                  Institution: <strong className="text-white">{validatedInstitution.institution_name}</strong> • Code: <strong className="text-emerald-400">{validatedInstitution.institution_code}</strong>
+                  Institution: <strong className="text-black">{validatedInstitution.institution_name}</strong> • Code: <strong className="text-black">{validatedInstitution.institution_code}</strong>
                 </span>
               </div>
             )}
@@ -1053,7 +1053,7 @@ onChange={(e) => {
 
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                <div>
-                 <label className="text-xs font-semibold text-slate-300 mb-1 block text-center">
+                 <label className="text-xs font-semibold text-gray-600 mb-1 block text-center">
                    Verification Code
                  </label>
                  <input
@@ -1063,7 +1063,7 @@ onChange={(e) => {
                    required
                    value={otpCode}
                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                   className="w-full bg-slate-950 border border-emerald-500/60 focus:border-emerald-400 rounded-2xl py-3 text-center text-xl font-mono tracking-[0.5em] text-emerald-300 font-bold focus:outline-none shadow-inner"
+                   className="w-full bg-white border border-black/60 focus:border-emerald-400 rounded-2xl py-3 text-center text-xl font-mono tracking-[0.5em] text-emerald-300 font-bold focus:outline-none shadow-inner"
                  />
                </div>
 
@@ -1075,13 +1075,13 @@ onChange={(e) => {
                 <span>Verify & Join Campus Portal</span>
               </button>
 
-               <div className="text-center text-xs text-slate-400">
+               <div className="text-center text-xs text-gray-500">
                  Didn't receive code? Check your spam/junk folder.{' '}
                <button
                  type="button"
                  onClick={handleResendOtp}
                  disabled={registrationPhase === 'sending'}
-                 className="text-emerald-400 font-bold hover:underline cursor-pointer disabled:text-slate-500 inline-block"
+                 className="text-black font-bold hover:underline cursor-pointer disabled:text-gray-400 inline-block"
                >
                  {registrationPhase === 'sending' ? 'Sending...' : 'Resend OTP'}
                </button>
@@ -1094,18 +1094,18 @@ onChange={(e) => {
         {step === 'institution_verify' && (
           <div className="space-y-5">
             <div className="space-y-1 text-center">
-              <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-950 border border-black/40 flex items-center justify-center text-black">
                 <Building2 className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-extrabold text-white">Verify Institution Code</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
+              <h3 className="text-xl font-extrabold text-black">Verify Institution Code</h3>
+              <p className="text-xs text-gray-600 leading-relaxed">
                 Enter your Institution Code to access the campus portal.
               </p>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">Institution Code</label>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">Institution Code</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -1113,21 +1113,21 @@ onChange={(e) => {
                     value={institutionVerifyCode}
 onChange={(e) => handleInstitutionCodeChange(e.target.value)}
                      placeholder="e.g. YAWEHH264881"
-                     className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+                     className="w-full bg-white border border-black/50 focus:border-black rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
                   />
                   {validatingCode && (
-                    <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <Loader2 className="w-4 h-4 animate-spin text-black absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   )}
                 </div>
 {institutionError && !validatingCode && (
                    <p className="text-[10px] text-red-400 mt-1">✗ {institutionError}</p>
                  )}
                  {validatedInstitution && !institutionError && !validatingCode && (
-                   <div className="text-[10px] text-emerald-400 mt-1 space-y-0.5">
+                   <div className="text-[10px] text-black mt-1 space-y-0.5">
                      <p>✓ Institution Verified</p>
-                     <p className="text-emerald-500">{validatedInstitution.institution_name}</p>
-                     <p className="text-emerald-500">Campus: {validatedInstitution.campus || 'N/A'}</p>
-                     <p className="text-emerald-500">Status: Active</p>
+                     <p className="text-black">{validatedInstitution.institution_name}</p>
+                     <p className="text-black">Campus: {validatedInstitution.campus || 'N/A'}</p>
+                     <p className="text-black">Status: Active</p>
                    </div>
                  )}
               </div>
@@ -1149,18 +1149,18 @@ onChange={(e) => handleInstitutionCodeChange(e.target.value)}
         {step === 'counter_verify' && (
           <div className="space-y-5">
             <div className="space-y-1 text-center">
-              <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-950 border border-black/40 flex items-center justify-center text-black">
                 <Users className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-extrabold text-white">Verify Counter Code</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
+              <h3 className="text-xl font-extrabold text-black">Verify Counter Code</h3>
+              <p className="text-xs text-gray-600 leading-relaxed">
                 Enter your assigned Counter or Canteen Code to access the kitchen dashboard.
               </p>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1 block">Counter / Canteen Code</label>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">Counter / Canteen Code</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -1172,17 +1172,17 @@ onChange={(e) => handleInstitutionCodeChange(e.target.value)}
                     }}
                     onBlur={(e) => handleCounterCodeBlur(e.target.value)}
                     placeholder="e.g. COUNTER-01"
-                    className="w-full bg-slate-950 border border-emerald-500/50 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
+                    className="w-full bg-white border border-black/50 focus:border-black rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono font-bold focus:outline-none pr-8"
                   />
                   {validatingCounter && (
-                    <Loader2 className="w-4 h-4 animate-spin text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <Loader2 className="w-4 h-4 animate-spin text-black absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   )}
                 </div>
                 {counterError && !validatingCounter && (
                   <p className="text-[10px] text-red-400 mt-1">✗ {counterError}</p>
                 )}
                 {!counterError && validatedInstitution && !validatingCounter && (
-                  <p className="text-[10px] text-emerald-400 mt-1">✓ Counter Code Verified</p>
+                  <p className="text-[10px] text-black mt-1">✓ Counter Code Verified</p>
                 )}
               </div>
 
@@ -1202,11 +1202,11 @@ onChange={(e) => handleInstitutionCodeChange(e.target.value)}
         {/* STEP 3: SUCCESS CONFIRMATION */}
         {step === 'success' && (
           <div className="text-center py-6 space-y-4">
-            <div className="w-16 h-16 mx-auto rounded-full bg-emerald-950 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shadow-xl">
+            <div className="w-16 h-16 mx-auto rounded-full bg-emerald-950 border border-black/50 flex items-center justify-center text-black shadow-xl">
               <CheckCircle2 className="w-9 h-9" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-2xl font-extrabold text-white">
+              <h3 className="text-2xl font-extrabold text-black">
                 {mode === 'login' ? 'Logged In Successfully!' : 'Email Verified & Account Joined!'}
               </h3>
               {mode === 'create' && !verifiedInstitution && (
@@ -1215,12 +1215,12 @@ onChange={(e) => handleInstitutionCodeChange(e.target.value)}
                 </p>
               )}
               {verifiedInstitution && (
-                <p className="text-xs text-emerald-400 font-mono font-semibold">
+                <p className="text-xs text-black font-mono font-semibold">
                   {verifiedInstitution.institution_name} - {verifiedInstitution.campus} ({verifiedInstitution.institution_code})
                 </p>
               )}
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
+            <p className="text-xs text-gray-600 leading-relaxed max-w-xs mx-auto">
               You now have access to campus dining menus, instant Razorpay checkout, and QR pickup lockers.
             </p>
             {verifiedInstitution && (

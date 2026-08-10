@@ -1435,19 +1435,42 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                    const completed = isOrderCompleted(o?.status);
                    const cancelled = isOrderCancelled(o?.status);
 
-                   // Show premium completion screen when order is collected
-                   if (completed && o) {
-                     return (
-                       <OrderCompletionScreen
-                         key={`completion-${o.id}`}
-                         order={o}
-                         institutionName={institutionName}
-                         onViewReceipt={(ord) => { setInvoiceOrder(ord); }}
-                         onRateOrder={(ord) => { setRatingOrder(ord); }}
-                         onBackToMenu={() => { setActiveTab('explore'); }}
-                       />
-                     );
-                   }
+                    // Show premium completion screen when order is collected
+                    if (completed && o) {
+                      return (
+                        <OrderCompletionScreen
+                          key={`completion-${o.id}`}
+                          order={o}
+                          institutionName={institutionName}
+                          onViewReceipt={(ord) => { setInvoiceOrder(ord); }}
+                          onRateOrder={(ord) => { setRatingOrder(ord); }}
+                          onBackToMenu={() => { setActiveTab('explore'); }}
+                          onOrderAgain={(ord) => {
+                            // Reconstruct previous order into cart using current menu prices
+                            const rebuildCart: { item: MenuItem; quantity: number }[] = [];
+                            for (const orderItem of ord.items) {
+                              const menuItem = menuItems.find(m => m.id === orderItem.menu_item_id);
+                              if (menuItem && !menuItem.is_archived && menuItem.is_available !== false) {
+                                const existing = rebuildCart.find(c => c.item.id === menuItem.id);
+                                if (existing) {
+                                  existing.quantity += orderItem.quantity;
+                                } else {
+                                  rebuildCart.push({ item: menuItem, quantity: orderItem.quantity });
+                                }
+                              }
+                            }
+                            if (rebuildCart.length > 0) {
+                              setCart(rebuildCart);
+                              setActiveTab('checkout');
+                              triggerToast?.('Order Again', `Added ${rebuildCart.length} item${rebuildCart.length !== 1 ? 's' : ''} to cart with current prices.`, 'success');
+                            } else {
+                              triggerToast?.('Items Unavailable', 'Previous items are no longer available.', 'warning');
+                              setActiveTab('explore');
+                            }
+                          }}
+                        />
+                      );
+                    }
 
                    // Read pickup code, estimated time, QR from Supabase order (never generate locally)
                    const pickupCode = o?.pickup_code || o?.pickup_token || '';

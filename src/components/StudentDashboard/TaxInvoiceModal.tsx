@@ -16,10 +16,12 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
 
   if (!isOpen) return null;
 
-  const orderNumber = order.order_number || order.order_id || '';
-  const pickupCode = order.pickup_code || order.pickup_token || '';
-  const tokenNumber = order.token_number || order.pickup_token || '';
-  const invoiceNumber = `INV-${(order.order_number || '').replace('FDX-', '') || String(order.id).slice(-8).toUpperCase()}`;
+  const orderNumber = order.order_number
+    ? `#FX-${String(order.order_number).padStart(4, '0')}`
+    : order.order_id || '';
+  const pickupCode = order.pickup_code || order.qr_pickup_code || null;
+  const tokenNumber = order.token_number || order.pickup_token || null;
+  const invoiceNumber = `INV-${(order.order_number ? String(order.order_number).slice(-8) : String(order.id).slice(-8)).toUpperCase()}`;
   const paymentMethod = order.payment_method === 'razorpay' ? 'UPI / Razorpay'
     : order.payment_method === 'cash' ? 'Cash at Counter'
     : order.payment_method === 'wallet' ? 'FOODEXA Wallet'

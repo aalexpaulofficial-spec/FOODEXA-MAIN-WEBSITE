@@ -187,10 +187,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [fetchProfile, user]);
 
-   const setPendingRegistrationProfile = useCallback((value: typeof pendingOtpProfile) => {
-     pendingOtpProfileRef.current = value;
-     setPendingOtpProfile(value);
-   }, []);
+    const setPendingRegistrationProfile = useCallback((value: typeof pendingOtpProfile) => {
+      pendingOtpProfileRef.current = value;
+      setPendingOtpProfile(value);
+    }, []);
+
+  const initializeAppSession = useCallback(async () => {
+    try {
+      const { error, restored, profile, session } = await restoreSession();
+      if (error) {
+        console.error('[Auth] Session initialization failed:', error.message);
+      } else if (restored && profile) {
+        console.info('[Auth] Session restored successfully');
+      } else {
+        console.info('[Auth] No existing session found');
+      }
+      setLoading(false);
+    } catch (err) {
+      console.error('[Auth] Critical session initialization error:', err);
+      setLoading(false);
+    }
+  }, [restoreSession]);
 
    // ── Session initialization — Supabase handles persistence natively ────────
   useEffect(() => {
@@ -676,6 +693,79 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await fetchProfile(activeUser.id);
     return { error: null };
   };
+
+  const getRedirectPath = useCallback((role: UserRole | null): string => {
+    switch (role) {
+      case 'student':
+        return '/student-dashboard';
+      case 'institution_admin':
+        return '/institution-dashboard';
+      case 'kitchen_staff':
+        return '/institution-dashboard';
+      case 'canteen_manager':
+        return '/institution-dashboard';
+      case 'faculty':
+        return '/student-dashboard';
+      case 'super_admin':
+        return '/super-admin-portal';
+      default:
+        return '/';
+    }
+  }, []);
+
+  const restoreSession = async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error('[Auth] Session restoration error:', error.message);
+        return { error, restored: false };
+      }
+
+      if (!session || !session.user) {
+        return { error: null, restored: false };
+      }
+
+      const userId = session.user.id;
+      setUser(session.user);
+      setSession(session);
+      setIsEmailVerified(!!session.user.email_confirmed_at);
+
+      try {
+        const profile = await fetchProfile(userId);
+        if (!profile) {
+          return { error: new Error('Profile not found'), restored: false };
+        }
+
+        setProfile(profile);
+        await loadInstitutionForProfile(profile);
+
+        return { error: null, restored: true, profile, session };
+      } catch (profileError) {
+        console.error('[Auth] Profile loading error:', profileError);
+        return { error: profileError as Error, restored: false };
+      }
+    } catch (err) {
+      console.error('[Auth] Critical session restoration error:', err);
+      return { error: err as Error, restored: false };
+    }
+  };
+
+  const initializeAppSession = useCallback(async () => {
+    try {
+      const { error, restored, profile, session } = await restoreSession();
+      if (error) {
+        console.error('[Auth] Session initialization failed:', error.message);
+      } else if (restored && profile) {
+        console.info('[Auth] Session restored successfully');
+      } else {
+        console.info('[Auth] No existing session found');
+      }
+      setLoading(false);
+    } catch (err) {
+      console.error('[Auth] Critical session initialization error:', err);
+      setLoading(false);
+    }
+  }, [restoreSession]);
 
   const updateProfile = async (updates: Partial<Profile>) => {
     const activeUser = user || (await supabase.auth.getUser()).data.user;

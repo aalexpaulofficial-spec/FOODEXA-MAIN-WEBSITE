@@ -2,16 +2,21 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
-import { LxPlayground } from './components/LxPlayground';
-import { MeetLxSection } from './components/MeetLxSection';
 import { PlatformFeatures } from './components/PlatformFeatures';
 import { ForStudents } from './components/ForStudents';
+import { ForFaculty } from './components/ForFaculty';
+import { ForGuests } from './components/ForGuests';
 import { ForInstitutions } from './components/ForInstitutions';
+import { OrderTrackingSection } from './components/OrderTrackingSection';
+import { QrPickupSection } from './components/QrPickupSection';
+import { AiSection } from './components/AiSection';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
-import { RoiCalculator } from './components/RoiCalculator';
-import { ImpactSustainability } from './components/ImpactSustainability';
+import { SecuritySection } from './components/SecuritySection';
+import { HowItWorksSection } from './components/HowItWorksSection';
+import { SuperAdminSection } from './components/SuperAdminSection';
 import { Pricing } from './components/Pricing';
 import { Faq } from './components/Faq';
+import { FinalCtaSection } from './components/FinalCtaSection';
 import { BookDemoModal } from './components/BookDemoModal';
 import { RoleSelectionModal } from './components/RoleSelectionModal';
 import { InstitutionRegistrationModal } from './components/InstitutionRegistrationModal';
@@ -103,9 +108,9 @@ export default function App() {
     if (role === 'student') return '/student-dashboard';
     if (role === 'faculty') return '/student-dashboard';
     if (role === 'guest') return '/student-dashboard';
-    if (role === 'institution_admin') return '/institution/dashboard';
-    if (role === 'kitchen_staff' || role === 'canteen_manager') return '/kitchen/dashboard';
-    if (role === 'super_admin') return '/admin/dashboard';
+    if (role === 'institution_admin') return '/institution-dashboard';
+    if (role === 'kitchen_staff' || role === 'canteen_manager') return '/kitchen-dashboard';
+    if (role === 'super_admin') return '/super-admin-portal';
     return null;
   };
 
@@ -300,45 +305,54 @@ export default function App() {
           onSelectPrompt={handleSelectPrompt}
         />
 
-        <LxPlayground
-          initialPrompt={activePrompt}
-          onOpenBookDemo={() => setIsBookDemoOpen(true)}
-        />
-
-        {/* Meet LX - AI Experience, Voice Ordering, Context Cards, Feature Grid & Dashboard Preview */}
-        <MeetLxSection
-          onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
-          onOpenLxDrawer={() => setIsLxDrawerOpen(true)}
-        />
-
-        <PlatformFeatures
-          onOpenBookDemo={() => setIsBookDemoOpen(true)}
-          onOpenLxDrawer={() => setIsLxDrawerOpen(true)}
-        />
+        <PlatformFeatures />
 
         <ForStudents
-          onOpenLxDrawer={() => setIsLxDrawerOpen(true)}
+          onOpenCreateAccount={handleOpenStudentRegister}
+        />
+
+        <ForFaculty 
+          onOpenCreateAccount={() => handleOpenCreateAccount('faculty')}
+        />
+
+        <ForGuests 
+          onOpenCreateAccount={() => handleOpenCreateAccount('guest')}
         />
 
         <ForInstitutions
-          onOpenBookDemo={() => setIsBookDemoOpen(true)}
-          onOpenInstitutionRegister={() => setIsInstitutionRegistrationOpen(true)}
+          onOpenRegisterInstitution={() => setIsInstitutionRegistrationOpen(true)}
+        />
+
+        <OrderTrackingSection />
+        
+        <QrPickupSection />
+
+        <AiSection 
+          onOpenLxDrawer={() => setIsLxDrawerOpen(true)}
         />
 
         <AnalyticsDashboard />
 
-        <RoiCalculator
-          onOpenBookDemo={() => setIsBookDemoOpen(true)}
-        />
+        <SecuritySection />
 
-        <ImpactSustainability />
+        <HowItWorksSection />
+
+        <SuperAdminSection 
+          onOpenLogin={handleOpenLogin}
+        />
 
         <Pricing
           onOpenBookDemo={() => setIsBookDemoOpen(true)}
-          onOpenLxDrawer={() => setIsLxDrawerOpen(true)}
+          onOpenRegisterInstitution={() => setIsInstitutionRegistrationOpen(true)}
         />
 
         <Faq />
+        
+        <FinalCtaSection 
+          onOpenCreateAccount={handleOpenStudentRegister}
+          onOpenLogin={handleOpenLogin}
+          onOpenRegisterInstitution={() => setIsInstitutionRegistrationOpen(true)}
+        />
       </main>
 
       {/* Footer */}

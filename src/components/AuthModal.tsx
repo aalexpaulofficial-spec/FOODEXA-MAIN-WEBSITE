@@ -368,15 +368,45 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
    const handleLoginSubmit = async (e: React.FormEvent) => {
      e.preventDefault();
+     const instCode = loginInstitutionCode.trim().toUpperCase();
      const normalizedLoginEmail = (loginEmail || '').trim().toLowerCase();
      setCurrentEmail(normalizedLoginEmail);
      setLoginError(null);
      setInstitutionError(null);
      setStep('form');
-     console.info('[Auth] Login attempt for:', normalizedLoginEmail);
 
+     // 1. Validate institution code first
+     if (!instCode) {
+       setLoginError('Please enter your Institution Code.');
+       return;
+     }
+
+     console.info('[Auth] Validating institution code:', instCode);
+     const { data: instData, error: instFetchError } = await supabase
+       .from('institutions')
+       .select('id, name, campus, city, state, country, institution_code')
+       .eq('institution_code', instCode)
+       .maybeSingle();
+
+     if (instFetchError || !instData) {
+       setLoginError('Invalid Institution Code. Please check the code and try again.');
+       return;
+     }
+
+     const institution: InstitutionData = {
+       institution_id: instData.id,
+       institution_name: instData.name,
+       campus: instData.campus || '',
+       city: instData.city || '',
+       state: instData.state || '',
+       country: instData.country || '',
+       institution_code: instData.institution_code,
+     };
+
+     console.info('[Auth] Institution verified:', institution.institution_name, '| Login attempt for:', normalizedLoginEmail);
+
+     // 2. Sign in with email/password
      const { error, session: authSession, user: authUser, profile: liveProfile } = await signIn(normalizedLoginEmail, loginPassword);
-     // Sessions persist automatically via Supabase — no need for rememberMe flag
 
      if (error) {
        const msg = error.message.toLowerCase();
@@ -405,30 +435,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setLoginUserId(authUser.id);
 
-    let institution: InstitutionData | null = null;
-    if (liveProfile.institution_id) {
-       const { data: instData } = await supabase
-         .from('institutions')
-         .select('id, name, campus, city, state, country, institution_code')
-         .eq('id', liveProfile.institution_id)
-         .maybeSingle();
-
-      if (instData) {
-        institution = {
-          institution_id: instData.id,
-          institution_name: instData.name,
-          campus: instData.campus || '',
-          city: instData.city || '',
-          state: instData.state || '',
-          country: instData.country || '',
-          institution_code: instData.institution_code,
-        };
-        setInstitutionData(institution);
-        setVerifiedInstitution(institution);
-        setValidatedInstitution(institution);
-        setInstitutionVerifyCode(institution.institution_code);
-      }
+    // 3. Update profile with the validated institution if different
+    if (liveProfile.institution_id !== institution.institution_id) {
+      console.info('[Auth] Updating profile institution from', liveProfile.institution_id, 'to', institution.institution_id);
+      await supabase
+        .from('profiles')
+        .update({ institution_id: institution.institution_id })
+        .eq('user_id', authUser.id);
     }
+
+    setInstitutionData(institution);
+    setVerifiedInstitution(institution);
+    setValidatedInstitution(institution);
+    setInstitutionVerifyCode(institution.institution_code);
 
      const role = liveProfile.role;
 
@@ -439,19 +458,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
        setStep('counter_verify');
        return;
      } else if (role === 'student' || role === 'faculty' || role === 'guest') {
-        if (institution) {
-          setInstitutionVerifyCode(institution.institution_code);
-         setValidatedInstitution(institution);
-         setVerifiedInstitution(institution);
-         setInstitutionData(institution);
-         setStep('success');
-         if (onLoginSuccess) {
-           onLoginSuccess({ profile: liveProfile, institution });
-         }
-         return;
-       }
-       setStep('institution_verify');
-       return;
+        setStep('success');
+        if (onLoginSuccess) {
+          onLoginSuccess({ profile: liveProfile, institution });
+        }
+        return;
      }
 
      setStep('success');

@@ -265,12 +265,13 @@ function isMissingSchemaError(error: any): boolean {
   return ['schema cache', 'could not find the table', 'does not exist', 'not found'].some((text) => message.includes(text));
 }
 
-function createOrderItemsPayload(orderId: string, items: { id: string; quantity: number; price: number }[]) {
+function createOrderItemsPayload(orderId: string, items: { id: string; name?: string; variant?: string | null; quantity: number; price: number; subtotal?: number }[]) {
   return items.map((item) => ({
     order_id: orderId,
     menu_item_id: item.id,
     quantity: item.quantity,
     price: item.price,
+    subtotal: item.subtotal ?? (item.price * item.quantity),
   }));
 }
 
@@ -476,10 +477,10 @@ export async function createOrderAfterPayment(params: {
     razorpay_signature: params.razorpay_signature,
   };
 
-  const { data: orderData, error: orderError } = await supabase.from('orders').insert([orderPayload]).select(SELECT_ORDER_WITH_ITEMS).single();
+  const { data: orderData, error: orderError } = await supabase.from('orders').insert([orderPayload]).select('*').single();
   if (orderError || !orderData) {
-    console.error('[Supabase] createOrderAfterPayment order insert failed:', orderError?.message);
-    return { data: null, error: 'We couldn\'t create your order. Please try again.' };
+    console.error('[Supabase] createOrderAfterPayment order insert failed:', orderError?.message, orderError?.code, orderError?.details);
+    return { data: null, error: `Order creation failed: ${orderError?.message || 'Unknown error'}` };
   }
 
   // Insert order_items

@@ -47,10 +47,10 @@ export const PremiumBottomNav: React.FC<PremiumBottomNavProps> = ({
             animate={{ y: 0, opacity: 1 }}
             whileTap={{ scale: 0.98 }}
             onClick={onOpenCart}
-            className="w-full bg-slate-900 text-white rounded-2xl p-3 shadow-xl flex items-center justify-between border border-slate-700/80 backdrop-blur-md"
+            className="w-full bg-[#1D1D1F] text-white rounded-[16px] p-3 shadow-md flex items-center justify-between border border-transparent backdrop-blur-md"
           >
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+              <div className="w-8 h-8 rounded-xl bg-[#0071E3] text-white flex items-center justify-center font-bold text-xs">
                 {cartCount}
               </div>
               <div className="text-left">
@@ -59,7 +59,7 @@ export const PremiumBottomNav: React.FC<PremiumBottomNavProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs font-extrabold text-cyan-300">
+            <div className="flex items-center gap-2 text-xs font-extrabold text-[#0071E3]">
               <span>View Cart</span>
               <ShoppingBag className="w-4 h-4" />
             </div>
@@ -68,7 +68,7 @@ export const PremiumBottomNav: React.FC<PremiumBottomNavProps> = ({
       )}
 
       {/* iOS Style Bottom Tab Bar */}
-      <div className="max-w-lg mx-auto glass-nav bg-white/75 backdrop-blur-2xl border border-white/80 shadow-2xl rounded-3xl p-1.5 flex items-center justify-around pointer-events-auto ring-1 ring-black/5">
+      <div className="max-w-lg mx-auto glass-nav bg-white/75 backdrop-blur-2xl border border-white/80 shadow-lg rounded-[24px] p-1.5 flex items-center justify-around pointer-events-auto ring-1 ring-black/5">
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           const showBadge = item.id === 'history' && activeOrderCount > 0;
@@ -76,14 +76,14 @@ export const PremiumBottomNav: React.FC<PremiumBottomNavProps> = ({
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center justify-center py-1.5 px-3 rounded-2xl transition-all relative ${
-                isActive ? 'text-blue-600 font-bold' : 'text-slate-500 hover:text-slate-800'
+              className={`flex flex-col items-center justify-center py-1.5 px-3 rounded-[16px] transition-all relative ${
+                isActive ? 'text-[#0071E3] font-bold' : 'text-[#86868B] hover:text-[#1D1D1F]'
               }`}
             >
               {isActive && (
                 <motion.div
                   layoutId="activeTabBadge"
-                  className="absolute inset-0 bg-blue-500/10 backdrop-blur-md border border-blue-500/20 rounded-2xl -z-10 shadow-xs"
+                  className="absolute inset-0 bg-[#0071E3]/10 backdrop-blur-md border border-transparent rounded-[16px] -z-10 shadow-xs"
                   transition={{ type: 'spring', duration: 0.4 }}
                 />
               )}
@@ -92,7 +92,7 @@ export const PremiumBottomNav: React.FC<PremiumBottomNavProps> = ({
                 {item.label}
               </span>
               {showBadge && (
-                <span className="absolute top-1 right-2 flex h-3 w-3 items-center justify-center rounded-full bg-red-500 text-[7px] font-black text-white shadow-sm ring-1 ring-white">
+                <span className="absolute top-1 right-2 flex h-3 w-3 items-center justify-center rounded-full bg-[#FF3B30] text-[7px] font-black text-white shadow-sm ring-1 ring-white">
                   {activeOrderCount}
                 </span>
               )}

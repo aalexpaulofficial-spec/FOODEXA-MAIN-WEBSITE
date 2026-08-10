@@ -182,8 +182,8 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
 
         {/* ── SearchBar (top) ────────────────────────────────────────── */}
         <div className="w-full my-4">
-          <div className="relative flex items-center glass-card rounded-2xl p-2 focus-within:ring-2 focus-within:ring-blue-500/30 focus-within:border-blue-500/50 transition-all shadow-md">
-            <div className="pl-4 text-slate-400">
+          <div className="relative flex items-center glass-card rounded-[16px] p-2 focus-within:ring-2 focus-within:ring-blue-500/30 focus-within:border-blue-500/50 transition-all shadow-md">
+            <div className="pl-4 text-[#86868B]">
               <Search className="w-5 h-5" />
             </div>
             <input
@@ -191,21 +191,21 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search meals, drinks, snacks, canteens..."
-              className="w-full bg-transparent px-3 py-2.5 text-sm sm:text-base text-slate-900 placeholder-slate-400 focus:outline-none"
+              className="w-full bg-transparent px-3 py-2.5 text-sm sm:text-base text-[#1D1D1F] placeholder-slate-400 focus:outline-none"
             />
             {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="p-2 text-slate-400 hover:text-slate-600 rounded-lg mr-1">
+              <button onClick={() => setSearchQuery('')} className="p-2 text-[#86868B] hover:text-[#6E6E73] rounded-lg mr-1">
                 <X className="w-5 h-5" />
               </button>
             )}
             <div className="flex items-center gap-2 border-l border-slate-200 pl-3 pr-1">
-              <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all" title="Voice Search">
+              <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-blue-50 text-[#0071E3] hover:bg-blue-100 transition-all" title="Voice Search">
                 <Mic className="w-5 h-5" />
               </button>
               <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all" title="AI Smart Search">
                 <Sparkles className="w-5 h-5" />
               </button>
-              <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all" title="Scan Food Barcode">
+              <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-emerald-50 text-[#30D158] hover:bg-[#E5F7EB] transition-all" title="Scan Food Barcode">
                 <QrCode className="w-5 h-5" />
               </button>
             </div>
@@ -213,7 +213,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
         </div>
 
         {/* ── BannerCarousel ────────────────────────────────────────── */}
-        <div className="relative w-full overflow-hidden rounded-3xl my-5 shadow-lg shadow-slate-200/50">
+        <div className="relative w-full overflow-hidden rounded-[24px] my-5 shadow-lg shadow-slate-200/50">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentBannerData.id}
@@ -246,9 +246,9 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
               </div>
 
               <div className="relative z-10 flex items-center justify-between mt-4">
-                <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs sm:text-sm shadow-md hover:bg-slate-100 transition-all hover:scale-105 active:scale-95">
+                <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#1D1D1F] font-bold text-xs sm:text-sm shadow-md hover:bg-slate-100 transition-all hover:scale-105 active:scale-95">
                   {currentBannerData.actionText}
-                  <ArrowRight className="w-4 h-4 text-slate-700" />
+                  <ArrowRight className="w-4 h-4 text-[#1D1D1F]" />
                 </button>
 
                 <div className="flex items-center gap-1.5">
@@ -271,17 +271,17 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
         <div className="w-full my-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3.5">
             <div>
-              <h3 className="text-lg font-bold text-slate-900 tracking-tight">Food Categories</h3>
-              <p className="text-xs text-slate-500">Explore items across all {institutionName} canteens</p>
+              <h3 className="text-lg font-bold text-[#1D1D1F] tracking-tight">Food Categories</h3>
+              <p className="text-xs text-[#86868B]">Explore items across all {institutionName} canteens</p>
             </div>
 
-            <div className="flex items-center glass-pill p-1 rounded-2xl w-fit shadow-xs">
+            <div className="flex items-center glass-pill p-1 rounded-[16px] w-fit shadow-xs">
               <button
                 onClick={() => setDietaryFilter('all')}
                 className={`px-3 py-1 rounded-xl text-xs font-semibold transition-all ${
                   dietaryFilter === 'all'
-                    ? 'bg-white/90 text-slate-900 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white/90 text-[#1D1D1F] shadow-sm'
+                    : 'text-[#6E6E73] hover:text-[#1D1D1F]'
                 }`}
               >
                 All
@@ -292,7 +292,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold transition-all ${
                   dietaryFilter === 'veg'
                     ? 'bg-emerald-600/90 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    : 'text-[#6E6E73] hover:text-[#1D1D1F]'
                 }`}
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-300"></span>
@@ -304,7 +304,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold transition-all ${
                   dietaryFilter === 'non-veg'
                     ? 'bg-red-600/90 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    : 'text-[#6E6E73] hover:text-[#1D1D1F]'
                 }`}
               >
                 <span className="w-2 h-2 rounded-full bg-red-300"></span>
@@ -321,13 +321,13 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                   key={cat.id}
                   whileTap={{ scale: 0.96 }}
                   onClick={() => setActiveCategory(cat.id)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-[16px] text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
                     isSelected
-                      ? 'bg-blue-600/90 backdrop-blur-md text-white shadow-md shadow-blue-600/25 border border-white/30'
-                      : 'glass-pill text-slate-700 hover:bg-white/90 shadow-sm'
+                      ? 'bg-[#0071E3]/90 backdrop-blur-md text-white shadow-md shadow-blue-600/25 border border-white/30'
+                      : 'glass-pill text-[#1D1D1F] hover:bg-white/90 shadow-sm'
                   }`}
                 >
-                  <span className={isSelected ? 'text-white' : 'text-slate-500'}>
+                  <span className={isSelected ? 'text-white' : 'text-[#86868B]'}>
                     {cat.icon}
                   </span>
                   <span>{cat.name}</span>
@@ -350,31 +350,31 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
             <div className="w-full my-6">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 text-white flex items-center justify-center shadow-md shadow-cyan-500/20">
+                  <div className="w-7 h-7 rounded-xl bg-[#1D1D1F] text-white flex items-center justify-center shadow-md shadow-cyan-500/20">
                     <Sparkles className="w-4 h-4" />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900 tracking-tight">Recommended For You</h3>
+                  <h3 className="text-lg font-bold text-[#1D1D1F] tracking-tight">Recommended For You</h3>
                 </div>
                 <span className="text-xs font-semibold text-cyan-700 bg-cyan-50 border border-cyan-200 px-2.5 py-0.5 rounded-full">
                   LX AI Curated
                 </span>
               </div>
 
-              <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 rounded-3xl p-5 sm:p-7 text-white shadow-xl relative overflow-hidden border border-slate-700/60">
-                <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+              <div className="bg-[#1D1D1F] rounded-[24px] p-5 sm:p-7 text-white shadow-md relative overflow-hidden border border-slate-700/60">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-[#0071E3]/10 rounded-full blur-3xl pointer-events-none"></div>
 
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center relative z-10">
                   <div className="md:col-span-5 relative group">
                     <img
                       src={recommended.image_url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600'}
                       alt={recommended.name}
-                      className="w-full h-48 sm:h-56 md:h-60 rounded-2xl object-cover shadow-lg ring-1 ring-white/10 group-hover:scale-[1.02] transition-all"
+                      className="w-full h-48 sm:h-56 md:h-60 rounded-[16px] object-cover shadow-lg ring-1 ring-white/10 group-hover:scale-[1.02] transition-all"
                     />
-                    <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-md px-3 py-1 rounded-xl text-xs font-bold text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                    <div className="absolute top-3 left-3 bg-[#1D1D1F]/80 backdrop-blur-md px-3 py-1 rounded-xl text-xs font-bold text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
                        <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />
                        {recommended.protein || 0}g Protein
                      </div>
-                     <div className="absolute bottom-3 right-3 bg-slate-900/80 backdrop-blur-md px-2.5 py-1 rounded-xl text-xs font-bold text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                     <div className="absolute bottom-3 right-3 bg-[#1D1D1F]/80 backdrop-blur-md px-2.5 py-1 rounded-xl text-xs font-bold text-amber-400 border border-amber-500/30 flex items-center gap-1">
                        <Star className="w-3.5 h-3.5 fill-amber-400" />
                        {recommended.rating?.toFixed(1) || '0.0'}
                      </div>
@@ -389,21 +389,21 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                       <p className="text-xs sm:text-sm text-slate-300 mt-1.5 leading-relaxed">{recommended.description}</p>
 
                       <div className="grid grid-cols-3 gap-2 my-4">
-                        <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/10 text-center">
-                          <p className="text-[10px] text-slate-400 uppercase font-bold">Calories</p>
+                        <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-[16px] border border-white/10 text-center">
+                          <p className="text-[10px] text-[#86868B] uppercase font-bold">Calories</p>
                           <p className="text-sm font-bold text-amber-300 mt-0.5 flex items-center justify-center gap-1">
                             <Flame className="w-3.5 h-3.5 text-amber-400" />{recommended.calories || 520} kcal
                           </p>
                         </div>
-                        <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/10 text-center">
-                          <p className="text-[10px] text-slate-400 uppercase font-bold">Protein</p>
+                        <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-[16px] border border-white/10 text-center">
+                          <p className="text-[10px] text-[#86868B] uppercase font-bold">Protein</p>
                            <p className="text-sm font-bold text-emerald-300 mt-0.5 flex items-center justify-center gap-1">
                              <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />{recommended.protein || 0}g
                            </p>
                         </div>
-                        <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/10 text-center">
-                          <p className="text-[10px] text-slate-400 uppercase font-bold">Prep Time</p>
-                          <p className="text-sm font-bold text-cyan-300 mt-0.5 flex items-center justify-center gap-1">
+                        <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-[16px] border border-white/10 text-center">
+                          <p className="text-[10px] text-[#86868B] uppercase font-bold">Prep Time</p>
+                          <p className="text-sm font-bold text-[#0071E3] mt-0.5 flex items-center justify-center gap-1">
                             <Clock className="w-3.5 h-3.5 text-cyan-400" />{recommended.prep_time || 8} mins
                           </p>
                         </div>
@@ -412,14 +412,14 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
 
                     <div className="flex items-center justify-between pt-2 border-t border-white/10">
                       <div>
-                        <p className="text-[10px] text-slate-400 uppercase font-semibold">Special Student Price</p>
+                        <p className="text-[10px] text-[#86868B] uppercase font-semibold">Special Student Price</p>
                         <p className="text-xl font-extrabold text-white">₹{recommended.price}</p>
                       </div>
                       <motion.button
                         whileHover={{ scale: 1.03 }}
                         whileTap={{ scale: 0.97 }}
                         onClick={() => onAddCart(recommended)}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/30 transition-all"
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-[16px] bg-[#0071E3] hover:bg-blue-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/30 transition-all"
                       >
                         <ShoppingBag className="w-4 h-4" />
                         <span>Order Now</span>
@@ -442,8 +442,8 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                   <TrendingUp className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900 tracking-tight">Trending Today</h3>
-                  <p className="text-xs text-slate-500">Most ordered across {institutionName} campus</p>
+                  <h3 className="text-lg font-bold text-[#1D1D1F] tracking-tight">Trending Today</h3>
+                  <p className="text-xs text-[#86868B]">Most ordered across {institutionName} campus</p>
                 </div>
               </div>
             </div>
@@ -455,46 +455,46 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                   <motion.div
                     key={item.id}
                     whileHover={{ y: -4 }}
-                    className="min-w-[240px] sm:min-w-[260px] glass-card glass-card-hover rounded-3xl p-3.5 flex flex-col justify-between"
+                    className="min-w-[240px] sm:min-w-[260px] glass-card glass-card-hover rounded-[24px] p-3.5 flex flex-col justify-between"
                   >
                     <div>
-                      <div className="relative rounded-2xl overflow-hidden h-36 mb-3">
+                      <div className="relative rounded-[16px] overflow-hidden h-36 mb-3">
                         <img
                           src={item.image_url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'}
                           alt={item.name}
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-md px-2 py-0.5 rounded-lg text-[10px] font-bold text-white flex items-center gap-1">
+                        <div className="absolute top-2 left-2 bg-[#1D1D1F]/80 backdrop-blur-md px-2 py-0.5 rounded-lg text-[10px] font-bold text-white flex items-center gap-1">
                           <Flame className="w-3 h-3 text-amber-400" />
                           #{index + 1} Trending
                         </div>
-                        <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded-lg text-[10px] font-bold text-slate-900 flex items-center gap-1 shadow-sm">
+                        <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded-lg text-[10px] font-bold text-[#1D1D1F] flex items-center gap-1 shadow-sm">
                           <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
                           {item.rating?.toFixed(1) || '4.5'}
                         </div>
                       </div>
 
-                      <h4 className="font-bold text-slate-900 text-sm line-clamp-1">{item.name}</h4>
-                      <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{canteenName}</p>
+                      <h4 className="font-bold text-[#1D1D1F] text-sm line-clamp-1">{item.name}</h4>
+                      <p className="text-xs text-[#86868B] line-clamp-1 mt-0.5">{canteenName}</p>
 
-                      <div className="flex items-center gap-3 my-2 text-xs text-slate-500">
+                      <div className="flex items-center gap-3 my-2 text-xs text-[#86868B]">
                         <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-400" />
+                          <Clock className="w-3 h-3 text-[#86868B]" />
                           {item.prep_time || '—'}
                         </span>
                         <span>•</span>
-                        <span className="text-emerald-600 font-medium">
+                        <span className="text-[#30D158] font-medium">
                           {item.calories ? `${item.calories} kcal` : '—'}
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                      <p className="text-base font-bold text-slate-900">₹{item.price}</p>
+                      <p className="text-base font-bold text-[#1D1D1F]">₹{item.price}</p>
                       <motion.button
                         whileTap={{ scale: 0.9 }}
                         onClick={() => onAddCart(item)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm hover:bg-blue-700 transition-all"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#0071E3] text-white font-bold text-xs shadow-sm hover:bg-blue-700 transition-all"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         Add
@@ -511,17 +511,17 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
         <div className="w-full my-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-xl font-bold text-slate-900 tracking-tight">Today's Campus Menu</h3>
-              <p className="text-xs text-slate-500">
+              <h3 className="text-xl font-bold text-[#1D1D1F] tracking-tight">Today's Campus Menu</h3>
+              <p className="text-xs text-[#86868B]">
                 Showing {displayItems.length} fresh items ready for express pickup
               </p>
             </div>
           </div>
 
           {displayItems.length === 0 ? (
-            <div className="bg-white rounded-3xl p-10 text-center border border-slate-200/80 my-4 shadow-sm">
-              <p className="text-slate-400 font-medium text-sm">No food items found matching your filters.</p>
-              <p className="text-xs text-slate-400 mt-1">Try clearing your search or switching categories.</p>
+            <div className="bg-white rounded-[24px] p-10 text-center border border-slate-200/80 my-4 shadow-sm">
+              <p className="text-[#86868B] font-medium text-sm">No food items found matching your filters.</p>
+              <p className="text-xs text-[#86868B] mt-1">Try clearing your search or switching categories.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -546,15 +546,15 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
             <div className="flex items-center justify-between mb-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-blue-600" />
-                  <h3 className="text-lg font-bold text-slate-900 tracking-tight">Popular Near You</h3>
+                  <MapPin className="w-5 h-5 text-[#0071E3]" />
+                  <h3 className="text-lg font-bold text-[#1D1D1F] tracking-tight">Popular Near You</h3>
                 </div>
-                <p className="text-xs text-slate-500">Top canteens filtered by distance and ratings</p>
+                <p className="text-xs text-[#86868B]">Top canteens filtered by distance and ratings</p>
               </div>
-              <div className="flex items-center gap-1 glass-pill p-1 rounded-2xl">
-                <button className="px-3 py-1 rounded-xl text-xs font-semibold bg-white/90 text-slate-900 shadow-sm">Popularity</button>
-                <button className="px-3 py-1 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all">Distance</button>
-                <button className="px-3 py-1 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all">Prep Time</button>
+              <div className="flex items-center gap-1 glass-pill p-1 rounded-[16px]">
+                <button className="px-3 py-1 rounded-xl text-xs font-semibold bg-white/90 text-[#1D1D1F] shadow-sm">Popularity</button>
+                <button className="px-3 py-1 rounded-xl text-xs font-semibold text-[#6E6E73] hover:text-[#1D1D1F] transition-all">Distance</button>
+                <button className="px-3 py-1 rounded-xl text-xs font-semibold text-[#6E6E73] hover:text-[#1D1D1F] transition-all">Prep Time</button>
               </div>
             </div>
 
@@ -565,13 +565,13 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                   <motion.div
                     key={`popular-canteen-${canteen.id}`}
                     whileHover={{ scale: 1.01 }}
-                    className="glass-card glass-card-hover rounded-2xl p-4 flex items-center gap-4"
+                    className="glass-card glass-card-hover rounded-[16px] p-4 flex items-center gap-4"
                   >
                     <div className="relative shrink-0">
                       <img
                         src={canteen.image_url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200'}
                         alt={canteen.name}
-                        className="w-16 h-16 rounded-2xl object-cover shadow-sm"
+                        className="w-16 h-16 rounded-[16px] object-cover shadow-sm"
                       />
                       {!orderingEnabled && (
                         <span className="absolute -top-1 -right-1 px-1.5 py-0.25 bg-red-600 text-white text-[8px] font-black rounded-full">
@@ -581,21 +581,21 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <h4 className="font-bold text-slate-900 text-sm line-clamp-1">{canteen.name}</h4>
+                        <h4 className="font-bold text-[#1D1D1F] text-sm line-clamp-1">{canteen.name}</h4>
                         {!orderingEnabled && (
                           <span className="px-1.5 py-0.25 border border-red-500/50 text-red-600 rounded-full text-[8px] font-bold">
                             COMING SOON
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
+                      <div className="flex items-center gap-1 text-xs text-[#86868B] mt-0.5">
                         <MapPin className="w-3 h-3 text-blue-500" />
                         <span className="line-clamp-1">{getCanteenDistance(canteen)} • {itemCount} items</span>
                       </div>
                       {featuredItem && (
                         <>
-                          <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
-                            <span className="font-medium text-slate-700 dark:text-slate-300 line-clamp-1">{featuredItem.name}</span>
+                          <div className="flex items-center gap-2 mt-1 text-xs text-[#86868B]">
+                            <span className="font-medium text-[#1D1D1F] dark:text-slate-300 line-clamp-1">{featuredItem.name}</span>
                             <span>•</span>
                             <span className="flex items-center gap-0.5">
                               <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
@@ -607,7 +607,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                               {avgPrepTime}m
                             </span>
                           </div>
-                          <p className="text-xs font-bold text-slate-900 mt-0.5">₹{featuredItem.price}</p>
+                          <p className="text-xs font-bold text-[#1D1D1F] mt-0.5">₹{featuredItem.price}</p>
                         </>
                       )}
                     </div>
@@ -615,7 +615,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
                       <motion.button
                         whileTap={{ scale: 0.9 }}
                         onClick={() => onAddCart(featuredItem)}
-                        className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm hover:bg-blue-700 transition-all"
+                        className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#0071E3] text-white font-bold text-xs shadow-sm hover:bg-blue-700 transition-all"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         Add

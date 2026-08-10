@@ -1,7 +1,7 @@
-# Task: Dual Auth & Landing Page Gradient
+# Task: Apple Style Premium Redesign
 
-- [ ] Add `anonymousSignIn` method to `AuthContext.tsx`.
-- [ ] Add "Quick Access" UI to `AuthModal.tsx`.
-- [ ] Add mesh gradient to landing page (`index.css` and `Hero.tsx`).
-- [ ] Sync changes to `foodexa` submodule.
-- [ ] Push to Github for Vercel deployment.
+- [ ] Update `RoleSelectionModal.tsx` (Apple aesthetic, remove cyan gradients)
+- [ ] Update `AuthModal.tsx` (Apple inputs, buttons, typography)
+- [ ] Update `StudentPortalModal.tsx` and Tabs (Apple cards, glassmorphism)
+- [ ] Replace emojis with real icons/images (especially payment/UPI)
+- [ ] Sync `foodexa` submodule and push to Vercel

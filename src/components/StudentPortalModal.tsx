@@ -98,7 +98,7 @@ const roleGradient = (role: UserRole | null | undefined) => {
 
 const roleColor = (role: UserRole | null | undefined) => {
   if (role === 'student') return 'text-emerald-300 border-black/40 bg-emerald-950/60';
-  if (role === 'faculty') return 'text-cyan-300 border-cyan-500/40 bg-cyan-950/60';
+  if (role === 'faculty') return 'text-[#0071E3] border-cyan-500/40 bg-cyan-950/60';
   if (role === 'guest') return 'text-amber-300 border-amber-500/40 bg-amber-950/60';
   return 'text-gray-600 border-gray-300 bg-gray-50';
 };
@@ -179,14 +179,14 @@ const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => v
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-white/90 backdrop-blur-xl p-4" onClick={onClose}>
       <div
-        className="bg-[#DCE1E7] rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl relative"
+        className="bg-[#DCE1E7] rounded-3xl p-6 max-w-sm w-full text-center shadow-lg relative"
         onClick={(e) => e.stopPropagation()}
       >
         <button onClick={onClose} className="absolute right-4 top-4 p-1 text-gray-500 hover:text-slate-600 rounded-full hover:bg-slate-200 transition-colors">
           <X className="w-5 h-5" />
         </button>
 
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-full text-blue-600 text-xs font-bold mb-4 shadow-sm">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white rounded-full text-[#0071E3] text-xs font-bold mb-4 shadow-sm">
           <Sparkles className="w-3.5 h-3.5" /> Scan at Counter Scanner
         </div>
 
@@ -210,7 +210,7 @@ const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => v
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs font-bold text-gray-500 uppercase">Pickup Code</span>
-            <span className="text-base font-black text-blue-600 uppercase">{qrValue}</span>
+            <span className="text-base font-black text-[#0071E3] uppercase">{qrValue}</span>
           </div>
         </div>
 
@@ -218,7 +218,7 @@ const QRModal = ({ isOpen, onClose, order }: { isOpen: boolean; onClose: () => v
           <button onClick={copyCode} className="w-full py-3 bg-white rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 shadow-sm flex items-center justify-center gap-2">
             <Copy className="w-4 h-4" /> Copy Code
           </button>
-          <button onClick={downloadQR} className="w-full py-3 bg-blue-600 rounded-xl text-sm font-bold text-black hover:bg-blue-700 shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
+          <button onClick={downloadQR} className="w-full py-3 bg-[#0071E3] rounded-xl text-sm font-bold text-black hover:bg-blue-700 shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2">
             <Download className="w-4 h-4" /> Download QR
           </button>
         </div>
@@ -1435,7 +1435,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                    return (
                      <div className="max-w-md mx-auto space-y-4 pb-20">
                        {/* Top Status Card */}
-                       <div className="bg-gray-50 rounded-3xl p-6 text-black shadow-xl relative overflow-hidden">
+                       <div className="bg-gray-50 rounded-3xl p-6 text-black shadow-md relative overflow-hidden">
                          <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
                          <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-black/20 rounded-full blur-3xl pointer-events-none"></div>
                          
@@ -1519,19 +1519,19 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                                  <div className="flex flex-col items-center">
                                    <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 font-bold text-xs transition-all duration-500 z-10 ${
                                      isPast ? 'border-red-500/40 bg-red-950/30' :
-                                     isDone ? 'bg-blue-600 border-blue-600 text-black' :
-                                     isActive ? 'bg-white border-blue-600 text-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.3)]' :
+                                     isDone ? 'bg-[#0071E3] border-blue-600 text-black' :
+                                     isActive ? 'bg-white border-blue-600 text-[#0071E3] shadow-[0_0_10px_rgba(37,99,235,0.3)]' :
                                      'bg-white border-slate-200 text-gray-600'
                                    }`}>
                                      {isPast ? <XCircle className="w-4 h-4 text-red-500" /> : isDone ? <Check className="w-4 h-4" /> : i + 1}
                                    </div>
                                    {i < STUDENT_TIMELINE_LABELS.length - 1 && (
-                                     <div className={`w-0.5 h-8 my-0.5 rounded-full transition-all duration-700 ${isDone ? 'bg-blue-600' : 'bg-slate-100'}`} />
+                                     <div className={`w-0.5 h-8 my-0.5 rounded-full transition-all duration-700 ${isDone ? 'bg-[#0071E3]' : 'bg-slate-100'}`} />
                                    )}
                                  </div>
                                  <div className={`pt-1 flex-1 min-w-0 ${i < STUDENT_TIMELINE_LABELS.length - 1 ? 'pb-3' : 'pb-0'}`}>
                                    <div className="flex items-center gap-2">
-                                     <p className={`text-sm font-bold ${isActive ? 'text-blue-600' : isDone || isPast ? 'text-slate-800' : 'text-gray-500'}`}>{stepLabel}</p>
+                                     <p className={`text-sm font-bold ${isActive ? 'text-[#0071E3]' : isDone || isPast ? 'text-slate-800' : 'text-gray-500'}`}>{stepLabel}</p>
                                    </div>
                                    <p className={`text-[11px] mt-0.5 ${isActive || isDone ? 'text-gray-400' : 'text-gray-600'}`}>{STUDENT_TIMELINE_DESCRIPTIONS[i]}</p>
                                  </div>
@@ -1544,7 +1544,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                        {/* Actions */}
                        <div className="pt-2 space-y-3">
                          {o && (stage >= 2) && (
-                           <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-blue-600 text-black font-bold text-sm shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition-colors">
+                           <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-[#0071E3] text-black font-bold text-sm shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition-colors">
                              <QrCode className="w-5 h-5" /> Show Pickup QR
                            </button>
                          )}
@@ -1614,13 +1614,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         {showCart && (
           <div className="fixed inset-0 z-40 bg-gray-50/40 backdrop-blur-sm" onClick={() => setShowCart(false)} />
         )}
-        <aside className={`fixed bottom-0 right-0 top-0 z-50 w-full max-w-md bg-[#E2E8F0] flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${showCart ? 'translate-x-0' : 'translate-x-full'}`}>
+        <aside className={`fixed bottom-0 right-0 top-0 z-50 w-full max-w-md bg-[#E2E8F0] flex flex-col shadow-lg transition-transform duration-300 ease-in-out ${showCart ? 'translate-x-0' : 'translate-x-full'}`}>
           
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-5 border-b border-slate-300 bg-[#E2E8F0]">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center">
-                <ShoppingCart className="w-5 h-5 text-blue-600" />
+                <ShoppingCart className="w-5 h-5 text-[#0071E3]" />
               </div>
               <div>
                 <h3 className="text-xl font-black text-slate-900">Your Cart</h3>
@@ -1649,7 +1649,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
                       <p className="text-sm font-black text-slate-900 truncate pr-8">{entry.item.name}</p>
                       <p className="text-xs text-gray-400">{formatINR(entry.item.offer_price || entry.item.price)} each</p>
-                      <p className="text-[10px] text-blue-600 font-bold mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3 text-red-500" /> {entry.item.counter_name}</p>
+                      <p className="text-[10px] text-[#0071E3] font-bold mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3 text-red-500" /> {entry.item.counter_name}</p>
                     </div>
                     
                     {/* Quantity controls */}
@@ -1709,7 +1709,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                       <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${paymentMethod === 'razorpay' ? 'border-blue-500' : 'border-slate-300'}`}>
                         {paymentMethod === 'razorpay' && <div className="w-2 h-2 rounded-full bg-blue-500" />}
                       </div>
-                      <CreditCard className="w-5 h-5 text-blue-600" />
+                      <CreditCard className="w-5 h-5 text-[#0071E3]" />
                       <span className="text-sm font-black text-slate-900">UPI / Instant Pay</span>
                     </div>
                     <span className="text-xs font-medium text-gray-400">Zero Fee</span>
@@ -1732,12 +1732,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               </div>
               <div className="flex justify-between text-base font-black text-slate-900 pt-1">
                 <span>Total Amount</span>
-                <span className="text-blue-600">{formatINR(cartGrandTotal)}</span>
+                <span className="text-[#0071E3]">{formatINR(cartGrandTotal)}</span>
               </div>
               <button
                 onClick={handlePlaceOrder}
                 disabled={submittingOrder}
-                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#1D4ED8] py-4 text-sm font-black text-black shadow-xl shadow-blue-500/20 hover:bg-blue-600 transition-all disabled:opacity-50 mt-2"
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#1D4ED8] py-4 text-sm font-black text-black shadow-md shadow-blue-500/20 hover:bg-[#0071E3] transition-all disabled:opacity-50 mt-2"
               >
                 {submittingOrder ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
                 {submittingOrder ? 'Processing...' : `Pay ${formatINR(cartGrandTotal)} & Place Order →`}
@@ -1750,7 +1750,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       {/* ── EDIT PROFILE MODAL ─────────────────────────────────────── */}
       {editingProfile && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-gray-50/40 backdrop-blur-sm p-4" onClick={() => setEditingProfile(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 space-y-4 shadow-md" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-black text-slate-900">Edit Profile</h3>
               <button onClick={() => setEditingProfile(false)} className="p-1.5 text-gray-500 hover:text-slate-800 rounded-full hover:bg-slate-100 transition-colors">
@@ -1797,7 +1797,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       {/* ── LEAVE INSTITUTION MODAL ──────────────────────────────── */}
       {showLeaveInstitution && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-gray-50/40 backdrop-blur-sm p-4" onClick={() => { setShowLeaveInstitution(false); setLeaveInstitutionMessage(null); }}>
-          <div className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-6 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-6 space-y-4 shadow-md" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center">
@@ -1855,7 +1855,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       {/* ── FLOATING LX AI BUTTON ────────────────────────────────────────── */}
       <button
         onClick={() => triggerToast && triggerToast('LX AI', 'AI Assistant coming soon!', 'ai')}
-        className="fixed bottom-24 right-5 z-40 p-3.5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-black shadow-xl shadow-blue-600/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 border border-white/20"
+        className="fixed bottom-24 right-5 z-40 p-3.5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-black shadow-md shadow-blue-600/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 border border-white/20"
         title="Chat with LX AI Food Assistant"
       >
         <Sparkles className="w-5 h-5 text-cyan-200 animate-spin" />

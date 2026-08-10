@@ -100,7 +100,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
     const currentPref = profile?.diet_preference || 'all';
     return (
       <div className="space-y-3">
-        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-200">Diet Preference</h3>
+        <h3 className="text-sm font-bold text-[#1D1D1F] dark:text-slate-200">Diet Preference</h3>
         <div className="grid grid-cols-3 gap-3">
           {([
             { value: 'all' as DietPreference, label: 'All Meals', icon: '🥗' },
@@ -113,7 +113,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
               className={`flex flex-col items-center gap-1.5 py-3 px-4 rounded-xl border-2 transition-all ${
                 currentPref === pref.value
                   ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  : 'border-slate-200 dark:border-slate-700 text-[#6E6E73] dark:text-[#86868B] hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
               <span className="text-xl">{pref.icon}</span>
@@ -128,8 +128,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
   const AccountView = () => (
     <div className="space-y-6 pb-8">
       {/* Profile Picture Section */}
-      <div className="glass-card dark:glass-card-dark rounded-3xl p-6">
-        <h2 className="text-sm font-bold text-slate-900 dark:text-slate-200 mb-4">Profile Picture</h2>
+      <div className="glass-card dark:glass-card-dark rounded-[24px] p-6">
+        <h2 className="text-sm font-bold text-[#1D1D1F] dark:text-slate-200 mb-4">Profile Picture</h2>
         <div className="flex items-center gap-6">
           <div className="relative group shrink-0">
             {profile?.avatar_url ? (
@@ -140,7 +140,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
                 className="w-24 h-24 rounded-full object-cover ring-4 ring-slate-100 dark:ring-slate-700 shadow-md"
               />
             ) : (
-              <div className="flex w-24 h-24 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 text-2xl font-black text-white shadow-md ring-4 ring-slate-100 dark:ring-slate-700">
+              <div className="flex w-24 h-24 items-center justify-center rounded-full bg-[#1D1D1F] text-2xl font-black text-white shadow-md ring-4 ring-slate-100 dark:ring-slate-700">
                 {profile?.full_name
                   ? profile.full_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
                   : (profile?.email?.[0] || 'S').toUpperCase()}
@@ -181,12 +181,12 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
       </div>
 
       {/* Student Details Section */}
-      <div className="glass-card dark:glass-card-dark rounded-3xl p-6">
+      <div className="glass-card dark:glass-card-dark rounded-[24px] p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-200">Account Information</h2>
+          <h2 className="text-sm font-bold text-[#1D1D1F] dark:text-slate-200">Account Information</h2>
           <button
             onClick={onEditProfileOpen}
-            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-[#1D1D1F] dark:text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
           >
             <Edit3 className="w-3.5 h-3.5 inline mr-1" />
             Edit
@@ -194,21 +194,21 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <DetailRow label="Student Name" value={getDisplayValue(profile?.full_name)} icon={<User className="w-4 h-4 text-slate-400" />} />
-          <DetailRow label="Email" value={getDisplayValue(profile?.email || userEmail)} icon={<Mail className="w-4 h-4 text-slate-400" />} />
-          <DetailRow label="Phone Number" value={getDisplayValue(profile?.phone)} icon={<Phone className="w-4 h-4 text-slate-400" />} />
-          <DetailRow label="Institution" value={getDisplayValue(institutionName)} icon={<Building2 className="w-4 h-4 text-slate-400" />} />
-          <DetailRow label="Department" value={getDisplayValue(profile?.department)} icon={<GraduationCap className="w-4 h-4 text-slate-400" />} />
-          <DetailRow label="Programme" value={getDisplayValue(profile?.programme)} icon={<GraduationCap className="w-4 h-4 text-slate-400" />} />
-          <DetailRow label="Semester" value={getDisplayValue(profile?.semester)} icon={<CalendarIcon className="w-4 h-4 text-slate-400" />} />
-          <DetailRow label="Campus Block" value={getDisplayValue(profile?.campus_block)} icon={<MapPin className="w-4 h-4 text-slate-400" />} />
-          <DetailRow label="Registration Number" value={getDisplayValue(profile?.designation)} icon={<Hash className="w-4 h-4 text-slate-400" />} />
-          <DetailRow label="Student ID" value={getDisplayValue(profile?.user_id?.slice(-6).toUpperCase())} icon={<Shield className="w-4 h-4 text-slate-400" />} />
+          <DetailRow label="Student Name" value={getDisplayValue(profile?.full_name)} icon={<User className="w-4 h-4 text-[#86868B]" />} />
+          <DetailRow label="Email" value={getDisplayValue(profile?.email || userEmail)} icon={<Mail className="w-4 h-4 text-[#86868B]" />} />
+          <DetailRow label="Phone Number" value={getDisplayValue(profile?.phone)} icon={<Phone className="w-4 h-4 text-[#86868B]" />} />
+          <DetailRow label="Institution" value={getDisplayValue(institutionName)} icon={<Building2 className="w-4 h-4 text-[#86868B]" />} />
+          <DetailRow label="Department" value={getDisplayValue(profile?.department)} icon={<GraduationCap className="w-4 h-4 text-[#86868B]" />} />
+          <DetailRow label="Programme" value={getDisplayValue(profile?.programme)} icon={<GraduationCap className="w-4 h-4 text-[#86868B]" />} />
+          <DetailRow label="Semester" value={getDisplayValue(profile?.semester)} icon={<CalendarIcon className="w-4 h-4 text-[#86868B]" />} />
+          <DetailRow label="Campus Block" value={getDisplayValue(profile?.campus_block)} icon={<MapPin className="w-4 h-4 text-[#86868B]" />} />
+          <DetailRow label="Registration Number" value={getDisplayValue(profile?.designation)} icon={<Hash className="w-4 h-4 text-[#86868B]" />} />
+          <DetailRow label="Student ID" value={getDisplayValue(profile?.user_id?.slice(-6).toUpperCase())} icon={<Shield className="w-4 h-4 text-[#86868B]" />} />
         </div>
       </div>
 
       {/* Diet Preference */}
-      <div className="glass-card dark:glass-card-dark rounded-3xl p-6">
+      <div className="glass-card dark:glass-card-dark rounded-[24px] p-6">
         <DietPreferenceSelector />
       </div>
 
@@ -227,7 +227,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
       <div className="pt-4">
         <button
           onClick={onSignOut}
-          className="w-full py-3.5 bg-red-50 dark:bg-red-950/30 text-red-600 font-bold rounded-2xl text-sm flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors border border-red-200 dark:border-red-900/40"
+          className="w-full py-3.5 bg-red-50 dark:bg-red-950/30 text-red-600 font-bold rounded-[16px] text-sm flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors border border-red-200 dark:border-red-900/40"
         >
           <LogOut className="w-4 h-4" />
           Sign Out
@@ -241,11 +241,11 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
       <div className="flex items-center gap-3 mb-4">
         <button
           onClick={() => setActiveView('account')}
-          className="p-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          className="p-1.5 text-[#86868B] hover:text-[#1D1D1F] dark:text-[#86868B] dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-200">Settings</h2>
+        <h2 className="text-xl font-bold text-[#1D1D1F] dark:text-slate-200">Settings</h2>
       </div>
 
       <SettingsGroup
@@ -297,7 +297,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
       <div className="pt-4">
         <button
           onClick={onSignOut}
-          className="w-full py-3.5 bg-red-50 dark:bg-red-950/30 text-red-600 font-bold rounded-2xl text-sm flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors border border-red-200 dark:border-red-900/40"
+          className="w-full py-3.5 bg-red-50 dark:bg-red-950/30 text-red-600 font-bold rounded-[16px] text-sm flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors border border-red-200 dark:border-red-900/40"
         >
           <LogOut className="w-4 h-4" />
           Logout
@@ -310,7 +310,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
     <div className="w-full my-6 max-w-4xl mx-auto space-y-6 px-4">
       {/* View Switcher */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-200">
+        <h2 className="text-xl font-bold text-[#1D1D1F] dark:text-slate-200">
           {activeView === 'account' ? 'My Account' : 'Settings'}
         </h2>
         <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
@@ -318,8 +318,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
             onClick={() => setActiveView('account')}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
               activeView === 'account'
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200 shadow-sm'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                ? 'bg-white dark:bg-slate-900 text-[#1D1D1F] dark:text-slate-200 shadow-sm'
+                : 'text-[#86868B] dark:text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-slate-300'
             }`}
           >
             Account
@@ -328,8 +328,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
             onClick={() => setActiveView('settings')}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
               activeView === 'settings'
-                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200 shadow-sm'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                ? 'bg-white dark:bg-slate-900 text-[#1D1D1F] dark:text-slate-200 shadow-sm'
+                : 'text-[#86868B] dark:text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-slate-300'
             }`}
           >
             Settings
@@ -356,8 +356,8 @@ const DetailRow = ({ label, value, icon }: { label: string; value: string; icon:
   <div className="flex items-center gap-3 py-2.5">
     {icon}
     <div className="flex-1 min-w-0">
-      <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{label}</p>
-      <p className="text-sm font-medium text-slate-900 dark:text-slate-200 mt-0.5 truncate">{value}</p>
+      <p className="text-[10px] font-bold text-[#86868B] dark:text-[#86868B] uppercase tracking-wider">{label}</p>
+      <p className="text-sm font-medium text-[#1D1D1F] dark:text-slate-200 mt-0.5 truncate">{value}</p>
     </div>
   </div>
 );
@@ -379,8 +379,8 @@ interface SettingsGroupProps {
 }
 
 const SettingsGroup: React.FC<SettingsGroupProps> = ({ title, items }) => (
-  <div className="glass-card dark:glass-card-dark rounded-3xl p-4">
-    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">{title}</p>
+  <div className="glass-card dark:glass-card-dark rounded-[24px] p-4">
+    <p className="text-[10px] font-bold text-[#86868B] dark:text-[#86868B] uppercase tracking-widest mb-3">{title}</p>
     <div className="space-y-1">
       {items.map((item, idx) => (
         <button
@@ -388,21 +388,21 @@ const SettingsGroup: React.FC<SettingsGroupProps> = ({ title, items }) => (
           onClick={item.onClick}
           className="w-full flex items-center gap-3 p-3 rounded-xl text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
         >
-          <span className="text-slate-600 dark:text-slate-400 shrink-0">{item.icon}</span>
+          <span className="text-[#6E6E73] dark:text-[#86868B] shrink-0">{item.icon}</span>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-200">{item.label}</p>
+              <p className="text-sm font-semibold text-[#1D1D1F] dark:text-slate-200">{item.label}</p>
               {item.count !== undefined && item.count > 0 && (
-                <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-full text-[10px] font-bold">
+                <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-[#1D1D1F] dark:text-slate-300 rounded-full text-[10px] font-bold">
                   {item.count}
                 </span>
               )}
             </div>
             {item.description && (
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{item.description}</p>
+              <p className="text-[11px] text-[#86868B] dark:text-[#86868B] mt-0.5">{item.description}</p>
             )}
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
+          <ChevronRight className="w-4 h-4 text-slate-300 dark:text-[#6E6E73] shrink-0" />
         </button>
       ))}
     </div>
@@ -470,9 +470,9 @@ const DeliverySpotsSection: React.FC<DeliverySpotsProps> = ({
 
   return (
     <>
-      <div className="glass-card dark:glass-card-dark rounded-3xl p-6">
+      <div className="glass-card dark:glass-card-dark rounded-[24px] p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-200">Saved Delivery / Pickup Spots</h2>
+          <h2 className="text-sm font-bold text-[#1D1D1F] dark:text-slate-200">Saved Delivery / Pickup Spots</h2>
           <button
             onClick={handleAdd}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors"
@@ -484,27 +484,27 @@ const DeliverySpotsSection: React.FC<DeliverySpotsProps> = ({
 
         {addresses.length === 0 ? (
           <div className="text-center py-8">
-            <MapPin className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-            <p className="text-sm text-slate-500 dark:text-slate-400">No saved spots yet.</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Add a delivery or pickup spot to get started.</p>
+            <MapPin className="w-10 h-10 text-slate-300 dark:text-[#6E6E73] mx-auto mb-3" />
+            <p className="text-sm text-[#86868B] dark:text-[#86868B]">No saved spots yet.</p>
+            <p className="text-xs text-[#86868B] dark:text-[#86868B] mt-1">Add a delivery or pickup spot to get started.</p>
           </div>
         ) : (
           <div className="space-y-3">
             {addresses.map((address) => (
               <div
                 key={address.id}
-                className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700"
+                className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-[16px] border border-slate-200 dark:border-slate-700"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="font-bold text-sm text-slate-900 dark:text-slate-200 truncate">{address.label}</p>
+                    <p className="font-bold text-sm text-[#1D1D1F] dark:text-slate-200 truncate">{address.label}</p>
                     {address.is_default && (
                       <span className="px-1.5 py-0.25 bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 rounded-full text-[10px] font-bold">
                         Default
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">{address.address}</p>
+                  <p className="text-xs text-[#86868B] dark:text-[#86868B] mt-0.5 line-clamp-1">{address.address}</p>
                 </div>
 
                 <div className="flex items-center gap-1 ml-2">
@@ -512,7 +512,7 @@ const DeliverySpotsSection: React.FC<DeliverySpotsProps> = ({
                     <button
                       onClick={() => handleSetDefault(address.id)}
                       disabled={isSettingDefault === address.id}
-                      className="p-1.5 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                      className="p-1.5 text-[#86868B] hover:text-blue-600 dark:text-[#86868B] dark:hover:text-blue-400 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                       title="Set as default"
                     >
                       <StarIcon className="w-4 h-4" />
@@ -521,7 +521,7 @@ const DeliverySpotsSection: React.FC<DeliverySpotsProps> = ({
                   <button
                     onClick={() => handleEdit(address)}
                     disabled={isDeleting === address.id}
-                    className="p-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    className="p-1.5 text-[#86868B] hover:text-[#1D1D1F] dark:text-[#86868B] dark:hover:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                     title="Edit"
                   >
                     <Edit3 className="w-4 h-4" />
@@ -529,7 +529,7 @@ const DeliverySpotsSection: React.FC<DeliverySpotsProps> = ({
                   <button
                     onClick={() => handleDelete(address.id)}
                     disabled={isDeleting === address.id}
-                    className="p-1.5 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    className="p-1.5 text-[#86868B] hover:text-red-600 dark:text-[#86868B] dark:hover:text-red-400 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                     title="Delete"
                   >
                     {isDeleting === address.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
@@ -612,16 +612,16 @@ const DeliverySpotModal: React.FC<DeliverySpotModalProps> = ({ isOpen, onClose, 
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
         transition={{ duration: 0.2 }}
-        className="w-full max-w-md rounded-3xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl"
+        className="w-full max-w-md rounded-[24px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
-          <h3 className="text-lg font-black text-slate-900 dark:text-slate-200">
+          <h3 className="text-lg font-black text-[#1D1D1F] dark:text-slate-200">
             {editingAddress ? 'Edit Delivery Spot' : 'Add New Spot'}
           </h3>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 text-[#86868B] hover:text-[#1D1D1F] dark:text-[#86868B] dark:hover:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -629,7 +629,7 @@ const DeliverySpotModal: React.FC<DeliverySpotModalProps> = ({ isOpen, onClose, 
 
         <div className="p-5 space-y-4">
           <div>
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">
+            <label className="text-xs font-bold text-[#86868B] dark:text-[#86868B] uppercase tracking-wider mb-1 block">
               Spot Label
             </label>
             <input
@@ -637,12 +637,12 @@ const DeliverySpotModal: React.FC<DeliverySpotModalProps> = ({ isOpen, onClose, 
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="e.g. Dorm Room, Library, Gym"
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-200 placeholder-slate-400 focus:border-blue-500 outline-none transition-colors"
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3.5 py-2.5 text-sm text-[#1D1D1F] dark:text-slate-200 placeholder-slate-400 focus:border-blue-500 outline-none transition-colors"
             />
           </div>
 
           <div>
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1 block">
+            <label className="text-xs font-bold text-[#86868B] dark:text-[#86868B] uppercase tracking-wider mb-1 block">
               Address / Location
             </label>
             <textarea
@@ -650,12 +650,12 @@ const DeliverySpotModal: React.FC<DeliverySpotModalProps> = ({ isOpen, onClose, 
               onChange={(e) => setAddress(e.target.value)}
               placeholder="Enter the full address or pickup location details"
               rows={3}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-200 placeholder-slate-400 focus:border-blue-500 outline-none resize-none transition-colors"
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3.5 py-2.5 text-sm text-[#1D1D1F] dark:text-slate-200 placeholder-slate-400 focus:border-blue-500 outline-none resize-none transition-colors"
             />
           </div>
 
           <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
+            <label className="text-sm font-medium text-[#1D1D1F] dark:text-slate-300 cursor-pointer">
               Set as default
             </label>
             <button
@@ -675,7 +675,7 @@ const DeliverySpotModal: React.FC<DeliverySpotModalProps> = ({ isOpen, onClose, 
           <button
             onClick={onClose}
             disabled={isSaving}
-            className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-[#1D1D1F] dark:text-slate-300 font-semibold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
           >
             Cancel
           </button>

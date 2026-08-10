@@ -58,11 +58,11 @@ export const FoodCard: React.FC<FoodCardProps> = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.25 }}
-      className="glass-card glass-card-hover rounded-3xl p-4 flex flex-col justify-between relative group h-full"
+      className="glass-card glass-card-hover rounded-[24px] p-4 flex flex-col justify-between relative group h-full"
     >
       <div>
         {/* Image & Badges */}
-        <div className="relative rounded-2xl overflow-hidden h-48 mb-3.5 bg-slate-100">
+        <div className="relative rounded-[16px] overflow-hidden h-48 mb-3.5 bg-slate-100">
           {!imgErr && item.image_url && !item.image_url.startsWith('blob:') ? (
             <img
               src={item.image_url}
@@ -79,8 +79,8 @@ export const FoodCard: React.FC<FoodCardProps> = ({
 
           {/* Veg / Non-Veg Indicator */}
           <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-xl flex items-center gap-1.5 shadow-sm border border-slate-200/60">
-            <span className={`w-2.5 h-2.5 rounded-full ${isVeg ? 'bg-emerald-500 ring-2 ring-emerald-200' : 'bg-red-500 ring-2 ring-red-200'}`}></span>
-            <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">
+            <span className={`w-2.5 h-2.5 rounded-full ${isVeg ? 'bg-[#30D158] ring-2 ring-emerald-200' : 'bg-red-500 ring-2 ring-red-200'}`}></span>
+            <span className="text-[10px] font-bold text-[#1D1D1F] uppercase tracking-wider">
               {isVeg ? 'Veg' : 'Non-Veg'}
             </span>
           </div>
@@ -101,7 +101,7 @@ export const FoodCard: React.FC<FoodCardProps> = ({
           {onFavorite && (
             <button
               onClick={(e) => { e.stopPropagation(); onFavorite(item); }}
-              className="absolute top-3 right-3 p-2 rounded-xl bg-white/90 backdrop-blur-md text-slate-700 hover:text-red-500 transition-all shadow-sm focus:outline-none"
+              className="absolute top-3 right-3 p-2 rounded-xl bg-white/90 backdrop-blur-md text-[#1D1D1F] hover:text-red-500 transition-all shadow-sm focus:outline-none"
             >
               <Heart className={`w-4 h-4 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} />
             </button>
@@ -128,7 +128,7 @@ export const FoodCard: React.FC<FoodCardProps> = ({
 
           {/* Rating Badge */}
           {rating > 0 && (
-            <div className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded-lg text-[10px] font-bold text-slate-900 flex items-center gap-1 shadow-sm">
+            <div className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded-lg text-[10px] font-bold text-[#1D1D1F] flex items-center gap-1 shadow-sm">
               <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
               {rating.toFixed(1)}
             </div>
@@ -137,18 +137,18 @@ export const FoodCard: React.FC<FoodCardProps> = ({
 
         {/* Title & Description */}
         <div className="flex items-start justify-between gap-2">
-          <h4 className="font-bold text-slate-900 text-base leading-snug">{item.name}</h4>
+          <h4 className="font-bold text-[#1D1D1F] text-base leading-snug">{item.name}</h4>
           <button
             onClick={handleShare}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg shrink-0"
+            className="p-1.5 text-[#86868B] hover:text-[#6E6E73] rounded-lg shrink-0"
             title="Share Meal"
           >
-            {copiedId === item.id ? <Check className="w-4 h-4 text-emerald-600" /> : <Share2 className="w-4 h-4" />}
+            {copiedId === item.id ? <Check className="w-4 h-4 text-[#30D158]" /> : <Share2 className="w-4 h-4" />}
           </button>
         </div>
 
         {item.description && (
-          <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+          <p className="text-xs text-[#86868B] mt-1 line-clamp-2 leading-relaxed">
             {item.description}
           </p>
         )}
@@ -160,7 +160,7 @@ export const FoodCard: React.FC<FoodCardProps> = ({
         )}
 
         {/* Macros Row */}
-        <div className="flex items-center gap-3 my-3 text-xs text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100">
+        <div className="flex items-center gap-3 my-3 text-xs text-[#6E6E73] bg-slate-50 p-2 rounded-xl border border-slate-100">
           {(item.prep_time || item.prep_time_minutes) && (
             <>
               <span className="flex items-center gap-1 font-medium">
@@ -181,7 +181,7 @@ export const FoodCard: React.FC<FoodCardProps> = ({
           )}
           {item.protein && (
             <span className="flex items-center gap-1 font-medium">
-              <Dumbbell className="w-3.5 h-3.5 text-emerald-600" />
+              <Dumbbell className="w-3.5 h-3.5 text-[#30D158]" />
               {item.protein}g
             </span>
           )}
@@ -191,17 +191,17 @@ export const FoodCard: React.FC<FoodCardProps> = ({
       {/* Price & Quantity Selector */}
       <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 mt-auto">
         <div>
-          <p className="text-xs text-slate-400">Price</p>
-          <p className="text-lg font-extrabold text-slate-900">{formatINR(item.offer_price || item.price)}</p>
+          <p className="text-xs text-[#86868B]">Price</p>
+          <p className="text-lg font-extrabold text-[#1D1D1F]">{formatINR(item.offer_price || item.price)}</p>
           {item.offer_price && item.offer_price < item.price && (
-            <p className="text-[10px] text-slate-400 line-through">
+            <p className="text-[10px] text-[#86868B] line-through">
               {formatINR(item.price)}
             </p>
           )}
         </div>
 
         {cartQty > 0 && onUpdateQty ? (
-          <div className="flex items-center bg-blue-50 border border-blue-200/80 rounded-2xl p-1 gap-2">
+          <div className="flex items-center bg-blue-50 border border-blue-200/80 rounded-[16px] p-1 gap-2">
             <button
               onClick={() => onUpdateQty(item, cartQty - 1)}
               className="w-7 h-7 bg-white text-blue-700 font-bold rounded-xl flex items-center justify-center shadow-sm hover:bg-blue-100 transition-all"
@@ -225,11 +225,11 @@ export const FoodCard: React.FC<FoodCardProps> = ({
               onAdd(item);
             }}
             disabled={!canAddToCart}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-2xl font-bold text-xs shadow-md transition-all ${
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-[16px] font-bold text-xs shadow-md transition-all ${
               showComingSoon
                 ? 'border-2 border-red-500/50 text-red-600 bg-white dark:bg-slate-800 cursor-not-allowed shadow-none'
                 : !canAddToCart
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
+                  ? 'bg-slate-100 text-[#86868B] cursor-not-allowed shadow-none'
                   : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20'
             }`}
           >

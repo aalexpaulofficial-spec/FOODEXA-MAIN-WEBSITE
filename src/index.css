@@ -2,23 +2,51 @@
 
 @layer base {
   :root {
-    --bg-primary: 253 253 252; /* #fdfdfc */
-    --bg-secondary: 247 247 248; /* #f7f7f8 */
-    --text-primary: 0 0 0;
-    --text-secondary: 107 114 128; /* gray-500 */
-    --accent: 16 163 127; /* subtle green accent if needed */
+    /* Apple Design System Tokens */
+    --apple-bg: #FFFFFF;
+    --apple-bg-secondary: #F5F5F7;
+    --apple-bg-tertiary: #FBFBFD;
+    --apple-text: #1D1D1F;
+    --apple-text-secondary: #86868B;
+    --apple-text-tertiary: #6E6E73;
+    --apple-blue: #0071E3;
+    --apple-blue-hover: #0077ED;
+    --apple-green: #30D158;
+    --apple-red: #FF3B30;
+    --apple-orange: #FF9F0A;
+    --apple-separator: rgba(0, 0, 0, 0.06);
+    --apple-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    --apple-shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.12);
+    --apple-shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.15);
+    --apple-radius-sm: 10px;
+    --apple-radius-md: 14px;
+    --apple-radius-lg: 20px;
+    --apple-radius-xl: 24px;
   }
-  
+
   html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
-  
+
   body {
-    background: linear-gradient(135deg, #fcfcfc 0%, #f0fdf4 50%, #f8fafc 100%);
-    color: #000;
-    /* fonts and selection can be handled in App.tsx wrapper */
+    background: #FFFFFF;
+    color: var(--apple-text);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  }
+
+  /* Apple-style input global reset */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="number"],
+  textarea,
+  select {
+    font-family: inherit;
+    transition: all 0.2s ease;
   }
 }
 
@@ -26,48 +54,169 @@
   .text-balance {
     text-wrap: balance;
   }
-  
+
+  /* Apple glassmorphism card */
   .glass-card {
-    @apply bg-white/80 backdrop-blur-xl border border-gray-200 shadow-sm rounded-2xl;
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: var(--apple-radius-lg);
   }
-  
+
+  /* Apple-style subtle background glow */
   .codex-gradient-bg {
-    background: radial-gradient(circle at 50% 50%, rgba(139, 92, 246, 0.15) 0%, rgba(59, 130, 246, 0.15) 25%, rgba(16, 185, 129, 0.05) 50%, transparent 70%);
+    background: radial-gradient(circle at 50% 50%, rgba(0, 113, 227, 0.04) 0%, rgba(0, 0, 0, 0.01) 50%, transparent 70%);
   }
 
   .codex-hero-gradient {
-    background: radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.15) 0%, rgba(59, 130, 246, 0.05) 40%, transparent 70%);
+    background: radial-gradient(circle at 50% 0%, rgba(0, 113, 227, 0.06) 0%, rgba(0, 0, 0, 0.01) 40%, transparent 70%);
+  }
+
+  /* Apple bouncy press effect */
+  .apple-press {
+    transition: transform 0.15s cubic-bezier(0.25, 0.1, 0.25, 1), opacity 0.15s ease;
+  }
+  .apple-press:active {
+    transform: scale(0.975);
+  }
+
+  /* Apple input style */
+  .apple-input {
+    background: var(--apple-bg-secondary);
+    border: 1.5px solid transparent;
+    border-radius: var(--apple-radius-sm);
+    padding: 10px 14px;
+    font-size: 15px;
+    color: var(--apple-text);
+    outline: none;
+    transition: all 0.2s ease;
+  }
+  .apple-input::placeholder {
+    color: var(--apple-text-secondary);
+    opacity: 0.7;
+  }
+  .apple-input:focus {
+    background: #FFFFFF;
+    border-color: var(--apple-blue);
+    box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
   }
 }
 
 @layer components {
   .btn-primary {
-    @apply px-6 py-2.5 rounded-full bg-black text-white font-medium text-sm hover:bg-gray-800 transition-colors shadow-sm;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 24px;
+    border-radius: 980px;
+    background: var(--apple-text);
+    color: #FFFFFF;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: none;
   }
-  
+  .btn-primary:hover {
+    background: #424245;
+  }
+  .btn-primary:active {
+    transform: scale(0.975);
+  }
+  .btn-primary:disabled {
+    background: #D2D2D7;
+    color: #86868B;
+    cursor: not-allowed;
+    transform: none;
+  }
+
   .btn-secondary {
-    @apply px-6 py-2.5 rounded-full bg-[#f3f4f6] text-black font-medium text-sm hover:bg-[#e5e7eb] transition-colors;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 24px;
+    border-radius: 980px;
+    background: var(--apple-bg-secondary);
+    color: var(--apple-text);
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-secondary:hover {
+    background: #E8E8ED;
+  }
+  .btn-secondary:active {
+    transform: scale(0.975);
+  }
+
+  /* Apple Blue CTA button */
+  .btn-apple-blue {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 24px;
+    border-radius: 980px;
+    background: var(--apple-blue);
+    color: #FFFFFF;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-apple-blue:hover {
+    background: var(--apple-blue-hover);
+  }
+  .btn-apple-blue:active {
+    transform: scale(0.975);
   }
 
   .nav-link {
-    @apply text-sm font-medium text-gray-500 hover:text-black transition-colors;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--apple-text-secondary);
+    transition: color 0.2s ease;
+  }
+  .nav-link:hover {
+    color: var(--apple-text);
   }
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar — Apple-style thin */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f9fafb;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Apple-style shimmer animation for loading states */
+@keyframes apple-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Registration shimmer override */
+@keyframes registration-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }

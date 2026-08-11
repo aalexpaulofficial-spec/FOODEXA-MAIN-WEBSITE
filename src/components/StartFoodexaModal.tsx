@@ -1,5 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { X, ArrowRight, Loader2, AlertCircle, GraduationCap, Users, User, CheckCircle2, RefreshCw } from 'lucide-react';
+import {
+  X,
+  ArrowRight,
+  ArrowLeft,
+  Loader2,
+  AlertCircle,
+  GraduationCap,
+  Users,
+  User,
+  CheckCircle2,
+  RefreshCw,
+  Mail,
+  Sparkles,
+  Chrome,
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { InstitutionData, Profile } from '../types';
@@ -12,24 +26,36 @@ interface StartFoodexaModalProps {
 }
 
 type AccountRole = 'student' | 'faculty' | 'guest';
-type Step = 'create' | 'otp' | 'role' | 'details' | 'verified';
+type Step = 'choice' | 'email' | 'otp' | 'role' | 'details' | 'verified';
 type InstitutionStatus = 'idle' | 'checking' | 'valid' | 'invalid' | 'error';
 
 const roles = [
-  { id: 'student' as const, icon: GraduationCap, title: 'Student' },
-  { id: 'faculty' as const, icon: Users, title: 'Faculty' },
-  { id: 'guest' as const, icon: User, title: 'Guest' },
+  { id: 'student' as const, icon: GraduationCap, title: 'Student', description: 'Create a student account for your campus dining experience.' },
+  { id: 'faculty' as const, icon: Users, title: 'Faculty', description: 'Set up a faculty account with the right campus access.' },
+  { id: 'guest' as const, icon: User, title: 'Guest', description: 'Create a guest account for temporary campus dining access.' },
 ];
 
-const createFormInitial = { email: '', password: '', confirmPassword: '' };
-const detailsFormInitial = { fullName: '', institutionCode: '' };
+const emailFormInitial = {
+  fullName: '',
+  email: '',
+  password: '',
+  confirmPassword: '',
+};
 
+const detailsFormInitial = {
+  fullName: '',
+  institutionCode: '',
+};
+
+const otpPattern = /^\d{6,8}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const safeTrim = (value: string) => value.trim();
 
 const friendlyAuthError = (message: string) => {
   const lower = message.toLowerCase();
   if (lower.includes('already') || lower.includes('registered') || lower.includes('exists')) {
-    return 'This email is already registered. Please log in instead.';
+    return 'This email is already registered. Please use Login instead.';
   }
   if (lower.includes('password')) {
     return 'Please use a stronger password.';
@@ -40,6 +66,11 @@ const friendlyAuthError = (message: string) => {
   return 'Unable to create your account right now. Please try again.';
 };
 
+const getInstitutionLocation = (institution: InstitutionData | null) =>
+  [institution?.campus, institution?.city, institution?.state || institution?.country]
+    .filter(Boolean)
+    .join(' • ');
+
 export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   isOpen,
   onClose,
@@ -47,95 +78,191 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   onOpenLogin,
 }) => {
   const { validateInstitutionCode, setInstitutionData, refreshProfile } = useAuth();
-  const [step, setStep] = useState<Step>('create');
-  const [createForm, setCreateForm] = useState(createFormInitial);
-  const [detailsForm, setDetailsForm] = useState(detailsFormInitial);
+
+  const [step, setStep] = useState<Step>('choice');
   const [selectedRole, setSelectedRole] = useState<AccountRole | null>(null);
-  const [otp, setOtp] = useState(Array(8).fill(''));
+  const [emailForm, setEmailForm] = useState(emailFormInitial);
+  const [detailsForm, setDetailsForm] = useState(detailsFormInitial);
+  const [otpCode, setOtpCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicateEmail, setDuplicateEmail] = useState(false);
   const [institutionStatus, setInstitutionStatus] = useState<InstitutionStatus>('idle');
   const [verifiedInstitution, setVerifiedInstitution] = useState<InstitutionData | null>(null);
-  const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+
   const verificationRequestRef = useRef(0);
+  const validationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const googleLoadingRef = useRef(false);
+
+  const normalizedEmail = useMemo(() => emailForm.email.trim().toLowerCase(), [emailForm.email]);
+  const displayName = useMemo(() => safeTrim(detailsForm.fullName || emailForm.fullName), [detailsForm.fullName, emailForm.fullName]);
+  const isBusy = loading || resending;
+
+  const resetState = () => {
+    setStep('choice');
+    setSelectedRole(null);
+    setEmailForm(emailFormInitial);
+    setDetailsForm(detailsFormInitial);
+    setOtpCode('');
+    setLoading(false);
+    setResending(false);
+    setError(null);
+    setDuplicateEmail(false);
+    setInstitutionStatus('idle');
+    setVerifiedInstitution(null);
+    verificationRequestRef.current += 1;
+    if (validationTimerRef.current) {
+      clearTimeout(validationTimerRef.current);
+      validationTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
-    if (!isOpen) {
-      setStep('create');
-      setCreateForm(createFormInitial);
-      setDetailsForm(detailsFormInitial);
-      setSelectedRole(null);
-      setOtp(Array(8).fill(''));
-      setLoading(false);
-      setResending(false);
-      setError(null);
-      setDuplicateEmail(false);
-      setInstitutionStatus('idle');
-      setVerifiedInstitution(null);
+    if (isOpen) {
+      resetState();
     }
   }, [isOpen]);
 
-  const normalizedEmail = useMemo(() => createForm.email.trim().toLowerCase(), [createForm.email]);
-  const roleLabel = selectedRole ? selectedRole[0].toUpperCase() + selectedRole.slice(1) : '';
-  const otpValue = otp.join('');
+  useEffect(() => {
+    if (!isOpen || step !== 'details') return;
+
+    const institutionCode = detailsForm.institutionCode.trim();
+    if (validationTimerRef.current) {
+      clearTimeout(validationTimerRef.current);
+      validationTimerRef.current = null;
+    }
+
+    if (!institutionCode) {
+      setInstitutionStatus('idle');
+      setVerifiedInstitution(null);
+      return;
+    }
+
+    const requestId = ++verificationRequestRef.current;
+    setInstitutionStatus('checking');
+    setVerifiedInstitution(null);
+
+    validationTimerRef.current = setTimeout(async () => {
+      const { error: codeError, data } = await validateInstitutionCode(institutionCode);
+      if (verificationRequestRef.current !== requestId) return;
+
+      if (codeError || !data) {
+        const status: InstitutionStatus = codeError?.toLowerCase().includes('unable to verify') ? 'error' : 'invalid';
+        setInstitutionStatus(status);
+        setVerifiedInstitution(null);
+        return;
+      }
+
+      setInstitutionStatus('valid');
+      setVerifiedInstitution(data);
+    }, 450);
+
+    return () => {
+      if (validationTimerRef.current) {
+        clearTimeout(validationTimerRef.current);
+        validationTimerRef.current = null;
+      }
+    };
+  }, [detailsForm.institutionCode, isOpen, step, validateInstitutionCode]);
 
   if (!isOpen) return null;
 
-  const resetInstitutionVerification = (institutionCode: string) => {
-    setDetailsForm((prev) => ({ ...prev, institutionCode }));
-    setInstitutionStatus('idle');
-    setVerifiedInstitution(null);
-    setError(null);
-  };
-
   const handleClose = () => {
+    resetState();
     onClose();
   };
 
   const handleOpenLogin = () => {
-    onClose();
+    resetState();
     onOpenLogin();
   };
 
-  const sendOtp = async () => {
+  const handleGoogleSignIn = async () => {
+    if (googleLoadingRef.current) return;
+    googleLoadingRef.current = true;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+
+      if (oauthError) {
+        console.error('[StartFoodexa] Google OAuth error:', oauthError.message);
+        setError('Unable to start Google sign-in right now. Please try again.');
+        setLoading(false);
+        googleLoadingRef.current = false;
+      }
+      // A successful OAuth start redirects away from the page.
+    } catch (err: any) {
+      console.error('[StartFoodexa] Google OAuth exception:', err);
+      setError('Unable to start Google sign-in right now. Please try again.');
+      setLoading(false);
+      googleLoadingRef.current = false;
+    }
+  };
+
+  const requestVerificationOtp = async () => {
     const { error: otpError } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
-      options: { shouldCreateUser: false },
+      options: {
+        shouldCreateUser: false,
+        data: {
+          full_name: safeTrim(emailForm.fullName),
+        },
+      },
     });
 
     if (otpError) {
       console.error('[StartFoodexa] OTP request failed:', otpError.message);
       return otpError;
     }
+
     return null;
   };
 
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading) return;
+    if (isBusy) return;
 
     setError(null);
     setDuplicateEmail(false);
 
-    if (!emailPattern.test(normalizedEmail)) {
+    const fullName = safeTrim(emailForm.fullName);
+    const email = normalizedEmail;
+
+    if (!fullName) {
+      setError('Full name is required.');
+      return;
+    }
+    if (!emailPattern.test(email)) {
       setError('Please enter a valid email address.');
       return;
     }
-    if (createForm.password.length < 8) {
+    if (emailForm.password.length < 8) {
       setError('Password must be at least 8 characters.');
       return;
     }
-    if (createForm.password !== createForm.confirmPassword) {
+    if (emailForm.password !== emailForm.confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
 
     setLoading(true);
+
     const { data, error: signUpError } = await supabase.auth.signUp({
-      email: normalizedEmail,
-      password: createForm.password,
+      email,
+      password: emailForm.password,
+      options: {
+        data: {
+          full_name: fullName,
+        },
+      },
     });
 
     if (signUpError) {
@@ -149,7 +276,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
     if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
       setDuplicateEmail(true);
-      setError('This email is already registered. Please log in instead.');
+      setError('This email is already registered. Please use Login instead.');
       setLoading(false);
       return;
     }
@@ -158,7 +285,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       await supabase.auth.signOut();
     }
 
-    const otpError = await sendOtp();
+    const otpError = await requestVerificationOtp();
     setLoading(false);
 
     if (otpError) {
@@ -168,35 +295,17 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       return;
     }
 
+    setOtpCode('');
     setStep('otp');
-    window.setTimeout(() => otpRefs.current[0]?.focus(), 50);
-  };
-
-  const handleOtpChange = (index: number, value: string) => {
-    const digit = value.replace(/\D/g, '').slice(-1);
-    setOtp((prev) => {
-      const next = [...prev];
-      next[index] = digit;
-      return next;
-    });
-    setError(null);
-    if (digit && index < 7) {
-      otpRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading) return;
+    if (isBusy) return;
 
-    if (!/^\d{8}$/.test(otpValue)) {
-      setError('Please enter the 8-digit verification code.');
+    const token = otpCode.trim();
+    if (!otpPattern.test(token)) {
+      setError('Please enter the verification code from your email.');
       return;
     }
 
@@ -205,12 +314,16 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
     const emailAttempt = await supabase.auth.verifyOtp({
       email: normalizedEmail,
-      token: otpValue,
+      token,
       type: 'email',
     });
 
     const result = emailAttempt.error
-      ? await supabase.auth.verifyOtp({ email: normalizedEmail, token: otpValue, type: 'signup' })
+      ? await supabase.auth.verifyOtp({
+          email: normalizedEmail,
+          token,
+          type: 'signup',
+        })
       : emailAttempt;
 
     setLoading(false);
@@ -225,76 +338,65 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   };
 
   const handleResendCode = async () => {
-    if (resending) return;
+    if (resending || !normalizedEmail) return;
     setResending(true);
     setError(null);
-    const otpError = await sendOtp();
+    const otpError = await requestVerificationOtp();
     setResending(false);
+
     if (otpError) {
       console.error('[StartFoodexa] OTP resend failed:', otpError.message);
       setError('Unable to resend the code right now. Please try again.');
     }
   };
 
-  useEffect(() => {
-    if (!isOpen || step !== 'details') return;
-    const institutionCode = detailsForm.institutionCode.trim();
-    setVerifiedInstitution(null);
-    if (!institutionCode) {
+  const handleRoleSelect = (role: AccountRole) => {
+    setSelectedRole(role);
+    setDetailsForm((prev) => ({
+      ...prev,
+      fullName: safeTrim(prev.fullName) || safeTrim(emailForm.fullName),
+    }));
+    setStep('details');
+  };
+
+  const handleDetailsChange = (field: 'fullName' | 'institutionCode', value: string) => {
+    setDetailsForm((prev) => ({ ...prev, [field]: value }));
+    if (field === 'institutionCode') {
+      setError(null);
       setInstitutionStatus('idle');
-      return;
+      setVerifiedInstitution(null);
     }
+  };
 
-    const requestId = ++verificationRequestRef.current;
-    setInstitutionStatus('checking');
-    const timer = window.setTimeout(async () => {
-      const verifyResult = await validateInstitutionCode(institutionCode);
-      if (verificationRequestRef.current !== requestId) return;
-      if (verifyResult.error || !verifyResult.data) {
-        const isRpcError = verifyResult.error?.toLowerCase().includes('unable to verify');
-        setInstitutionStatus(isRpcError ? 'error' : 'invalid');
-        setVerifiedInstitution(null);
-        return;
-      }
-      setInstitutionStatus('valid');
-      setVerifiedInstitution(verifyResult.data);
-    }, 500);
-
-    return () => window.clearTimeout(timer);
-  }, [detailsForm.institutionCode, isOpen, step, validateInstitutionCode]);
-
-  const handleSaveProfile = async (e: React.FormEvent) => {
+  const handleEnterDashboard = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRole || loading) return;
+    if (isBusy || !selectedRole) return;
 
-    const fullName = detailsForm.fullName.trim();
+    const fullName = safeTrim(detailsForm.fullName || emailForm.fullName);
     const institutionCode = detailsForm.institutionCode.trim();
 
-    setError(null);
     if (!fullName) {
-      setError('Please enter your full name.');
+      setError('Full name is required.');
       return;
     }
     if (!institutionCode) {
-      setError('Please enter your institution code.');
+      setError('Institution code is required.');
       return;
     }
     if (institutionStatus !== 'valid' || !verifiedInstitution) {
-      setError(institutionStatus === 'invalid'
-        ? null
-        : institutionStatus === 'error'
-          ? 'Unable to verify the institution right now. Please try again.'
-          : 'Please wait for your institution code to be verified.');
+      setError('Please wait for your institution code to be verified.');
       return;
     }
 
     setLoading(true);
+    setError(null);
 
     const { data: authData, error: userError } = await supabase.auth.getUser();
-    const authUser = authData.user;
+    const authUser = authData?.user;
+
     if (userError || !authUser) {
       console.error('[StartFoodexa] Unable to load authenticated user:', userError?.message);
-      setError('Your session could not be loaded. Please log in again.');
+      setError('Your session could not be loaded. Please sign in again.');
       setLoading(false);
       return;
     }
@@ -305,34 +407,54 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       full_name: fullName,
       role: selectedRole,
       institution_id: verifiedInstitution.institution_id,
+      department: null,
+      semester: null,
+      programme: null,
+      campus_block: null,
     };
+
+    const profileColumns = 'user_id, institution_id, full_name, email, phone, role, created_at, updated_at, department, semester, programme, campus_block';
 
     const { data: savedProfile, error: profileError } = await supabase
       .from('profiles')
       .upsert(profilePayload, { onConflict: 'user_id' })
-      .select('id, user_id, institution_id, full_name, email, phone, profile_image, role, created_at, updated_at, campus_block, programme, department, semester')
+      .select(profileColumns)
       .maybeSingle();
-
-    setLoading(false);
 
     if (profileError || !savedProfile) {
       console.error('[StartFoodexa] Profile save failed:', profileError?.message);
       setError('Unable to save your profile right now. Please try again.');
+      setLoading(false);
       return;
     }
 
     setInstitutionData(verifiedInstitution);
     await refreshProfile();
     setStep('verified');
-    onAccountSetupSuccess({ profile: savedProfile as Profile, institution: verifiedInstitution });
+    setLoading(false);
+    onAccountSetupSuccess({
+      profile: savedProfile as Profile,
+      institution: verifiedInstitution,
+    });
   };
 
-  const fieldClass = 'w-full rounded-2xl border border-[#D2D2D7] bg-white px-4 py-3 text-sm font-medium text-[#1D1D1F] outline-none transition focus:border-[#0071E3] focus:ring-4 focus:ring-[#0071E3]/10';
+  const fieldClass =
+    'w-full rounded-2xl border border-[#D2D2D7] bg-white px-4 py-3 text-sm font-medium text-[#1D1D1F] outline-none transition focus:border-[#0071E3] focus:ring-4 focus:ring-[#0071E3]/10';
+
+  const renderHeader = (title: string, subtitle: string) => (
+    <div className="space-y-1.5 pr-8">
+      <h3 className="text-[28px] font-bold text-[#1D1D1F]">{title}</h3>
+      <p className="text-sm text-[#515154]">{subtitle}</p>
+    </div>
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-xl" onClick={handleClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-xl"
+      onClick={handleClose}
+    >
       <div
-        className="relative my-8 w-full max-w-[480px] rounded-[24px] border border-black/5 bg-white p-6 shadow-[0_20px_60px_rgba(0,0,0,0.18)] sm:p-8"
+        className="relative my-8 w-full max-w-[520px] rounded-[24px] border border-black/5 bg-white p-6 shadow-[0_20px_60px_rgba(0,0,0,0.18)] sm:p-8"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -343,54 +465,35 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
           <X className="h-4 w-4" />
         </button>
 
-        {step === 'create' && (
-          <form onSubmit={handleCreateAccount} className="space-y-5">
-            <div className="space-y-1.5 pr-8">
-              <h3 className="text-[28px] font-bold text-[#1D1D1F]">Create your FOODEXA Account</h3>
-              <p className="text-sm text-[#515154]">Create an account to access your campus dining experience.</p>
-            </div>
-
-            {error && (
-              <div className="rounded-xl border border-[#FFD6D6] bg-[#FFF0F0] p-3 text-xs font-medium text-[#FF3B30]">
-                {error}
-                {duplicateEmail && (
-                  <button type="button" onClick={handleOpenLogin} className="mt-2 block font-bold text-[#0071E3] hover:underline">
-                    Go to Login
-                  </button>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-[#515154]">Email Address *</label>
-                <input type="email" required value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} className={fieldClass} placeholder="you@example.com" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-[#515154]">Password *</label>
-                <input type="password" required value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} className={fieldClass} placeholder="Minimum 8 characters" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-[#515154]">Confirm Password *</label>
-                <input type="password" required value={createForm.confirmPassword} onChange={(e) => setCreateForm({ ...createForm, confirmPassword: e.target.value })} className={fieldClass} placeholder="Re-enter password" />
-              </div>
-            </div>
-
-            <button type="submit" disabled={loading} className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60">
-              {loading ? <><Loader2 className="h-4 w-4 animate-spin text-white" /><span>Creating...</span></> : <><span>Create Account</span><ArrowRight className="h-4 w-4 text-white" /></>}
-            </button>
-
-            <button type="button" onClick={handleOpenLogin} className="w-full text-xs font-semibold text-[#0071E3] hover:underline">
-              Already have an account? Login
-            </button>
-          </form>
+        {step !== 'choice' && (
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              if (step === 'email') setStep('choice');
+              else if (step === 'otp') setStep('email');
+              else if (step === 'role') setStep('otp');
+              else if (step === 'details') setStep('role');
+              else if (step === 'verified') setStep('choice');
+            }}
+            className="absolute left-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-[#F5F5F7] text-[#515154] transition-colors hover:bg-[#E8E8ED]"
+            aria-label="Back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
         )}
 
-        {step === 'otp' && (
-          <form onSubmit={handleVerifyOtp} className="space-y-5">
-            <div className="space-y-1.5 pr-8">
-              <h3 className="text-[28px] font-bold text-[#1D1D1F]">Verify Your Email</h3>
-              <p className="text-sm text-[#515154]">We sent an 8-digit verification code to your email.</p>
+        {step === 'choice' && (
+          <div className="space-y-6">
+            <div className="space-y-3 pr-8">
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-[#F5F5F7] px-3 py-1 text-xs font-semibold text-[#1D1D1F]">
+                <Sparkles className="h-3.5 w-3.5 text-[#0071E3]" />
+                WELCOME TO FOODEXA
+              </div>
+              {renderHeader(
+                'Choose how you want to create your FOODEXA account.',
+                'Use Google for a fast start, or create your account with email and password.'
+              )}
             </div>
 
             {error && (
@@ -400,31 +503,217 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
               </div>
             )}
 
-            <div className="grid grid-cols-8 gap-2">
-              {otp.map((digit, index) => (
-                <input
-                  key={index}
-                  ref={(node) => { otpRefs.current[index] = node; }}
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handleOtpChange(index, e.target.value)}
-                  onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                  className="h-12 rounded-xl border border-[#D2D2D7] bg-white text-center text-lg font-bold text-[#1D1D1F] outline-none transition focus:border-[#0071E3] focus:ring-4 focus:ring-[#0071E3]/10"
-                />
-              ))}
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                className="flex w-full items-start gap-3 rounded-2xl border border-[#D2D2D7] bg-white p-4 text-left transition hover:bg-[#F5F5F7] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F5F5F7] text-[#1D1D1F]">
+                  <Chrome className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-[#1D1D1F]">Continue with Google</p>
+                  <p className="mt-1 text-xs text-[#515154]">
+                    Create your account securely with Google. Your account and order history will be saved.
+                  </p>
+                </div>
+                <ArrowRight className="mt-1 h-4 w-4 text-[#515154]" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStep('email')}
+                className="flex w-full items-start gap-3 rounded-2xl border border-[#D2D2D7] bg-white p-4 text-left transition hover:bg-[#F5F5F7]"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F5F5F7] text-[#1D1D1F]">
+                  <Mail className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-[#1D1D1F]">Create account with email</p>
+                  <p className="mt-1 text-xs text-[#515154]">
+                    Create a FOODEXA account using your email and password.
+                  </p>
+                </div>
+                <ArrowRight className="mt-1 h-4 w-4 text-[#515154]" />
+              </button>
             </div>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60">
-              {loading ? <><Loader2 className="h-4 w-4 animate-spin text-white" /><span>Verifying...</span></> : <><span>Verify Email</span><ArrowRight className="h-4 w-4 text-white" /></>}
+            <button
+              type="button"
+              onClick={handleOpenLogin}
+              className="w-full text-xs font-semibold text-[#0071E3] hover:underline"
+            >
+              Already have an account? Go to Login
+            </button>
+          </div>
+        )}
+
+        {step === 'email' && (
+          <form onSubmit={handleCreateAccount} className="space-y-5">
+            {renderHeader('Create your FOODEXA account', 'Enter your name, email, and password to continue.')}
+
+            {(error || duplicateEmail) && (
+              <div className="rounded-xl border border-[#FFD6D6] bg-[#FFF0F0] p-3 text-xs font-medium text-[#FF3B30]">
+                {error}
+                {duplicateEmail && (
+                  <button
+                    type="button"
+                    onClick={handleOpenLogin}
+                    className="mt-2 block font-bold text-[#0071E3] hover:underline"
+                  >
+                    Go to Login
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#515154]">Full Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={emailForm.fullName}
+                  onChange={(e) => setEmailForm({ ...emailForm, fullName: e.target.value })}
+                  className={fieldClass}
+                  placeholder="Alex Paul"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#515154]">Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  value={emailForm.email}
+                  onChange={(e) => setEmailForm({ ...emailForm, email: e.target.value })}
+                  className={fieldClass}
+                  placeholder="you@example.com"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#515154]">Password *</label>
+                <input
+                  type="password"
+                  required
+                  value={emailForm.password}
+                  onChange={(e) => setEmailForm({ ...emailForm, password: e.target.value })}
+                  className={fieldClass}
+                  placeholder="Minimum 8 characters"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#515154]">Confirm Password *</label>
+                <input
+                  type="password"
+                  required
+                  value={emailForm.confirmPassword}
+                  onChange={(e) => setEmailForm({ ...emailForm, confirmPassword: e.target.value })}
+                  className={fieldClass}
+                  placeholder="Re-enter password"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isBusy}
+              className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-white" />
+                  <span>Creating account...</span>
+                </>
+              ) : (
+                <>
+                  <span>Create Account</span>
+                  <ArrowRight className="h-4 w-4 text-white" />
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenLogin}
+              className="w-full text-xs font-semibold text-[#0071E3] hover:underline"
+            >
+              Already have an account? Login
+            </button>
+          </form>
+        )}
+
+        {step === 'otp' && (
+          <form onSubmit={handleVerifyOtp} className="space-y-5">
+            {renderHeader(
+              'Check your email for your verification code.',
+              'Enter the code Supabase sent to your email address to continue.'
+            )}
+
+            {error && (
+              <div className="flex items-start gap-2 rounded-xl border border-[#FFD6D6] bg-[#FFF0F0] p-3">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#FF3B30]" />
+                <p className="text-xs font-medium text-[#FF3B30]">{error}</p>
+              </div>
+            )}
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-[#515154]">Verification Code *</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={8}
+                value={otpCode}
+                onChange={(e) => {
+                  setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8));
+                  setError(null);
+                }}
+                className={`${fieldClass} text-center font-mono text-xl tracking-[0.35em]`}
+                placeholder="12345678"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isBusy}
+              className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-white" />
+                  <span>Verifying...</span>
+                </>
+              ) : (
+                <>
+                  <span>Verify Code</span>
+                  <ArrowRight className="h-4 w-4 text-white" />
+                </>
+              )}
             </button>
 
             <div className="grid grid-cols-2 gap-3">
-              <button type="button" onClick={handleResendCode} disabled={resending} className="rounded-2xl border border-[#D2D2D7] px-4 py-3 text-xs font-semibold text-[#1D1D1F] disabled:opacity-60">
-                {resending ? <span className="inline-flex items-center gap-2"><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Resending</span> : 'Resend Code'}
+              <button
+                type="button"
+                onClick={handleResendCode}
+                disabled={resending}
+                className="rounded-2xl border border-[#D2D2D7] px-4 py-3 text-xs font-semibold text-[#1D1D1F] disabled:opacity-60"
+              >
+                {resending ? (
+                  <span className="inline-flex items-center gap-2">
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    Resending
+                  </span>
+                ) : (
+                  'Resend Code'
+                )}
               </button>
-              <button type="button" onClick={() => setStep('create')} className="rounded-2xl border border-[#D2D2D7] px-4 py-3 text-xs font-semibold text-[#1D1D1F]">
+              <button
+                type="button"
+                onClick={() => setStep('email')}
+                className="rounded-2xl border border-[#D2D2D7] px-4 py-3 text-xs font-semibold text-[#1D1D1F]"
+              >
                 Change Email
               </button>
             </div>
@@ -433,13 +722,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
         {step === 'role' && (
           <div className="space-y-6">
-            <div className="space-y-1.5 pr-8">
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-[#F2FFF8] px-3 py-1 text-xs font-semibold text-[#0A7A37]">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Email Verified
-              </div>
-              <h3 className="text-[28px] font-bold text-[#1D1D1F]">Choose Your Role</h3>
-            </div>
+            {renderHeader('Choose your role', 'Select the role that matches how you will use FOODEXA.')}
 
             <div className="grid gap-3">
               {roles.map((role) => {
@@ -448,16 +731,17 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
                   <button
                     key={role.id}
                     type="button"
-                    onClick={() => {
-                      setSelectedRole(role.id);
-                      setStep('details');
-                    }}
+                    onClick={() => handleRoleSelect(role.id)}
                     className="flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 text-left transition-all hover:bg-[#F5F5F7]"
                   >
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F5F5F7] text-[#1D1D1F]">
                       <Icon className="h-5 w-5" />
                     </div>
-                    <span className="text-sm font-semibold text-[#1D1D1F]">{role.title}</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-[#1D1D1F]">{role.title}</p>
+                      <p className="mt-1 text-xs text-[#515154]">{role.description}</p>
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-[#515154]" />
                   </button>
                 );
               })}
@@ -466,11 +750,11 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
         )}
 
         {step === 'details' && selectedRole && (
-          <form onSubmit={handleSaveProfile} className="space-y-5">
-            <div className="space-y-1.5 pr-8">
-              <h3 className="text-[28px] font-bold text-[#1D1D1F]">{roleLabel} Details</h3>
-              <p className="text-sm text-[#515154]">Enter your name and verified campus institution code.</p>
-            </div>
+          <form onSubmit={handleEnterDashboard} className="space-y-5">
+            {renderHeader(
+              `${selectedRole[0].toUpperCase() + selectedRole.slice(1)} details`,
+              'Confirm your name and verify your institution code before entering the dashboard.'
+            )}
 
             {error && (
               <div className="flex items-start gap-2 rounded-xl border border-[#FFD6D6] bg-[#FFF0F0] p-3">
@@ -482,30 +766,51 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
             <div className="space-y-3">
               <div>
                 <label className="mb-1 block text-xs font-semibold text-[#515154]">Full Name *</label>
-                <input type="text" required value={detailsForm.fullName} onChange={(e) => setDetailsForm({ ...detailsForm, fullName: e.target.value })} className={fieldClass} placeholder="Alex Paul" />
+                <input
+                  type="text"
+                  required
+                  value={detailsForm.fullName}
+                  onChange={(e) => handleDetailsChange('fullName', e.target.value)}
+                  className={fieldClass}
+                  placeholder={emailForm.fullName || 'Alex Paul'}
+                />
               </div>
+
               <div>
                 <label className="mb-1 block text-xs font-semibold text-[#515154]">Institution Code *</label>
                 <input
                   type="text"
                   required
                   value={detailsForm.institutionCode}
-                  onChange={(e) => resetInstitutionVerification(e.target.value)}
-                  className={`${fieldClass} font-mono font-bold`}
+                  onChange={(e) => handleDetailsChange('institutionCode', e.target.value)}
+                  className={`${fieldClass} font-mono font-bold uppercase`}
                   placeholder="Enter your institution code"
                 />
-                {institutionStatus === 'checking' && <p className="mt-2 text-xs font-semibold text-[#515154]">Checking institution...</p>}
+
+                {institutionStatus === 'checking' && (
+                  <p className="mt-2 text-xs font-semibold text-[#515154]">Checking institution...</p>
+                )}
+
                 {institutionStatus === 'valid' && verifiedInstitution && (
                   <div className="mt-2 rounded-xl border border-[#B8F2D0] bg-[#F2FFF8] p-3 text-xs text-[#0A7A37]">
                     <p className="font-bold">Institution Code Verified</p>
-                    <p className="mt-1 font-semibold">{verifiedInstitution.institution_name}</p>
-                    <p>{[verifiedInstitution.campus, verifiedInstitution.city, verifiedInstitution.state || verifiedInstitution.country].filter(Boolean).join(' - ')}</p>
+                    <p className="mt-1 font-semibold">{verifiedInstitution.institution_code}</p>
+                    <p className="mt-0.5">{verifiedInstitution.institution_name}</p>
+                    <p>{getInstitutionLocation(verifiedInstitution)}</p>
                   </div>
                 )}
+
                 {institutionStatus === 'invalid' && (
                   <div className="mt-2 rounded-xl border border-[#FFD6D6] bg-[#FFF0F0] p-3 text-xs text-[#FF3B30]">
                     <p className="font-bold">Invalid Institution Code</p>
-                    <p>Please check the code and try again.</p>
+                    <p>Please check your code and try again.</p>
+                  </div>
+                )}
+
+                {institutionStatus === 'error' && (
+                  <div className="mt-2 rounded-xl border border-[#FFD6D6] bg-[#FFF0F0] p-3 text-xs text-[#FF3B30]">
+                    <p className="font-bold">Unable to verify right now</p>
+                    <p>Please try again in a moment.</p>
                   </div>
                 )}
               </div>
@@ -513,13 +818,27 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
             <button
               type="submit"
-              disabled={loading || !detailsForm.fullName.trim() || institutionStatus !== 'valid' || !verifiedInstitution}
+              disabled={isBusy || !displayName || institutionStatus !== 'valid' || !verifiedInstitution}
               className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? <><Loader2 className="h-4 w-4 animate-spin text-white" /><span>Entering...</span></> : <><span>Enter Dashboard</span><ArrowRight className="h-4 w-4 text-white" /></>}
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-white" />
+                  <span>Entering dashboard...</span>
+                </>
+              ) : (
+                <>
+                  <span>Enter Dashboard</span>
+                  <ArrowRight className="h-4 w-4 text-white" />
+                </>
+              )}
             </button>
 
-            <button type="button" onClick={() => setStep('role')} className="w-full text-xs font-semibold text-[#515154] hover:text-[#1D1D1F]">
+            <button
+              type="button"
+              onClick={() => setStep('role')}
+              className="w-full text-xs font-semibold text-[#515154] hover:text-[#1D1D1F]"
+            >
               Choose a different role
             </button>
           </form>
@@ -533,13 +852,11 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
             <div className="space-y-1">
               <h3 className="text-2xl font-bold text-[#1D1D1F]">Campus Ready</h3>
               <p className="text-sm font-semibold text-[#1D1D1F]">{verifiedInstitution.institution_name}</p>
-              <p className="text-xs text-[#515154]">
-                {[verifiedInstitution.campus, verifiedInstitution.city, verifiedInstitution.state || verifiedInstitution.country].filter(Boolean).join(' - ')}
-              </p>
+              <p className="text-xs text-[#515154]">{getInstitutionLocation(verifiedInstitution)}</p>
             </div>
             <div className="flex items-center justify-center gap-2 text-xs font-semibold text-[#0A7A37]">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Loading your campus...
+              Loading your dashboard...
             </div>
           </div>
         )}

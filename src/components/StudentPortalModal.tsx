@@ -301,19 +301,45 @@ const BannerCarousel = ({ banners }: { banners: any[] }) => {
 // ── Main Component ──────────────────────────────────────────────────────────
 
 export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, onClose, role, triggerToast }) => {
-  const { user, profile, refreshProfile, signOut, updateProfile, leaveInstitution, institutionData, switchInstitution, visitorSession, leaveVisitorInstitution, joinInstitutionAsVisitor, validateInstitutionCode: validateInstitutionCodeForVisitor } = useAuth();
+  const { user, profile, refreshProfile, signOut, updateProfile, leaveInstitution, institutionData, switchInstitution, directSession, clearDirectSession, isDirectUser } = useAuth();
   const navigate = useNavigate();
-  const isVisitor = !user && !!visitorSession.visitorId;
+  const isDirect = isDirectUser;
   const [activeTab, setActiveTab] = useState<PortalTab>('explore');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
 
-  // Determine effective user ID and institution data (auth or visitor)
-  const effectiveUserId = user?.id || visitorSession.visitorId || '';
-  const effectiveInstitutionData = user ? institutionData : visitorSession.institution;
-  const effectiveProfile = user ? profile : null;
-  const effectiveRole = user ? (profile?.role || null) : (visitorSession.role);
+  // Determine effective user ID and institution data (auth or direct session)
+  // Google users: user.id is the student_id
+  // Direct users: student_id is NULL (temporary session)
+  const effectiveUserId = user?.id || '';
+  const effectiveInstitutionData = user ? institutionData : (directSession ? {
+    institution_id: directSession.institutionId,
+    institution_name: directSession.institutionName,
+    campus: '',
+    city: '',
+    state: '',
+    country: '',
+    institution_code: '',
+  } : null);
+  const effectiveProfile = user ? profile : (directSession ? {
+    user_id: '',
+    email: '',
+    full_name: directSession.name,
+    phone: null,
+    institution_id: directSession.institutionId,
+    role: directSession.role,
+    department: null,
+    semester: null,
+    programme: null,
+    campus_block: null,
+    designation: null,
+    avatar_url: null,
+    diet_preference: null,
+    created_at: '',
+    updated_at: '',
+  } : null);
+  const effectiveRole = user ? (profile?.role || null) : (directSession ? directSession.role : null);
 
   // Supabase Realtime orders — single source of truth
   const { orders, activeOrders, pastOrders, loading: ordersLoading, error: ordersError, refresh: refreshOrders } = useSupabaseOrders({
@@ -845,13 +871,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   // Order is ONLY created in Supabase AFTER payment succeeds.
   // Institution never sees unpaid orders.
   const handlePlaceOrder = async () => {
-    if (!effectiveUserId) { setError('Session error. Please rejoin.'); return; }
     if (!effectiveRole) { setError('Role missing.'); return; }
     if (!cart.length) return;
 
     setSubmittingOrder(true); setError(null);
 
-    // Get institution_id — from profile (auth) or visitor session
+    // Get institution_id — from profile (auth) or direct session
     let liveInstitutionId: string | null = null;
     if (user?.id) {
       // Re-fetch institution_id fresh from DB — React state may be stale
@@ -869,9 +894,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         return;
       }
       liveInstitutionId = freshProfileRow?.institution_id || profile?.institution_id || null;
-    } else {
-      // Visitor session — institution from visitor session
-      liveInstitutionId = visitorSession.institution?.institution_id || null;
+    } else if (directSession) {
+      // Direct user — institution from temporary session
+      liveInstitutionId = directSession.institutionId;
     }
 
     if (!liveInstitutionId) {
@@ -906,13 +931,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
        }));
 
       // ── STEP 1: Create Razorpay order (NO Supabase write yet) ──────────
-      const customerEmail = effectiveProfile?.email || `${effectiveUserId}@foodexa.guest`;
+      const customerEmail = effectiveProfile?.email || `${directSession?.name || 'guest'}@foodexa.direct`;
       const customerName = effectiveProfile?.full_name || (effectiveRole ? effectiveRole.charAt(0).toUpperCase() + effectiveRole.slice(1) : 'Guest');
       const customerPhone = effectiveProfile?.phone || '0000000000';
       const razorpayResult = await createRazorpayOrder({
         amount: cartGrandTotal,
         currency: 'INR',
-        user_id: effectiveUserId,
+        user_id: effectiveUserId || `direct_${directSession?.temporarySessionId || 'unknown'}`,
         email: customerEmail,
         phone: customerPhone,
         name: customerName,
@@ -968,7 +993,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             // ── STEP 4: Create order + order_items in Supabase ──────────
             // Only now does the institution see the order
             const createResult = await createOrderAfterPayment({
-              user_id: effectiveUserId,
+              user_id: user?.id || '',
               email: customerEmail,
               role: effectiveRole,
               customer_name: customerName,
@@ -1049,14 +1074,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
   const handleSignOut = async () => {
     if (user) {
+      // Google/email user: sign out from Supabase
       await signOut();
-    } else {
-      // Visitor session — just clear the visitor session
-      leaveVisitorInstitution();
-      // Clear visitor-specific localStorage
-      if (visitorSession.visitorId) {
-        localStorage.removeItem(`foodexa-active-canteen-${visitorSession.visitorId}`);
-      }
+    } else if (directSession) {
+      // Direct user: clear temporary session
+      clearDirectSession();
     }
     onClose();
     navigate('/', { replace: true });
@@ -1101,27 +1123,17 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     if (user) {
       const { error } = await leaveInstitution();
       if (error) {
-        setLeaveInstitutionMessage(error.message || 'Failed to leave institution. Please try again.');
+        setLeaveInstitutionMessage('Failed to leave institution. Please try again.');
       } else {
-        setLeaveInstitutionMessage('Success! You have left your institution. You can join another institution anytime.');
-        setInstitutionName('');
-        setInstitutionCode('');
-        await refreshProfile();
-        setTimeout(() => {
-          setShowLeaveInstitution(false);
-          setLeaveInstitutionMessage(null);
-        }, 2000);
+        setLeaveInstitutionMessage('You have left the institution.');
+        onClose();
+        navigate('/', { replace: true });
       }
-    } else {
-      // Visitor session — clear visitor institution
-      leaveVisitorInstitution();
-      setInstitutionName('');
-      setInstitutionCode('');
-      setLeaveInstitutionMessage('Success! You have left the institution. You can join another institution anytime.');
-      setTimeout(() => {
-        setShowLeaveInstitution(false);
-        setLeaveInstitutionMessage(null);
-      }, 2000);
+    } else if (directSession) {
+      clearDirectSession();
+      setLeaveInstitutionMessage('You have left the institution.');
+      onClose();
+      navigate('/', { replace: true });
     }
     setLeavingInstitution(false);
   };
@@ -1301,7 +1313,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     institutionName={institutionName}
                     canteens={canteens}
                     activeCanteenName={activeCanteen?.name || null}
-                    isVisitor={isVisitor}
+                    isVisitor={isDirect}
                     onSignOut={handleSignOut}
                     onSwitchCanteen={() => setShowSwitchInstitution(true)}
                     onSwitchInstitution={() => setShowSwitchInstitution(true)}
@@ -1894,17 +1906,15 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           if (user) {
             return await switchInstitution(code);
           }
-          // Visitor session — validate and switch
-          const { error, data } = await validateInstitutionCodeForVisitor(code);
-          if (error || !data) {
-            return { error: error || 'Invalid institution code.' };
+          // Direct session — switch institution via context
+          const result = await switchInstitution(code);
+          if (result.error) {
+            return { error: result.error };
           }
-          // Update visitor session with new institution
-          joinInstitutionAsVisitor(data, visitorSession.role || 'student');
           // Clear active canteen
           setActiveCanteen(null);
           activeCanteenIdRef.current = null;
-          localStorage.removeItem(`foodexa-active-canteen-${effectiveUserId}`);
+          return { error: null };
           return { error: null };
         }}
         currentInstitutionName={institutionName}

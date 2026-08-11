@@ -3,10 +3,12 @@ import { supabase } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 import type { UserRole, Profile, InstitutionData } from '../types';
 
-interface VisitorSession {
-  visitorId: string;
-  institution: InstitutionData | null;
-  role: 'student' | 'faculty' | 'guest' | null;
+export interface DirectSession {
+  temporarySessionId: string;
+  institutionId: string;
+  institutionName: string;
+  name: string;
+  role: 'student' | 'faculty' | 'guest';
 }
 
 interface AuthContextType {
@@ -22,7 +24,6 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
   signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; institutionId?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
-  signInAnonymously: () => Promise<{ error: Error | null; user: User | null }>;
   joinWithCodeRoleName: (institutionCode: string, role: 'student' | 'faculty' | 'guest', displayName: string) => Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }>;
   signOut: () => Promise<void>;
   clearAllSessionData: () => void;
@@ -30,9 +31,9 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
   leaveInstitution: () => Promise<{ error: Error | null }>;
   switchInstitution: (institutionCode: string) => Promise<{ error: string | null }>;
-  visitorSession: VisitorSession;
-  joinInstitutionAsVisitor: (institution: InstitutionData, role: 'student' | 'faculty' | 'guest') => void;
-  leaveVisitorInstitution: () => void;
+  directSession: DirectSession | null;
+  clearDirectSession: () => void;
+  isDirectUser: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -41,6 +42,8 @@ const normalizeRole = (value: unknown): UserRole | null => {
   const allowed: UserRole[] = ['student', 'faculty', 'guest', 'institution_admin', 'kitchen_staff', 'canteen_manager', 'super_admin'];
   return allowed.includes(value as UserRole) ? (value as UserRole) : null;
 };
+
+const DIRECT_SESSION_KEY = 'foodexa-direct-session';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -60,28 +63,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   } | null>(null);
   const pendingOtpProfileRef = React.useRef<typeof pendingOtpProfile>(null);
 
-  // ── Visitor session (no-auth public access) ──────────────────────────────
-  const [visitorSession, setVisitorSession] = useState<VisitorSession>(() => {
+  // ── Direct user session (institution code + name + role, no Supabase auth) ──
+  const [directSession, setDirectSession] = useState<DirectSession | null>(() => {
     try {
-      const saved = localStorage.getItem('foodexa-visitor-session');
+      const saved = sessionStorage.getItem(DIRECT_SESSION_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.visitorId) return parsed;
+        if (parsed && parsed.temporarySessionId && parsed.institutionId) return parsed;
       }
     } catch { /* ignore */ }
-    return { visitorId: '', institution: null, role: null };
+    return null;
   });
 
-  const joinInstitutionAsVisitor = useCallback((institution: InstitutionData, role: 'student' | 'faculty' | 'guest') => {
-    const visitorId = crypto.randomUUID();
-    const newSession: VisitorSession = { visitorId, institution, role };
-    setVisitorSession(newSession);
-    localStorage.setItem('foodexa-visitor-session', JSON.stringify(newSession));
-  }, []);
+  const isDirectUser = !!directSession && !user;
 
-  const leaveVisitorInstitution = useCallback(() => {
-    setVisitorSession({ visitorId: '', institution: null, role: null });
-    localStorage.removeItem('foodexa-visitor-session');
+  const clearDirectSession = useCallback(() => {
+    setDirectSession(null);
+    sessionStorage.removeItem(DIRECT_SESSION_KEY);
+    setInstitutionData(null);
   }, []);
 
   const loadInstitutionForProfile = useCallback(async (profileData: Profile | null): Promise<InstitutionData | null> => {
@@ -228,36 +227,49 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setPendingOtpProfile(value);
     }, []);
 
-   // ── Session initialization — Supabase handles persistence natively ────────
-  useEffect(() => {
-    const initAuth = async () => {
-      const { data: { session: existingSession } } = await supabase.auth.getSession();
-      setSession(existingSession);
-      setUser(existingSession?.user ?? null);
-      setIsEmailVerified(!!existingSession?.user?.email_confirmed_at);
-      if (existingSession?.user) {
-        await fetchProfile(existingSession.user.id);
-      }
-      setLoading(false);
-    };
+    // ── Session initialization — Supabase handles persistence natively ────────
+   useEffect(() => {
+     const initAuth = async () => {
+       const { data: { session: existingSession } } = await supabase.auth.getSession();
+       setSession(existingSession);
+       setUser(existingSession?.user ?? null);
+       setIsEmailVerified(!!existingSession?.user?.email_confirmed_at);
+       if (existingSession?.user) {
+         await fetchProfile(existingSession.user.id);
+       } else if (directSession) {
+         // Direct user session: load institution data
+         const inst = {
+           institution_id: directSession.institutionId,
+           institution_name: directSession.institutionName,
+           campus: '',
+           city: '',
+           state: '',
+           country: '',
+           institution_code: '',
+         };
+         setInstitutionData(inst);
+         setIsEmailVerified(true);
+       }
+       setLoading(false);
+     };
 
-    initAuth();
+     initAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-      setIsEmailVerified(!!newSession?.user?.email_confirmed_at);
-      if (newSession?.user) {
-        await fetchProfile(newSession.user.id);
-      } else {
-        setProfile(null);
-        setInstitutionData(null);
-      }
-      setLoading(false);
-    });
+     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+       setSession(newSession);
+       setUser(newSession?.user ?? null);
+       setIsEmailVerified(!!newSession?.user?.email_confirmed_at);
+       if (newSession?.user) {
+         await fetchProfile(newSession.user.id);
+       } else if (!directSession) {
+         setProfile(null);
+         setInstitutionData(null);
+       }
+       setLoading(false);
+     });
 
-    return () => subscription.unsubscribe();
-  }, [fetchProfile]);
+     return () => subscription.unsubscribe();
+   }, [fetchProfile, directSession]);
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -405,9 +417,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { error: 'Institution Code is required.', data: null };
     }
     try {
-      // Use the existing RPC function for institution code validation
       const { data, error: rpcError } = await supabase
-        .rpc('get_institution_by_code', { p_institution_code: trimmed.toUpperCase() });
+        .rpc('get_institution_by_code', { p_code: trimmed.trim() });
 
       if (rpcError) {
         console.error('[Auth] validateInstitutionCode RPC error:', rpcError.message);
@@ -415,17 +426,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (!data || (Array.isArray(data) && data.length === 0)) {
-        return { error: 'Institution code not found. Please check the code and try again.', data: null };
+        return { error: 'Invalid institution code. Please check your code and try again.', data: null };
       }
 
-      // Handle both single object and array responses
       const inst = Array.isArray(data) ? data[0] : data;
+
+      if (inst.status && inst.status !== 'approved' && inst.status !== 'active') {
+        return { error: 'This institution is currently unavailable. Please contact your institution administrator.', data: null };
+      }
 
       return {
         error: null,
         data: {
           institution_id: inst.id,
-          institution_name: inst.institution_name || inst.name || '',
+          institution_name: inst.name || inst.institution_name || '',
           campus: inst.campus || '',
           city: inst.city || '',
           state: inst.state || '',
@@ -675,22 +689,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }
     keysToRemove.forEach((key) => localStorage.removeItem(key));
-    sessionStorage.clear();
+    sessionStorage.removeItem(DIRECT_SESSION_KEY);
   };
-
-  const signInAnonymously = useCallback(async () => {
-    try {
-      const { data, error } = await supabase.auth.signInAnonymously();
-      if (error) {
-        console.error('[Auth] Anonymous sign-in error:', error.message);
-        return { error: new Error(error.message), user: null };
-      }
-      return { error: null, user: data?.user || null };
-    } catch (err: any) {
-      console.error('[Auth] Anonymous sign-in exception:', err);
-      return { error: new Error(err?.message || 'Anonymous sign-in failed'), user: null };
-    }
-  }, []);
 
   const joinWithCodeRoleName = useCallback(async (
     institutionCode: string,
@@ -704,51 +704,58 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { error: instError || 'Invalid institution code.', profile: null, institution: null };
       }
 
-      // 2. Ensure anonymous auth session exists
-      let currentUser = user;
-      if (!currentUser) {
-        const { error: anonError, user: anonUser } = await signInAnonymously();
-        if (anonError || !anonUser) {
-          return { error: 'Unable to create session. Please try again.', profile: null, institution: null };
-        }
-        currentUser = anonUser;
-      }
-
-      const userId = currentUser.id;
-
-      // 3. Upsert profile with display name, role, institution_id
-      const { error: upsertError } = await upsertProfileSafely({
-        user_id: userId,
-        email: currentUser.email || '',
-        full_name: displayName.trim(),
+      // 2. Create temporary frontend session (NO Supabase auth)
+      const tempSession: DirectSession = {
+        temporarySessionId: crypto.randomUUID(),
+        institutionId: instData.institution_id,
+        institutionName: instData.institution_name,
+        name: displayName.trim(),
         role,
-        institution_id: instData.institution_id,
-      });
+      };
 
-      if (upsertError) {
-        console.error('[Auth] joinWithCodeRoleName profile upsert error:', upsertError.message);
-        return { error: upsertError.message, profile: null, institution: null };
-      }
+      setDirectSession(tempSession);
+      sessionStorage.setItem(DIRECT_SESSION_KEY, JSON.stringify(tempSession));
 
-      // 4. Fetch the complete profile
-      const fetchedProfile = await fetchProfile(userId);
-
-      // 5. Load institution data
+      // 3. Set institution data for the portal
       setInstitutionData(instData);
 
-      // 6. Set email verified flag for anonymous users
+      // 4. Build a minimal profile-like object for display purposes
+      const profileLike: Profile = {
+        user_id: '',
+        email: '',
+        full_name: displayName.trim(),
+        phone: null,
+        institution_id: instData.institution_id,
+        role,
+        department: null,
+        semester: null,
+        programme: null,
+        campus_block: null,
+        designation: null,
+        avatar_url: null,
+        diet_preference: null,
+        created_at: '',
+        updated_at: '',
+      };
+
+      setProfile(profileLike);
       setIsEmailVerified(true);
 
-      return { error: null, profile: fetchedProfile, institution: instData };
+      return { error: null, profile: profileLike, institution: instData };
     } catch (err: any) {
       console.error('[Auth] joinWithCodeRoleName exception:', err);
       return { error: err?.message || 'Something went wrong. Please try again.', profile: null, institution: null };
     }
-  }, [user, validateInstitutionCode, signInAnonymously, upsertProfileSafely, fetchProfile, setInstitutionData]);
+  }, [validateInstitutionCode, setInstitutionData]);
 
   const signOut = async () => {
-    // NON-DESTRUCTIVE SIGN OUT: Only clear UI state, preserve anonymous identity
-    // The Supabase session (and anonymous UUID) is preserved in localStorage
+    if (user) {
+      // Google/email user: sign out from Supabase
+      await supabase.auth.signOut();
+    }
+    // Clear direct user session if exists
+    clearDirectSession();
+    // Clear all session data
     clearAllSessionData();
     setUser(null);
     setSession(null);
@@ -758,21 +765,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const leaveInstitution = async () => {
-    const activeUser = user || (await supabase.auth.getUser()).data.user;
-    if (!activeUser) return { error: new Error('Not authenticated') };
+    if (user) {
+      const { error } = await upsertProfileSafely({
+        user_id: user.id,
+        institution_id: null,
+      });
 
-    const { error } = await upsertProfileSafely({
-      user_id: activeUser.id,
-      institution_id: null,
-    });
+      if (error) {
+        return { error: new Error(error.message) };
+      }
 
-    if (error) {
-      return { error: new Error(error.message) };
+      setInstitutionData(null);
+      await fetchProfile(user.id);
+      return { error: null };
+    } else if (directSession) {
+      clearDirectSession();
+      return { error: null };
     }
-
-    setInstitutionData(null);
-    await fetchProfile(activeUser.id);
-    return { error: null };
+    return { error: new Error('Not authenticated') };
   };
 
   const getRedirectPath = useCallback((role: UserRole | null): string => {
@@ -849,27 +859,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [restoreSession]);
 
   const updateProfile = async (updates: Partial<Profile>) => {
-    const activeUser = user || (await supabase.auth.getUser()).data.user;
-    if (!activeUser) return { error: new Error('Not authenticated') };
+    if (user) {
+      const safeUpdates = { ...updates };
+      delete (safeUpdates as any).user_id;
+      const { error } = await upsertProfileSafely({
+        user_id: user.id,
+        ...safeUpdates,
+      });
 
-    const safeUpdates = { ...updates };
-    delete (safeUpdates as any).user_id;
-    const { error } = await upsertProfileSafely({
-      user_id: activeUser.id,
-      ...safeUpdates,
-    });
+      if (!error) {
+        await fetchProfile(user.id);
+      }
 
-    if (!error) {
-      await fetchProfile(activeUser.id);
+      return { error: error ? new Error(error.message) : null };
+    } else if (directSession) {
+      const updatedSession: DirectSession = {
+        ...directSession,
+        name: updates.full_name || directSession.name,
+      };
+      setDirectSession(updatedSession);
+      sessionStorage.setItem(DIRECT_SESSION_KEY, JSON.stringify(updatedSession));
+      const updatedProfile = { ...profile, ...updates } as Profile;
+      setProfile(updatedProfile);
+      return { error: null };
     }
-
-    return { error: error ? new Error(error.message) : null };
+    return { error: new Error('Not authenticated') };
   };
 
   const switchInstitution = async (institutionCode: string): Promise<{ error: string | null }> => {
-    const activeUser = user || (await supabase.auth.getUser()).data.user;
-    if (!activeUser) return { error: 'Not authenticated.' };
-
     const trimmedCode = institutionCode.trim();
     if (!trimmedCode) return { error: 'Institution Code is required.' };
 
@@ -881,17 +898,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const newInstitutionId = result.data.institution_id;
 
-      const { error: updateError } = await upsertProfileSafely({
-        user_id: activeUser.id,
-        institution_id: newInstitutionId,
-      });
+      if (user) {
+        // Google/email user: update profile in Supabase
+        const { error: updateError } = await upsertProfileSafely({
+          user_id: user.id,
+          institution_id: newInstitutionId,
+        });
 
-      if (updateError) {
-        return { error: 'Failed to switch institution. Please try again.' };
+        if (updateError) {
+          return { error: 'Failed to switch institution. Please try again.' };
+        }
+
+        await fetchProfile(user.id);
+      } else if (directSession) {
+        // Direct user: update temporary session
+        const updatedSession: DirectSession = {
+          ...directSession,
+          institutionId: newInstitutionId,
+          institutionName: result.data.institution_name,
+        };
+        setDirectSession(updatedSession);
+        sessionStorage.setItem(DIRECT_SESSION_KEY, JSON.stringify(updatedSession));
+      } else {
+        return { error: 'Not authenticated.' };
       }
 
       setInstitutionData(result.data);
-      await fetchProfile(activeUser.id);
 
       return { error: null };
     } catch (err: any) {
@@ -914,7 +946,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       signIn,
       signUpWithPassword,
       verifyOtp,
-      signInAnonymously,
       joinWithCodeRoleName,
       signOut,
       clearAllSessionData,
@@ -922,9 +953,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       refreshProfile,
       leaveInstitution,
       switchInstitution,
-      visitorSession,
-      joinInstitutionAsVisitor,
-      leaveVisitorInstitution,
+      directSession,
+      clearDirectSession,
+      isDirectUser,
     }}>
       {children}
     </AuthContext.Provider>

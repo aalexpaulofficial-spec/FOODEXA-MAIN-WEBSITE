@@ -34,7 +34,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onLoginSuccess,
   onBack,
 }) => {
-  const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
+  const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile, joinWithCodeRoleName } = useAuth();
   const [mode, setMode] = useState<'login' | 'create' | 'quick'>(initialMode);
   const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success'>('form');
   const [loginUserId, setLoginUserId] = useState<string | null>(null);
@@ -254,15 +254,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
     setIsQuickLoading(true);
-    const { error, profile, institution } = await anonymousSignIn(quickCode.trim(), selectedAccountRole);
+    const { error, profile, institution } = await joinWithCodeRoleName(quickCode.trim(), selectedAccountRole, selectedAccountRole);
     setIsQuickLoading(false);
-    
+
     if (error || !profile) {
-      setQuickError(error?.message || 'Invalid code');
+      setQuickError(error || 'Invalid code');
     } else {
       setStep('success');
       if (onLoginSuccess) {
-        onLoginSuccess({ profile, institution });
+        onLoginSuccess({ profile, institution: institution || null });
       }
     }
   };

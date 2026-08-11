@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 interface JoinInstitutionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onJoin: (institution: { id: string; name: string; campus: string; city: string; institution_code: string }, role: 'student' | 'faculty' | 'guest', profile: any) => void;
+  onJoin: (institution: { id: string; name: string; campus: string; city: string; institution_code: string }, role: 'student' | 'faculty' | 'guest', profile: any, directSession: { name: string; role: string; institutionId: string; institutionName: string } | null) => void;
 }
 
 type Step = 'code' | 'role' | 'name' | 'confirm' | 'loading';
@@ -45,7 +45,7 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
   }, [isOpen]);
 
   const handleValidateCode = async () => {
-    const trimmed = institutionCode.trim().toUpperCase();
+    const trimmed = institutionCode.trim();
     if (!trimmed) {
       setError('Please enter your institution code.');
       return;
@@ -56,7 +56,7 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
 
     try {
       const { data, error: rpcError } = await supabase
-        .rpc('get_institution_by_code', { p_institution_code: trimmed });
+        .rpc('get_institution_by_code', { p_code: trimmed });
 
       if (rpcError) {
         console.error('[JoinInstitution] RPC error:', rpcError);
@@ -66,14 +66,14 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
       }
 
       if (!data || (Array.isArray(data) && data.length === 0)) {
-        setError('Institution code not found. Please check the code and try again.');
+        setError('Invalid institution code. Please check your code and try again.');
         setValidating(false);
         return;
       }
 
       const inst = Array.isArray(data) ? data[0] : data;
 
-      if (inst.status && inst.status !== 'active') {
+      if (inst.status && inst.status !== 'approved' && inst.status !== 'active') {
         setError('This institution is currently unavailable. Please contact your institution administrator.');
         setValidating(false);
         return;
@@ -81,10 +81,10 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
 
       setValidatedInstitution({
         id: inst.id,
-        name: inst.institution_name || inst.name || '',
+        name: inst.name || inst.institution_name || '',
         campus: inst.campus || '',
         city: inst.city || '',
-        institution_code: inst.institution_code || trimmed,
+        institution_code: inst.institution_code || trimmed.toUpperCase(),
       });
       setStep('role');
     } catch (err: any) {
@@ -128,7 +128,12 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
       }
 
       setJoining(false);
-      onJoin(validatedInstitution, selectedRole, result.profile);
+      onJoin(validatedInstitution, selectedRole, result.profile, {
+        name: displayName.trim(),
+        role: selectedRole,
+        institutionId: validatedInstitution.id,
+        institutionName: validatedInstitution.name,
+      });
     } catch (err: any) {
       console.error('[JoinInstitution] Join error:', err);
       setError('Something went wrong. Please try again.');

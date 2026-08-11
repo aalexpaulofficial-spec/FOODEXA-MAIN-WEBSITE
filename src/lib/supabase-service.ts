@@ -461,7 +461,7 @@ export async function createOrderAfterPayment(params: {
   }
 
   const orderPayload: Record<string, any> = {
-    student_id: params.user_id,
+    student_id: params.user_id || null,
     email: params.email,
     customer_name: customerName,
     phone,
@@ -611,7 +611,7 @@ export async function placeOrder(params: {
   }
 
   const payload: Record<string, any> = {
-    student_id: params.user_id,
+    student_id: params.user_id || null,
     email: params.email,
     customer_name: customerName,
     phone: phone,

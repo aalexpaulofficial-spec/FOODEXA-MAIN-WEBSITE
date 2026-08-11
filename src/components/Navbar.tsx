@@ -11,11 +11,11 @@ interface NavbarProps {
   onOpenGetStarted: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ 
-  onOpenLogin, 
-  onOpenGetStarted 
+export const Navbar: React.FC<NavbarProps> = ({
+  onOpenLogin,
+  onOpenGetStarted
 }) => {
-  const { user, profile } = useAuth();
+  const { user, profile, directSession } = useAuth();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -29,7 +29,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-sm' : 'bg-transparent'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-        
+
         {/* Logo */}
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
           <span className="text-xl font-bold tracking-tight text-black flex items-center gap-1.5">
@@ -49,14 +49,14 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Auth CTA */}
         <div className="flex items-center gap-4">
-          {user && profile ? (
+          {(user && profile) || directSession ? (
             <button onClick={() => window.location.reload()} className="flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 transition-colors shadow-sm text-sm font-medium text-black">
               <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 overflow-hidden shrink-0">
-                {profile.avatar_url ? (
+                {user && profile?.avatar_url ? (
                   <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-[10px] text-white font-bold bg-blue-600">
-                    {profile.full_name?.charAt(0).toUpperCase() || 'U'}
+                    {(user && profile?.full_name?.charAt(0).toUpperCase()) || directSession?.name?.charAt(0).toUpperCase() || 'U'}
                   </div>
                 )}
               </div>

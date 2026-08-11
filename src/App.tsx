@@ -42,7 +42,7 @@ const accountRoles: AccountRole[] = ['student', 'faculty', 'guest'];
 const isAccountRole = (role: string | null): role is AccountRole => !!role && accountRoles.includes(role as AccountRole);
 
 export default function App() {
-  const { user, profile, session, isEmailVerified, isPendingOtpVerification, loading: authLoading, visitorSession, joinInstitutionAsVisitor, leaveVisitorInstitution } = useAuth();
+  const { user, profile, session, isEmailVerified, isPendingOtpVerification, loading: authLoading, directSession, isDirectUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const restoredDashboardRef = useRef(false);
@@ -113,23 +113,10 @@ export default function App() {
     setIsStudentPortalOpen(true);
   };
 
-  const handleJoinInstitution = (institution: { id: string; name: string; campus: string; city: string; institution_code: string }, role: 'student' | 'faculty' | 'guest', profile: any) => {
+  const handleJoinInstitution = (institution: { id: string; name: string; campus: string; city: string; institution_code: string }, role: 'student' | 'faculty' | 'guest', profile: any, directSessionInfo: { name: string; role: string; institutionId: string; institutionName: string } | null) => {
     setIsJoinInstitutionOpen(false);
     closeDashboards();
     setCurrentUserRole(role);
-    // Set institution data for the portal
-    if (institution) {
-      const instData: any = {
-        institution_id: institution.id,
-        institution_name: institution.name,
-        campus: institution.campus || '',
-        city: institution.city || '',
-        state: '',
-        country: '',
-        institution_code: institution.institution_code,
-      };
-      // Store in context via setInstitutionData if available
-    }
     setIsStudentPortalOpen(true);
   };
 
@@ -203,37 +190,43 @@ export default function App() {
   useEffect(() => {
     if (authLoading) return;
 
-    if (!user) {
+    if (!user && !directSession) {
       restoredDashboardRef.current = false;
       setCurrentUserRole(null);
       closeDashboards();
       return;
     }
 
-    if (!isEmailVerified) {
+    if (user && !isEmailVerified) {
       closeDashboards();
       return;
     }
 
-    if (!profile) return;
+    if (user && !profile) return;
 
     const isOnDashboardPath = isDashboardPath(location.pathname);
     if (isOnDashboardPath && !restoredDashboardRef.current) {
       restoredDashboardRef.current = true;
-      openDashboardForProfile(profile);
+      if (user && profile) {
+        openDashboardForProfile(profile);
+      } else if (directSession) {
+        setCurrentUserRole(directSession.role);
+        setIsStudentPortalOpen(true);
+      }
     }
-  }, [authLoading, user, profile, isEmailVerified, location.pathname]);
+  }, [authLoading, user, profile, isEmailVerified, location.pathname, directSession]);
 
   // ── Redirect verified+profiled users away from public/auth pages ──
   // Happens ONLY when user is fully logged in AND email is verified AND profile exists
   // AND we are NOT in the middle of an OTP verification flow.
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !profile || !isEmailVerified) return;
+    if (!user && !directSession) return;
+    if (user && (!profile || !isEmailVerified)) return;
     if (isPendingOtpVerification) return; // ← GUARD: don't redirect until OTP is done
 
     const path = location.pathname;
-    const dashboardRoute = getDashboardRoute(profile.role);
+    const dashboardRoute = user && profile ? getDashboardRoute(profile.role) : '/student-dashboard';
 
     const publicPaths = ['/', '/login', '/create-account', '/student-login', '/institution-login'];
     const isPublicOrAuthPath =
@@ -243,7 +236,7 @@ export default function App() {
     if (isPublicOrAuthPath && dashboardRoute) {
       navigate(dashboardRoute, { replace: true });
     }
-  }, [authLoading, user, profile, isEmailVerified, isPendingOtpVerification, location.pathname, navigate]);
+  }, [authLoading, user, profile, isEmailVerified, isPendingOtpVerification, location.pathname, navigate, directSession]);
 
   const handleOpenLogin = () => {
     setIsRoleSelectionOpen(false);

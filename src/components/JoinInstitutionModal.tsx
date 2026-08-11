@@ -86,7 +86,7 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
         city: inst.city || '',
         institution_code: inst.institution_code || trimmed.toUpperCase(),
       });
-      setStep('role');
+      setStep('name');
     } catch (err: any) {
       console.error('[JoinInstitution] Exception:', err);
       setError('We couldn\'t connect to FOODEXA right now. Please try again.');
@@ -100,12 +100,12 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
 
   const handleContinueFromRole = () => {
     if (!selectedRole) return;
-    setStep('name');
+    setStep('confirm');
   };
 
   const handleContinueFromName = () => {
     if (!displayName.trim()) return;
-    setStep('confirm');
+    setStep('role');
   };
 
   const handleConfirmJoin = async () => {
@@ -146,14 +146,15 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
       e.preventDefault();
       if (step === 'code') handleValidateCode();
       else if (step === 'name' && displayName.trim()) handleContinueFromName();
+      else if (step === 'role' && selectedRole) handleContinueFromRole();
       else if (step === 'confirm' && !joining) handleConfirmJoin();
     }
   };
 
   const handleBack = () => {
-    if (step === 'role') setStep('code');
-    else if (step === 'name') setStep('role');
-    else if (step === 'confirm') setStep('name');
+    if (step === 'role') setStep('name');
+    else if (step === 'name') setStep('code');
+    else if (step === 'confirm') setStep('role');
     setError(null);
   };
 
@@ -289,8 +290,8 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
           </div>
         )}
 
-        {/* ═══════════════════ STEP 2: ROLE SELECTION ═══════════════════ */}
-        {step === 'role' && (
+        {/* ═══════════════════ STEP 2: NAME ENTRY ═══════════════════ */}
+        {step === 'name' && (
           <div>
             <div className="mb-6">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4" style={{ background: '#F5F5F7' }}>
@@ -300,10 +301,83 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
                 </span>
               </div>
               <h3 className="text-[28px] font-bold leading-tight" style={{ color: '#1D1D1F', letterSpacing: '-0.02em' }}>
-                Who are you?
+                Your Name
               </h3>
               <p className="text-sm mt-2" style={{ color: '#86868B' }}>
-                Select how you're joining {validatedInstitution?.name}.
+                Enter your display name for {validatedInstitution?.name}.
+                {validatedInstitution?.campus ? ` · ${validatedInstitution.campus}` : ''}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold mb-1.5 block" style={{ color: '#86868B' }}>
+                  Display Name
+                </label>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => { setDisplayName(e.target.value); setError(null); }}
+                  onKeyDown={handleKeyDown}
+                  placeholder="e.g. A. Alex Paul"
+                  className="w-full px-4 py-3.5 rounded-2xl text-sm font-medium outline-none transition-all"
+                  style={{
+                    background: '#F5F5F7',
+                    color: '#1D1D1F',
+                    border: error ? '1.5px solid #FF3B30' : '1.5px solid transparent',
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.border = '1.5px solid #0071E3'; e.currentTarget.style.background = '#FFFFFF'; }}
+                  onBlur={(e) => { e.currentTarget.style.border = error ? '1.5px solid #FF3B30' : '1.5px solid transparent'; e.currentTarget.style.background = '#F5F5F7'; }}
+                  autoFocus
+                />
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2 p-3 rounded-xl" style={{ background: '#FFF0F0', border: '1px solid #FFD6D6' }}>
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#FF3B30' }} />
+                  <p className="text-xs font-medium" style={{ color: '#FF3B30' }}>{error}</p>
+                </div>
+              )}
+
+              <button
+                onClick={handleContinueFromName}
+                disabled={!displayName.trim()}
+                className="w-full flex items-center justify-center gap-2 apple-press"
+                style={{
+                  padding: '14px',
+                  borderRadius: '14px',
+                  background: displayName.trim() ? '#1D1D1F' : '#D2D2D7',
+                  color: displayName.trim() ? '#FFFFFF' : '#86868B',
+                  fontWeight: 600,
+                  fontSize: '15px',
+                  cursor: displayName.trim() ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.2s ease',
+                  border: 'none',
+                }}
+              >
+                <span>Continue</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════════════ STEP 3: ROLE SELECTION ═══════════════════ */}
+        {step === 'role' && (
+          <div>
+            <div className="mb-6">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4" style={{ background: '#F5F5F7' }}>
+                <User className="w-3.5 h-3.5" style={{ color: '#0071E3' }} />
+                <span className="text-xs font-semibold" style={{ color: '#1D1D1F' }}>
+                  {displayName} at {validatedInstitution?.name}
+                </span>
+              </div>
+              <h3 className="text-[28px] font-bold leading-tight" style={{ color: '#1D1D1F', letterSpacing: '-0.02em' }}>
+                Select Role
+              </h3>
+              <p className="text-sm mt-2" style={{ color: '#86868B' }}>
+                How would you like to join {validatedInstitution?.name}?
               </p>
             </div>
 
@@ -377,78 +451,6 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
               <span>{selectedRole ? 'Continue' : 'Select a Role'}</span>
               {selectedRole && <ArrowRight className="w-4 h-4" />}
             </button>
-          </div>
-        )}
-
-        {/* ═══════════════════ STEP 3: NAME ENTRY ═══════════════════ */}
-        {step === 'name' && (
-          <div>
-            <div className="mb-6">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4" style={{ background: '#F5F5F7' }}>
-                <User className="w-3.5 h-3.5" style={{ color: '#0071E3' }} />
-                <span className="text-xs font-semibold" style={{ color: '#1D1D1F' }}>
-                  {roleLabel} at {validatedInstitution?.name}
-                </span>
-              </div>
-              <h3 className="text-[28px] font-bold leading-tight" style={{ color: '#1D1D1F', letterSpacing: '-0.02em' }}>
-                Your Name
-              </h3>
-              <p className="text-sm mt-2" style={{ color: '#86868B' }}>
-                Enter your display name. This is how others will see you.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold mb-1.5 block" style={{ color: '#86868B' }}>
-                  Display Name
-                </label>
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => { setDisplayName(e.target.value); setError(null); }}
-                  onKeyDown={handleKeyDown}
-                  placeholder="e.g. A. Alex Paul"
-                  className="w-full px-4 py-3.5 rounded-2xl text-sm font-medium outline-none transition-all"
-                  style={{
-                    background: '#F5F5F7',
-                    color: '#1D1D1F',
-                    border: error ? '1.5px solid #FF3B30' : '1.5px solid transparent',
-                  }}
-                  onFocus={(e) => { e.currentTarget.style.border = '1.5px solid #0071E3'; e.currentTarget.style.background = '#FFFFFF'; }}
-                  onBlur={(e) => { e.currentTarget.style.border = error ? '1.5px solid #FF3B30' : '1.5px solid transparent'; e.currentTarget.style.background = '#F5F5F7'; }}
-                  autoFocus
-                />
-              </div>
-
-              {error && (
-                <div className="flex items-start gap-2 p-3 rounded-xl" style={{ background: '#FFF0F0', border: '1px solid #FFD6D6' }}>
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#FF3B30' }} />
-                  <p className="text-xs font-medium" style={{ color: '#FF3B30' }}>{error}</p>
-                </div>
-              )}
-
-              <button
-                onClick={handleContinueFromName}
-                disabled={!displayName.trim()}
-                className="w-full flex items-center justify-center gap-2 apple-press"
-                style={{
-                  padding: '14px',
-                  borderRadius: '14px',
-                  background: displayName.trim() ? '#1D1D1F' : '#D2D2D7',
-                  color: displayName.trim() ? '#FFFFFF' : '#86868B',
-                  fontWeight: 600,
-                  fontSize: '15px',
-                  cursor: displayName.trim() ? 'pointer' : 'not-allowed',
-                  transition: 'all 0.2s ease',
-                  border: 'none',
-                }}
-              >
-                <span>Continue</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
           </div>
         )}
 

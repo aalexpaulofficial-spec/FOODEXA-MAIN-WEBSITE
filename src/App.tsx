@@ -208,6 +208,12 @@ export default function App() {
     if (isOnDashboardPath && !restoredDashboardRef.current) {
       restoredDashboardRef.current = true;
       if (user && profile) {
+        // Google user without an institution must join one first
+        if (!profile.institution_id) {
+          setIsJoinInstitutionOpen(true);
+          navigate('/', { replace: true });
+          return;
+        }
         openDashboardForProfile(profile);
       } else if (directSession) {
         setCurrentUserRole(directSession.role);
@@ -241,8 +247,9 @@ export default function App() {
   const handleOpenLogin = () => {
     setIsRoleSelectionOpen(false);
     setIsPortalAccessOpen(false);
-    setIsAuthOpen(false);
-    setIsJoinInstitutionOpen(true);
+    setIsJoinInstitutionOpen(false);
+    setAuthInitialMode('login');
+    setIsAuthOpen(true);
   };
 
   const handleOpenCreateAccount = (role: AccountRole) => {
@@ -442,6 +449,10 @@ export default function App() {
         onBack={() => {
           setIsAuthOpen(false);
           setIsRoleSelectionOpen(true);
+        }}
+        onDirectLogin={() => {
+          setIsAuthOpen(false);
+          setIsJoinInstitutionOpen(true);
         }}
         initialMode={authInitialMode}
         selectedRole={selectedRole}

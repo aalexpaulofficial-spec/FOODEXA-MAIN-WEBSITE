@@ -704,7 +704,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { error: instError || 'Invalid institution code.', profile: null, institution: null };
       }
 
-      // 2. Create temporary frontend session (NO Supabase auth)
+      // 2. If an authenticated (Google) user exists, persist institution to their Supabase profile
+      if (user) {
+        const { error: upsertError } = await upsertProfileSafely({
+          user_id: user.id,
+          full_name: displayName.trim(),
+          role,
+          institution_id: instData.institution_id,
+        });
+
+        if (upsertError) {
+          console.error('[Auth] joinWithCodeRoleName profile upsert error:', upsertError.message);
+          return { error: upsertError.message, profile: null, institution: null };
+        }
+
+        const fetchedProfile = await fetchProfile(user.id);
+        setInstitutionData(instData);
+        return { error: null, profile: fetchedProfile, institution: instData };
+      }
+
+      // 3. Otherwise (Direct Login): create temporary frontend session (NO Supabase auth)
       const tempSession: DirectSession = {
         temporarySessionId: crypto.randomUUID(),
         institutionId: instData.institution_id,
@@ -716,10 +735,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setDirectSession(tempSession);
       sessionStorage.setItem(DIRECT_SESSION_KEY, JSON.stringify(tempSession));
 
-      // 3. Set institution data for the portal
+      // 4. Set institution data for the portal
       setInstitutionData(instData);
 
-      // 4. Build a minimal profile-like object for display purposes
+      // 5. Build a minimal profile-like object for display purposes
       const profileLike: Profile = {
         user_id: '',
         email: '',
@@ -746,7 +765,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error('[Auth] joinWithCodeRoleName exception:', err);
       return { error: err?.message || 'Something went wrong. Please try again.', profile: null, institution: null };
     }
-  }, [validateInstitutionCode, setInstitutionData]);
+  }, [user, validateInstitutionCode, upsertProfileSafely, fetchProfile, setInstitutionData]);
 
   const signOut = async () => {
     if (user) {

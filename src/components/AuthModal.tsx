@@ -21,6 +21,7 @@ interface AuthModalProps {
   selectedRole?: UserRole;
   onLoginSuccess?: (data: { profile: Profile; institution: InstitutionData | null }) => void;
   onBack?: () => void;
+  onDirectLogin?: () => void;
 }
 
 type AccountRole = 'student' | 'faculty' | 'guest';
@@ -33,6 +34,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   selectedRole = 'student',
   onLoginSuccess,
   onBack,
+  onDirectLogin,
 }) => {
   const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile, joinWithCodeRoleName } = useAuth();
   const [mode, setMode] = useState<'login' | 'create' | 'quick'>(initialMode);
@@ -264,6 +266,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (onLoginSuccess) {
         onLoginSuccess({ profile, institution: institution || null });
       }
+    }
+  };
+
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+
+  const handleGoogleSignIn = async () => {
+    if (isGoogleLoading) return;
+    setIsGoogleLoading(true);
+    setGoogleError(null);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/student-login`,
+        },
+      });
+      if (error) {
+        console.error('[Auth] Google OAuth error:', error.message);
+        setGoogleError('Unable to start Google Sign-In. Please try again.');
+        setIsGoogleLoading(false);
+      }
+      // On success the browser redirects to Google — modal stays until redirect
+    } catch (err: any) {
+      console.error('[Auth] Google OAuth exception:', err);
+      setGoogleError('Unable to start Google Sign-In. Please try again.');
+      setIsGoogleLoading(false);
     }
   };
 
@@ -732,39 +761,63 @@ if (validateError || !validatedInst) {
                     <Lock className="w-3.5 h-3.5" />
                     <span>FOODEXA Login</span>
                   </div>
-                  <h3 className="text-2xl font-bold text-black">Welcome Back</h3>
+                  <h3 className="text-2xl font-bold text-black">Welcome to FOODEXA</h3>
                   <p className="text-xs text-[#86868B] leading-relaxed">
-                    Students and faculty: enter your institution code to join directly — no email or password needed.
+                    Sign in to access campus dining menus, order food, and track your meals in real time.
                   </p>
                 </div>
 
-                {/* Student/Faculty Join - No Login Required */}
-                <div className="space-y-3">
-                  <div className="p-4 rounded-2xl bg-[#F5F5F7] border-0 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-black flex items-center justify-center">
-                        <GraduationCap className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-[#1D1D1F]">Join Your Institution</p>
-                        <p className="text-[11px] text-[#86868B]">No sign-up required. Just enter your institution code.</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        if (onBack) onBack();
-                      }}
-                      className="w-full py-3 rounded-xl bg-black text-white text-sm font-semibold flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors"
-                    >
-                      <span>Join as Student / Faculty / Guest</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
+                {/* OPTION 1: Continue with Google */}
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isGoogleLoading}
+                  className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border border-gray-200 bg-white hover:bg-gray-50 transition-all cursor-pointer disabled:opacity-60"
+                >
+                  {isGoogleLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-black" />
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                  )}
+                  <span className="text-sm font-semibold text-[#1D1D1F]">
+                    {isGoogleLoading ? 'Redirecting to Google...' : 'Continue with Google'}
+                  </span>
+                </button>
+
+                {/* Divider */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <span className="text-[10px] text-[#86868B] font-medium">OR</span>
+                  <div className="flex-1 h-px bg-gray-200" />
                 </div>
 
-                {/* Institution Admin Login Link */}
+                {/* OPTION 2: Direct Login */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    if (onDirectLogin) onDirectLogin();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-black text-white text-sm font-semibold hover:bg-gray-800 transition-all cursor-pointer"
+                >
+                  <GraduationCap className="w-4 h-4" />
+                  <span>Direct Login</span>
+                </button>
+                <p className="text-center text-[11px] text-[#86868B] -mt-2">
+                  Enter your Institution Code, Name and Role — no email or password needed.
+                </p>
+
+                {googleError && (
+                  <div className="p-3 rounded-xl bg-[#FFF0F0] border border-[#FFD6D6] text-xs text-[#FF3B30]">
+                    {googleError}
+                  </div>
+                )}
+
                 <div className="p-3 bg-white/80 border border-gray-200 rounded-xl text-center text-xs text-[#86868B]">
                   <span>Institution Administrator? </span>
                   <a

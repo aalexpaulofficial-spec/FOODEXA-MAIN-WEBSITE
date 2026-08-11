@@ -12,7 +12,7 @@ import {
   RefreshCw,
   Mail,
   Sparkles,
-  Chrome,
+  Building2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -23,6 +23,7 @@ interface StartFoodexaModalProps {
   onClose: () => void;
   onAccountSetupSuccess: (data: { profile: Profile; institution: InstitutionData | null }) => void;
   onOpenLogin: () => void;
+  onDirectAccess: () => void;
   mode?: 'entry' | 'google-onboarding';
 }
 
@@ -48,7 +49,7 @@ const detailsFormInitial = {
   institutionCode: '',
 };
 
-const otpPattern = /^\d{8}$/;
+const otpPattern = /^\d{6,8}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const safeTrim = (value: string) => value.trim();
@@ -77,6 +78,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   onClose,
   onAccountSetupSuccess,
   onOpenLogin,
+  onDirectAccess,
   mode = 'entry',
 }) => {
   const { validateInstitutionCode, setInstitutionData, refreshProfile, user, profile: authProfile } = useAuth();
@@ -86,6 +88,8 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   const [emailForm, setEmailForm] = useState(emailFormInitial);
   const [detailsForm, setDetailsForm] = useState(detailsFormInitial);
   const [otpCode, setOtpCode] = useState('');
+  const [pendingSignupEmail, setPendingSignupEmail] = useState('');
+  const [otpSuccessMessage, setOtpSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +99,6 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
   const verificationRequestRef = useRef(0);
   const validationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const googleLoadingRef = useRef(false);
   const onboardingMode = mode === 'google-onboarding';
 
   const normalizedEmail = useMemo(() => emailForm.email.trim().toLowerCase(), [emailForm.email]);
@@ -115,6 +118,8 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       fullName: onboardingMode ? suggestedName : '',
     });
     setOtpCode('');
+    setPendingSignupEmail('');
+    setOtpSuccessMessage(null);
     setLoading(false);
     setResending(false);
     setError(null);
@@ -188,42 +193,18 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     onOpenLogin();
   };
 
-  const handleGoogleSignIn = async () => {
-    if (googleLoadingRef.current) return;
-    googleLoadingRef.current = true;
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-
-      if (oauthError) {
-        console.error('[StartFoodexa] Google OAuth error:', oauthError.message);
-        setError('Unable to start Google sign-in right now. Please try again.');
-        setLoading(false);
-        googleLoadingRef.current = false;
-      }
-      // A successful OAuth start redirects away from the page.
-    } catch (err: any) {
-      console.error('[StartFoodexa] Google OAuth exception:', err);
-      setError('Unable to start Google sign-in right now. Please try again.');
-      setLoading(false);
-      googleLoadingRef.current = false;
-    }
+  const handleDirectAccess = () => {
+    resetState();
+    onDirectAccess();
   };
 
-  const requestVerificationOtp = async () => {
+  const requestVerificationOtp = async (email: string, fullName: string) => {
     const { error: otpError } = await supabase.auth.signInWithOtp({
-      email: normalizedEmail,
+      email,
       options: {
         shouldCreateUser: false,
         data: {
-          full_name: safeTrim(emailForm.fullName),
+          full_name: fullName,
         },
       },
     });
@@ -242,6 +223,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
     setError(null);
     setDuplicateEmail(false);
+    setOtpSuccessMessage(null);
 
     const fullName = safeTrim(emailForm.fullName);
     const email = normalizedEmail;
@@ -291,11 +273,13 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       return;
     }
 
+    setPendingSignupEmail(email);
+
     if (data.session) {
       await supabase.auth.signOut();
     }
 
-    const otpError = await requestVerificationOtp();
+    const otpError = await requestVerificationOtp(email, fullName);
     setLoading(false);
 
     if (otpError) {
@@ -319,18 +303,25 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       return;
     }
 
+    const signupEmail = (pendingSignupEmail || normalizedEmail).trim().toLowerCase();
+    if (!signupEmail) {
+      setError('Please restart signup so we can verify the correct email address.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
+    setOtpSuccessMessage(null);
 
     const emailAttempt = await supabase.auth.verifyOtp({
-      email: normalizedEmail,
+      email: signupEmail,
       token,
       type: 'email',
     });
 
     const result = emailAttempt.error
       ? await supabase.auth.verifyOtp({
-          email: normalizedEmail,
+          email: signupEmail,
           token,
           type: 'signup',
         })
@@ -348,16 +339,20 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   };
 
   const handleResendCode = async () => {
-    if (resending || !normalizedEmail) return;
+    const signupEmail = (pendingSignupEmail || normalizedEmail).trim().toLowerCase();
+    if (resending || !signupEmail) return;
     setResending(true);
     setError(null);
-    const otpError = await requestVerificationOtp();
+    setOtpSuccessMessage(null);
+    const otpError = await requestVerificationOtp(signupEmail, safeTrim(emailForm.fullName));
     setResending(false);
 
     if (otpError) {
       console.error('[StartFoodexa] OTP resend failed:', otpError.message);
       setError('Unable to resend the code right now. Please try again.');
+      return;
     }
+    setOtpSuccessMessage('New verification code sent.');
   };
 
   const handleRoleSelect = (role: AccountRole) => {
@@ -503,7 +498,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
               </div>
               {renderHeader(
                 'Choose how you\'d like to continue.',
-                'Use Google for a fast start, or create your account with email and password.'
+                'Create a permanent account with email, or use direct access for temporary campus entry.'
               )}
             </div>
 
@@ -517,24 +512,6 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={handleGoogleSignIn}
-                disabled={loading}
-                className="flex w-full items-start gap-3 rounded-2xl border border-[#D2D2D7] bg-white p-4 text-left transition hover:bg-[#F5F5F7] disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F5F5F7] text-[#1D1D1F]">
-                  <Chrome className="h-5 w-5" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-[#1D1D1F]">CONTINUE WITH GOOGLE</p>
-                  <p className="mt-1 text-xs text-[#515154]">
-                    Create your account securely with Google. Your account and order history will be saved.
-                  </p>
-                </div>
-                <ArrowRight className="mt-1 h-4 w-4 text-[#515154]" />
-              </button>
-
-              <button
-                type="button"
                 onClick={() => setStep('email')}
                 className="flex w-full items-start gap-3 rounded-2xl border border-[#D2D2D7] bg-white p-4 text-left transition hover:bg-[#F5F5F7]"
               >
@@ -545,6 +522,23 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
                   <p className="text-sm font-semibold text-[#1D1D1F]">CREATE ACCOUNT WITH EMAIL</p>
                   <p className="mt-1 text-xs text-[#515154]">
                     Create a FOODEXA account using your email and password.
+                  </p>
+                </div>
+                <ArrowRight className="mt-1 h-4 w-4 text-[#515154]" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDirectAccess}
+                className="flex w-full items-start gap-3 rounded-2xl border border-[#D2D2D7] bg-white p-4 text-left transition hover:bg-[#F5F5F7]"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F5F5F7] text-[#1D1D1F]">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-[#1D1D1F]">DIRECT ACCESS</p>
+                  <p className="mt-1 text-xs text-[#515154]">
+                    Enter your institution code and continue without creating a permanent account.
                   </p>
                 </div>
                 <ArrowRight className="mt-1 h-4 w-4 text-[#515154]" />
@@ -598,7 +592,11 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
                   type="email"
                   required
                   value={emailForm.email}
-                  onChange={(e) => setEmailForm({ ...emailForm, email: e.target.value })}
+                  onChange={(e) => {
+                    setEmailForm({ ...emailForm, email: e.target.value });
+                    setPendingSignupEmail('');
+                    setOtpSuccessMessage(null);
+                  }}
                   className={fieldClass}
                   placeholder="you@example.com"
                 />
@@ -659,7 +657,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
           <form onSubmit={handleVerifyOtp} className="space-y-5">
             {renderHeader(
               'CHECK YOUR EMAIL FOR YOUR VERIFICATION CODE',
-              'Enter the code Supabase sent to your email address to continue.'
+              'Enter the verification code sent to your email.'
             )}
 
             {error && (
@@ -669,7 +667,18 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
               </div>
             )}
 
+            {otpSuccessMessage && (
+              <div className="flex items-start gap-2 rounded-xl border border-[#B8F2D0] bg-[#F2FFF8] p-3">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#0A7A37]" />
+                <p className="text-xs font-medium text-[#0A7A37]">{otpSuccessMessage}</p>
+              </div>
+            )}
+
             <div>
+              <p className="mb-3 rounded-2xl bg-[#F5F5F7] px-4 py-3 text-center text-xs font-semibold text-[#515154]">
+                Enter the verification code sent to:<br />
+                <span className="text-[#1D1D1F]">{pendingSignupEmail || normalizedEmail}</span>
+              </p>
               <label className="mb-1 block text-xs font-semibold text-[#515154]">Verification Code *</label>
               <input
                 type="text"
@@ -680,9 +689,10 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
                 onChange={(e) => {
                   setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8));
                   setError(null);
+                  setOtpSuccessMessage(null);
                 }}
                 className={`${fieldClass} text-center font-mono text-xl tracking-[0.35em]`}
-                placeholder="12345678"
+                placeholder="123456"
               />
             </div>
 

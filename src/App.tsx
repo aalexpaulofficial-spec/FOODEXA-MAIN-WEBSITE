@@ -298,6 +298,17 @@ export default function App() {
 
   const isDashboardOpen = isStudentPortalOpen || isInstitutionDashboardOpen || isKitchenDashboardOpen || isSuperAdminDashboardOpen;
 
+  if (authLoading && isDashboardPath(location.pathname)) {
+    return (
+      <div className="min-h-screen bg-[#fcfcfc] text-black font-sans flex items-center justify-center px-6">
+        <div className="text-center space-y-3">
+          <div className="mx-auto h-10 w-10 rounded-full border-2 border-black/10 border-t-black animate-spin" />
+          <p className="text-sm font-semibold text-[#1D1D1F]">Loading your FOODEXA campus...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen max-w-full overflow-x-hidden bg-[#fcfcfc] text-black font-sans selection:bg-black selection:text-white ${isDashboardOpen ? 'overflow-hidden' : ''}`}>
       
@@ -486,6 +497,10 @@ export default function App() {
           setIsStartFoodexaOpen(false);
           setAuthInitialMode('login');
           setIsAuthOpen(true);
+        }}
+        onDirectAccess={() => {
+          setIsStartFoodexaOpen(false);
+          setIsJoinInstitutionOpen(true);
         }}
       />
 

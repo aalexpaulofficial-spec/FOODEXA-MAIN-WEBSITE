@@ -101,7 +101,7 @@ export const ResetPassword = () => {
                 </button>
               </div>
               {newPassword && (
-                <p className={\`text-[10px] mt-1 font-semibold \${strength.color}\`}>
+                <p className={`text-[10px] mt-1 font-semibold ${strength.color}`}>
                   Strength: {strength.label}
                 </p>
               )}

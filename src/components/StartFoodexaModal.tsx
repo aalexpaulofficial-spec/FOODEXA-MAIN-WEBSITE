@@ -36,7 +36,7 @@ const roles = [
 ];
 
 const PENDING_VERIFICATION_EMAIL_KEY = 'foodexa_pending_verification_email';
-const RESEND_COOLDOWN_SECONDS = 30;
+const RESEND_COOLDOWN_SECONDS = 60;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const initialAccountForm = {
@@ -80,7 +80,7 @@ const mapOtpErrorMessage = (message: string) => {
     return 'This verification code has expired. Please request a new code.';
   }
   if (lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
-    return 'Invalid verification code. Please check the latest 8-digit code in your email.';
+    return 'Invalid or expired verification code.\nPlease check the 8-digit code and try again.';
   }
   if (lower.includes('network') || lower.includes('fetch') || lower.includes('server') || lower.includes('rate limit') || lower.includes('too many')) {
     return 'Unable to verify right now. Please try again.';
@@ -216,6 +216,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
           full_name: fullName,
           role: selectedRole,
         },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
@@ -236,10 +237,6 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       setDuplicateEmail(true);
       setError('This email is already registered.');
       return;
-    }
-
-    if (data.session) {
-      await supabase.auth.signOut();
     }
 
     sessionStorage.setItem(PENDING_VERIFICATION_EMAIL_KEY, normalizedEmail);
@@ -302,7 +299,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     const { data, error: verifyError } = await supabase.auth.verifyOtp({
       email: signupEmail,
       token: otpCode,
-      type: 'email',
+      type: 'signup',
     });
 
     setLoading(false);
@@ -333,15 +330,9 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setResending(true);
     setError(null);
 
-    const { error: otpError } = await supabase.auth.signInWithOtp({
+    const { error: otpError } = await supabase.auth.resend({
+      type: 'signup',
       email: signupEmail,
-      options: {
-        shouldCreateUser: false,
-        data: {
-          full_name: fullName,
-          role: selectedRole,
-        },
-      },
     });
 
     setResending(false);

@@ -381,6 +381,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           campus_block: metadata?.campusBlock?.trim() || null,
           faculty_id: metadata?.facultyId?.trim() || null,
         },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
@@ -562,122 +563,45 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
      console.info('[Auth] Authenticated user after OTP verification | userId:', userId, '| email_confirmed_at:', authUser.email_confirmed_at || 'NULL', '| email:', authUser.email);
 
-     const pendingProfile = pendingOtpProfileRef.current || pendingOtpProfile;
-     const userData = authUser.user_metadata || {};
-     const role = normalizeRole(pendingProfile?.role || userData.role);
+     // OTP verified successfully. Profile creation will happen after
+      // institution code verification in the AuthModal.
+      // Return the authenticated user info without creating a profile yet.
+      const pendingProfile = pendingOtpProfileRef.current || pendingOtpProfile;
+      const userData = authUser.user_metadata || {};
 
-     if (!role) {
-       console.error('[Auth] No valid role found for new profile | userId:', userId, '| pending role:', pendingProfile?.role, '| metadata role:', userData.role);
-       return {
-         error: new Error('Unable to complete registration. The account has no valid role. Please restart the registration process.'),
-         profile: null,
-         institution: null,
-       };
-     }
+      // Try to fetch existing profile (may exist from a previous attempt)
+      let existingProfile = await fetchProfile(userId);
 
-     const fullName = String(pendingProfile?.fullName || userData.full_name || '').trim();
-     const phone = pendingProfile?.phone || userData.phone || null;
-
-     if (!fullName) {
-       console.error('[Auth] No full name available for verified account | userId:', userId);
-       return {
-         error: new Error('Please enter your full name before opening the dashboard.'),
-         profile: null,
-         institution: null,
-       };
-     }
-
-     // PRODUCTION FIX: Multi-source institution_id resolution with last-resort API lookup
-     let institutionId: string | null =
-       pendingProfile?.institutionId ||
-       userData.institution_id ||
-       institutionData?.institution_id ||
-       null;
-
-     // Last-resort: if we have an institution_code but no id, look it up now
-     if (!institutionId) {
-       const institutionCode = pendingProfile?.institutionCode || userData.institution_code || null;
-       if (institutionCode) {
-         console.info('[Auth] verifyOtp: institution_id missing; attempting last-resort lookup by code:', institutionCode);
-         try {
-           const { data: resolved } = await validateInstitutionCode(institutionCode);
-           if (resolved?.institution_id) {
-             institutionId = resolved.institution_id;
-             console.info('[Auth] verifyOtp: resolved institution_id via code lookup:', institutionId);
-           } else {
-             console.warn('[Auth] verifyOtp: institution code lookup returned no id for code:', institutionCode);
-           }
-         } catch (lookupErr) {
-           console.warn('[Auth] verifyOtp: last-resort institution lookup failed:', lookupErr);
-         }
-       }
-     }
-
-     if (!institutionId) {
-       console.warn('[Auth] verifyOtp: institution_id is NULL after all resolution attempts | userId:', userId, '| institution_code:', pendingProfile?.institutionCode || userData.institution_code || 'NULL');
-     }
-
-     // Profile creation MUST happen only AFTER email verification has succeeded.
-     console.info('[Auth] Creating/upserting profile | userId:', userId, '| role:', role, '| institution_id:', institutionId || 'NULL', '| email:', authUser.email);
-
-     const { error: upsertError } = await upsertProfileSafely({
-       user_id: userId,
-       email: authUser.email || normalizedEmail,
-       full_name: fullName,
-       phone,
-       role,
-       institution_id: institutionId,
-       department: userData.department || null,
-       semester: userData.semester || null,
-       programme: userData.programme || null,
-       campus_block: userData.campus_block || null,
-     });
-
-    if (upsertError) {
-      console.error('[Auth] Profile upsert error | userId:', userId, '| reason:', upsertError.message);
-      return { error: new Error(upsertError.message), profile: null, institution: null };
-    }
-
-      console.info('[Auth] Profile upsert succeeded | userId:', userId);
-
-      let fetchedProfile = await fetchProfile(userId);
-
-      if (!fetchedProfile) {
-        console.warn('[Auth] Profile fetch returned NULL after upsert, retrying once...');
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        fetchedProfile = await fetchProfile(userId);
+      if (existingProfile) {
+        // Profile already exists — load institution and return
+        let fetchedInstitution: InstitutionData | null = null;
+        if (existingProfile.institution_id) {
+          const { data: instData } = await supabase
+            .from('institutions')
+            .select('id, name, campus, city, state, country, institution_code')
+            .eq('id', existingProfile.institution_id)
+            .maybeSingle();
+          if (instData) {
+            fetchedInstitution = {
+              institution_id: instData.id,
+              institution_name: instData.name || '',
+              campus: instData.campus || '',
+              city: instData.city || '',
+              state: instData.state || '',
+              country: instData.country || '',
+              institution_code: instData.institution_code || '',
+            };
+            setInstitutionData(fetchedInstitution);
+          }
+        }
+        setPendingRegistrationProfile(null);
+        return { error: null, profile: existingProfile, institution: fetchedInstitution };
       }
 
-      setPendingRegistrationProfile(null);
-
-      let fetchedInstitution: InstitutionData | null = null;
-
-     if (institutionId) {
-       console.info('[Auth] Loading institution by id:', institutionId);
-       const { data: instData, error: instError } = await supabase
-         .from('institutions')
-         .select('id, name, campus, city, state, country, institution_code')
-         .eq('id', institutionId)
-         .maybeSingle();
-
-      if (instError) {
-        console.error('[Auth] Institution fetch by id error:', instError.message);
-      } else if (instData) {
-        fetchedInstitution = {
-          institution_id: instData.id,
-          institution_name: instData.name || '',
-          campus: instData.campus || '',
-          city: instData.city || '',
-          state: instData.state || '',
-          country: instData.country || '',
-          institution_code: instData.institution_code || '',
-        };
-        setInstitutionData(fetchedInstitution);
-      }
-    }
-
-     return { error: null, profile: fetchedProfile, institution: fetchedInstitution };
-   };
+      // No existing profile — return null profile so AuthModal shows institution step
+      console.info('[Auth] OTP verified but no profile exists yet. Awaiting institution code verification.');
+      return { error: null, profile: null, institution: null };
+    };
 
    const ensureProfileExists = async (userId: string): Promise<Profile | null> => {
      return await fetchProfile(userId);

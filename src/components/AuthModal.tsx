@@ -27,7 +27,7 @@ interface AuthModalProps {
 type AccountRole = 'student' | 'faculty' | 'guest';
 const ACCOUNT_ROLES: AccountRole[] = ['student', 'faculty', 'guest'];
 const PENDING_VERIFICATION_EMAIL_KEY = 'foodexa_pending_verification_email';
-const RESEND_COOLDOWN_SECONDS = 30;
+const RESEND_COOLDOWN_SECONDS = 60;
 
 const getPendingVerificationEmail = () =>
   (sessionStorage.getItem(PENDING_VERIFICATION_EMAIL_KEY) || '').trim().toLowerCase();
@@ -74,6 +74,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // Track the email used for the current OTP flow (login or create)
   const [currentEmail, setCurrentEmail] = useState('');
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [showCreateConfirmPassword, setShowCreateConfirmPassword] = useState(false);
+
+  // Password strength helper
+  const getPasswordStrength = (pass: string) => {
+    if (!pass) return { label: '', color: '', level: 0 };
+    if (pass.length < 8) return { label: 'Weak', color: 'text-red-500', level: 1 };
+    const hasUpper = /[A-Z]/.test(pass);
+    const hasNumber = /[0-9]/.test(pass);
+    const hasSpecial = /[^A-Za-z0-9]/.test(pass);
+    if (pass.length >= 8 && hasUpper && hasNumber && hasSpecial) return { label: 'Very Strong', color: 'text-green-600', level: 4 };
+    if (pass.length >= 8 && hasUpper && hasNumber) return { label: 'Strong', color: 'text-green-500', level: 3 };
+    if (pass.length >= 8) return { label: 'Fair', color: 'text-yellow-500', level: 2 };
+    return { label: 'Weak', color: 'text-red-500', level: 1 };
+  };
 
   // OTP state
   const [otpCode, setOtpCode] = useState('');
@@ -498,6 +513,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setInstitutionError(null);
     setOtpError(null);
 
+    if (!currentForm.fullName.trim()) {
+      setInstitutionError('Please enter your full name.');
+      return;
+    }
+
+    if (!normalizedEmail) {
+      setInstitutionError('Please enter your email address.');
+      return;
+    }
+
     if (currentForm.password.length < 8) {
       setInstitutionError('Password must be at least 8 characters.');
       return;
@@ -508,38 +533,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    setRegistrationPhase('validating');
-    setValidatingCode(true);
-
-    const { error: validateError, data: validatedInst } = await validateInstitutionCode(currentForm.institutionCode);
-
-if (validateError || !validatedInst) {
-        setInstitutionError(validateError || 'Invalid Institution Code');
-        setValidatingCode(false);
-        setRegistrationPhase('idle');
-        return;
-      }
-
-    setRegistrationPhase('connecting');
-    setValidatedInstitution(validatedInst);
-    setInstitutionData(validatedInst);
-    setInstitutionVerifyCode(validatedInst.institution_code);
-    setValidatingCode(false);
-
     setRegistrationPhase('sending');
-    console.info('[Auth] Calling signUpWithPassword | email:', normalizedEmail, '| institution_id:', validatedInst.institution_id);
-    // PRODUCTION FIX: Pass institution_id directly so verifyOtp can always resolve it,
-    // even if React context state gets stale or is reset between steps.
-    const { error } = await signUpWithPassword(normalizedEmail, currentForm.password, currentForm.fullName, selectedAccountRole, {
-      institutionCode: currentForm.institutionCode,
-      institutionId: validatedInst.institution_id, // Direct UUID — never NULL
-      phone: currentForm.phone,
-      department: (currentForm as any).department,
-      semester: (currentForm as any).semester,
-      programme: (currentForm as any).programme,
-      campusBlock: (currentForm as any).campusBlock,
-      facultyId: (currentForm as any).facultyId,
-    });
+
+    console.info('[Auth] Calling signUpWithPassword | email:', normalizedEmail);
+    const { error } = await signUpWithPassword(normalizedEmail, currentForm.password, currentForm.fullName, selectedAccountRole);
 
     if (error) {
       console.error('[Auth] signUpWithPassword rejected:', error.message);
@@ -570,16 +567,12 @@ if (validateError || !validatedInst) {
     setRegistrationPhase('sending');
     console.info('[Auth] Resending OTP email for:', normalizedEmail);
     try {
-      // PRODUCTION FIX: the OTP for this flow is issued by signInWithOtp
-      // (Magic Link template), NOT by a signup confirmation. Using
-      // `resend({ type: 'signup' })` would silently do nothing because no
-      // signup-confirmation email was ever sent (Confirm Email is OFF).
-      const { error } = await supabase.auth.signInWithOtp({
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
         email: normalizedEmail,
-        options: { shouldCreateUser: false },
       });
       if (error) {
-        console.error('[Auth] OTP resend (signInWithOtp) failed:', error.name, '-', error.message);
+        console.error('[Auth] OTP resend failed:', error.name, '-', error.message);
         setOtpError(mapOtpErrorMessage(error.message || 'Failed to resend OTP. Please try again.'));
         setRegistrationPhase('sent');
         return;
@@ -587,14 +580,14 @@ if (validateError || !validatedInst) {
       console.info('[Auth] OTP email resent successfully for:', normalizedEmail);
       setResendCountdown(RESEND_COOLDOWN_SECONDS);
       setRegistrationPhase('sent');
-    } catch (err: any) {
-      console.error('[Auth] OTP resend threw:', err?.message || err);
+    } catch (err) {
+      console.error('[Auth] OTP resend threw:', err);
       setOtpError('Verification service is temporarily unavailable. Please try again.');
       setRegistrationPhase('sent');
     }
   };
 
-   const handleVerifyOtp = async (e: React.FormEvent) => {
+    const handleVerifyOtp = async (e: React.FormEvent) => {
       e.preventDefault();
 
       const normalizedEmail = (getPendingVerificationEmail() || currentEmail).trim().toLowerCase();
@@ -614,26 +607,27 @@ if (validateError || !validatedInst) {
          return;
        }
 
-       if (!liveProfile) {
-         console.warn('[Auth] verifyOtp returned null profile; profile setup is required before dashboard entry.');
-         setOtpError('Verification succeeded, but no authenticated session was returned. Please try again.');
-         setRegistrationPhase('idle');
-         return;
-       }
-
-       console.info('[Auth] OTP verified and profile ready | user:', liveProfile.user_id, '| institution:', institution?.institution_id || 'NULL');
+       console.info('[Auth] OTP verified | profile:', liveProfile?.user_id || 'NULL', '| institution:', institution?.institution_id || 'NULL');
        setRegistrationPhase('idle');
        sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
 
-       if (institution?.institution_code) {
-         setInstitutionVerifyCode(institution.institution_code);
+       // If profile already exists with institution, go straight to success
+       if (liveProfile && liveProfile.institution_id && institution) {
          setVerifiedInstitution(institution);
          setValidatedInstitution(institution);
+         setInstitutionVerifyCode(institution.institution_code);
+         setStep('success');
+         if (onLoginSuccess) {
+           onLoginSuccess({ profile: liveProfile, institution });
+         }
+         return;
        }
 
-       if (onLoginSuccess) {
-         onLoginSuccess({ profile: liveProfile, institution: institution || null });
-       }
+       // Otherwise, show institution code step
+       setInstitutionVerifyCode('');
+       setInstitutionError(null);
+       setValidatedInstitution(null);
+       setStep('institution_verify');
    };
 
   const handleBack = () => {
@@ -826,38 +820,6 @@ if (validateError || !validatedInst) {
 
                 <form onSubmit={handleCreateSubmit} className="space-y-3">
                   {/* Institution Code - TOP OF ALL FORMS (required by spec) */}
-                  <div>
-                    <label className="text-xs font-semibold text-[#86868B] mb-1 block">Institution Code <span className="text-black">*</span></label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        required
-                        value={getCurrentForm().institutionCode}
-onChange={(e) => {
-                           if (selectedAccountRole === 'student') setStudentForm({ ...studentForm, institutionCode: e.target.value });
-                           else if (selectedAccountRole === 'faculty') setFacultyForm({ ...facultyForm, institutionCode: e.target.value });
-                           else setGuestForm({ ...guestForm, institutionCode: e.target.value });
-                           handleInstitutionCodeChange(e.target.value);
-                         }}
-                         placeholder="e.g. YAWEHH264881"
-                         className="w-full apple-input font-mono font-bold w-full pr-8"
-                      />
-                      {validatingCode && (
-                        <Loader2 className="w-4 h-4 animate-spin text-black absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      )}
-                    </div>
-{institutionError && !validatingCode && (
-                       <p className="text-[10px] text-[#FF3B30] mt-1">✗ {institutionError}</p>
-                     )}
-                     {!institutionError && validatedInstitution && !validatingCode && (
-                       <div className="text-[10px] text-black mt-1 space-y-0.5">
-                         <p>✓ Institution Verified</p>
-                         <p className="text-black">{validatedInstitution.institution_name}</p>
-                         <p className="text-black">Campus: {validatedInstitution.campus || 'N/A'}</p>
-                         <p className="text-black">Status: Active</p>
-                       </div>
-                     )}
-                  </div>
 
                   <div>
                     <label className="text-xs font-semibold text-[#86868B] mb-1 block">Full Name</label>
@@ -1029,9 +991,15 @@ onChange={(e) => {
                     <></>
                   )}
 
+                  {institutionError && (
+                    <div className="p-3 rounded-xl bg-[#FFF0F0] border border-[#FFD6D6] text-xs text-[#FF3B30] mb-2">
+                      {institutionError}
+                    </div>
+                  )}
+
                   <button
                     type="submit"
-                    disabled={isCreatingAccount || validatingCode}
+                    disabled={isCreatingAccount || !getCurrentForm().fullName.trim() || !getCurrentForm().universityEmail.trim() || getCurrentForm().password.length < 8 || getCurrentForm().password !== getCurrentForm().confirmPassword}
                     className="relative w-full overflow-hidden btn-primary mt-2"
                   >
                     {isCreatingAccount && (
@@ -1070,28 +1038,13 @@ onChange={(e) => {
               <div className="w-12 h-12 mx-auto rounded-2xl bg-[#F5F5F7] border-transparent flex items-center justify-center text-black">
                 <KeyRound className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-bold text-black">Verify Your Email OTP</h3>
+              <h3 className="text-xl font-bold text-black">Check Your Email</h3>
                <p className="text-xs text-[#86868B] leading-relaxed">
                  Enter the 8-digit verification code sent to:
                  <br />
                  <strong className="text-black">{getPendingVerificationEmail() || currentEmail || ''}</strong>
                </p>
             </div>
-
-            {validatedInstitution && (
-              <div className="p-3 bg-white border border-gray-200 rounded-xl flex items-center gap-2 text-xs text-[#86868B]">
-                <Building2 className="w-4 h-4 text-black shrink-0" />
-                <span>
-                  Institution: <strong className="text-black">{validatedInstitution.institution_name}</strong> • Code: <strong className="text-black">{validatedInstitution.institution_code}</strong>
-                </span>
-              </div>
-            )}
-
-            {institutionError && (
-              <div className="p-3 rounded-xl bg-[#FFF0F0] border border-[#FFD6D6] text-xs text-[#FF3B30]">
-                {institutionError}
-              </div>
-            )}
 
             {otpError && (
               <div className="p-3 rounded-xl bg-[#FFF0F0] border border-[#FFD6D6] text-xs text-[#FF3B30]">
@@ -1101,20 +1054,51 @@ onChange={(e) => {
 
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                <div>
-                 <label className="text-xs font-semibold text-[#86868B] mb-1 block text-center">
+                 <label className="text-xs font-semibold text-[#86868B] mb-2 block text-center">
                    Verification Code
                  </label>
-                 <input
-                   type="text"
-                   inputMode="numeric"
-                   autoComplete="one-time-code"
-                   maxLength={8}
-                   required
-                   value={otpCode}
-                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                   className="w-full apple-input py-3 text-center text-xl font-mono tracking-[0.35em] font-bold w-full"
-                   placeholder="1 2 3 4 5 6 7 8"
-                 />
+                 <div className="flex justify-center gap-1.5">
+                   {Array.from({ length: 8 }).map((_, i) => (
+                     <input
+                       key={i}
+                       id={`otp-box-${i}`}
+                       type="text"
+                       inputMode="numeric"
+                       autoComplete={i === 0 ? 'one-time-code' : 'off'}
+                       maxLength={1}
+                       value={otpCode[i] || ''}
+                       onChange={(e) => {
+                         const val = e.target.value.replace(/\D/g, '');
+                         if (!val && !e.target.value) return;
+                         const newCode = otpCode.split('');
+                         newCode[i] = val.slice(-1);
+                         const joined = newCode.join('').slice(0, 8);
+                         setOtpCode(joined);
+                         if (val && i < 7) {
+                           document.getElementById(`otp-box-${i + 1}`)?.focus();
+                         }
+                       }}
+                       onKeyDown={(e) => {
+                         if (e.key === 'Backspace' && !otpCode[i] && i > 0) {
+                           const newCode = otpCode.split('');
+                           newCode[i - 1] = '';
+                           setOtpCode(newCode.join(''));
+                           document.getElementById(`otp-box-${i - 1}`)?.focus();
+                         }
+                       }}
+                       onPaste={(e) => {
+                         e.preventDefault();
+                         const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 8);
+                         if (pasted) {
+                           setOtpCode(pasted);
+                           const focusIdx = Math.min(pasted.length, 7);
+                           document.getElementById(`otp-box-${focusIdx}`)?.focus();
+                         }
+                       }}
+                       className="w-10 h-12 text-center text-lg font-mono font-bold border border-gray-200 rounded-xl focus:border-black focus:outline-none bg-white transition-colors"
+                     />
+                   ))}
+                 </div>
                </div>
 
               <button
@@ -1123,7 +1107,7 @@ onChange={(e) => {
                 className="w-full btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <ShieldCheck className="w-4 h-4 text-white" />
-                <span>Verify & Join Campus Portal</span>
+                <span>Verify Code</span>
               </button>
 
                <div className="text-center text-xs text-[#86868B]">
@@ -1145,16 +1129,16 @@ onChange={(e) => {
            </div>
          )}
 
-        {/* INSTITUTION CODE VERIFICATION STEP (for institution_admin login) */}
+        {/* INSTITUTION CODE VERIFICATION STEP */}
         {step === 'institution_verify' && (
           <div className="space-y-5">
             <div className="space-y-1 text-center">
               <div className="w-12 h-12 mx-auto rounded-2xl bg-[#F5F5F7] border-transparent flex items-center justify-center text-black">
                 <Building2 className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-bold text-black">Verify Institution Code</h3>
+              <h3 className="text-xl font-bold text-black">Join Your Institution</h3>
               <p className="text-xs text-[#86868B] leading-relaxed">
-                Enter your Institution Code to access the campus portal.
+                Enter your institution code to complete registration.
               </p>
             </div>
 
@@ -1166,35 +1150,84 @@ onChange={(e) => {
                     type="text"
                     required
                     value={institutionVerifyCode}
-onChange={(e) => handleInstitutionCodeChange(e.target.value)}
-                     placeholder="e.g. YAWEHH264881"
-                     className="w-full apple-input font-mono font-bold w-full pr-8"
+                    onChange={(e) => {
+                      setInstitutionVerifyCode(e.target.value.toUpperCase());
+                      setInstitutionError(null);
+                      setValidatedInstitution(null);
+                      handleInstitutionCodeChange(e.target.value);
+                    }}
+                    placeholder="e.g. YAWEHH264881"
+                    className="w-full apple-input font-mono font-bold pr-8"
                   />
                   {validatingCode && (
                     <Loader2 className="w-4 h-4 animate-spin text-black absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   )}
                 </div>
-{institutionError && !validatingCode && (
-                   <p className="text-[10px] text-[#FF3B30] mt-1">✗ {institutionError}</p>
-                 )}
-                 {validatedInstitution && !institutionError && !validatingCode && (
-                   <div className="text-[10px] text-black mt-1 space-y-0.5">
-                     <p>✓ Institution Verified</p>
-                     <p className="text-black">{validatedInstitution.institution_name}</p>
-                     <p className="text-black">Campus: {validatedInstitution.campus || 'N/A'}</p>
-                     <p className="text-black">Status: Active</p>
-                   </div>
-                 )}
+                {institutionError && !validatingCode && (
+                  <p className="text-[10px] text-[#FF3B30] mt-1">✗ {institutionError}</p>
+                )}
+                {validatedInstitution && !institutionError && !validatingCode && (
+                  <div className="text-[10px] text-green-600 mt-1 space-y-0.5">
+                    <p>✓ Institution Code Verified</p>
+                    <p className="text-black font-semibold">{validatedInstitution.institution_name}</p>
+                    <p className="text-black">{validatedInstitution.campus || ''} {validatedInstitution.city ? `• ${validatedInstitution.city}` : ''}</p>
+                  </div>
+                )}
               </div>
 
               <button
                 type="button"
-                onClick={handleLoginInstitutionVerify}
+                onClick={async () => {
+                  if (!institutionVerifyCode.trim()) return;
+                  setValidatingCode(true);
+                  setInstitutionError(null);
+
+                  const { error: validateError, data: validatedInst } = await validateInstitutionCode(institutionVerifyCode);
+
+                  if (validateError || !validatedInst) {
+                    setInstitutionError(validateError || 'Invalid Institution Code');
+                    setValidatingCode(false);
+                    return;
+                  }
+
+                  setValidatedInstitution(validatedInst);
+                  setVerifiedInstitution(validatedInst);
+                  setInstitutionData(validatedInst);
+                  setValidatingCode(false);
+
+                  // Now create/update the profile with institution_id
+                  const { error: profileError } = await updateProfile({
+                    full_name: getCurrentForm().fullName || authProfile?.full_name || '',
+                    role: selectedAccountRole,
+                    institution_id: validatedInst.institution_id,
+                  });
+
+                  if (profileError) {
+                    setInstitutionError(profileError.message || 'Failed to complete profile.');
+                    return;
+                  }
+
+                  await refreshProfile();
+
+                  setStep('success');
+                  if (onLoginSuccess && authProfile) {
+                    onLoginSuccess({ profile: authProfile, institution: validatedInst });
+                  }
+                }}
                 disabled={!institutionVerifyCode.trim() || validatingCode}
                 className="w-full btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <span>Verify & Access Portal</span>
-                <ArrowRight className="w-4 h-4 text-white" />
+                {validatingCode ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Verifying...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Join Institution & Continue</span>
+                    <ArrowRight className="w-4 h-4 text-white" />
+                  </>
+                )}
               </button>
             </div>
           </div>

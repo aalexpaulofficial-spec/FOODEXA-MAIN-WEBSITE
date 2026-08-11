@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { X, Lock, User, ArrowRight, ArrowLeft, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2, RefreshCw } from 'lucide-react';
+import { X, Lock, User, ArrowRight, ArrowLeft, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { UserRole, Profile } from '../types';
@@ -68,6 +68,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginNotice, setLoginNotice] = useState<string | null>(null);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
 
   // Track the email used for the current OTP flow (login or create)
@@ -273,33 +275,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
 
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [googleError, setGoogleError] = useState<string | null>(null);
-
-  const handleGoogleSignIn = async () => {
-    if (isGoogleLoading) return;
-    setIsGoogleLoading(true);
-    setGoogleError(null);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) {
-        console.error('[Auth] Google OAuth error:', error.message);
-        setGoogleError('Unable to start Google Sign-In. Please try again.');
-        setIsGoogleLoading(false);
-      }
-      // On success the browser redirects to Google — modal stays until redirect
-    } catch (err: any) {
-      console.error('[Auth] Google OAuth exception:', err);
-      setGoogleError('Unable to start Google Sign-In. Please try again.');
-      setIsGoogleLoading(false);
-    }
-  };
-
   const handleLoginInstitutionVerify = async () => {
       const code = institutionVerifyCode.trim() || validatedInstitution?.institution_code || institutionData?.institution_code || '';
       if (!code) {
@@ -407,6 +382,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const normalizedLoginEmail = (loginEmail || '').trim().toLowerCase();
       setCurrentEmail(normalizedLoginEmail);
       setLoginError(null);
+      setLoginNotice(null);
       setInstitutionError(null);
       setStep('form');
 
@@ -484,6 +460,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         onLoginSuccess({ profile: liveProfile, institution: institutionData });
       }
     };
+
+  const handleForgotPassword = async () => {
+    const normalizedLoginEmail = (loginEmail || '').trim().toLowerCase();
+    setLoginError(null);
+    setLoginNotice(null);
+
+    if (!normalizedLoginEmail) {
+      setLoginError('Please enter your email address first.');
+      return;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(normalizedLoginEmail, {
+      redirectTo: `${window.location.origin}/login`,
+    });
+
+    if (error) {
+      console.error('[Auth] Password reset failed:', error.message);
+      setLoginError('Unable to send password reset right now. Please try again.');
+      return;
+    }
+
+    setLoginNotice('Password reset link sent. Please check your email.');
+  };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -659,6 +658,8 @@ if (validateError || !validatedInst) {
     setValidatedInstitution(null);
     setLoginUserId(null);
     setLoginError(null);
+    setLoginNotice(null);
+    setShowLoginPassword(false);
     setOtpError(null);
     setRegistrationPhase('idle');
     setIsLoginSubmitting(false);
@@ -713,7 +714,11 @@ if (validateError || !validatedInst) {
                       type="email"
                       required
                       value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
+                      onChange={(e) => {
+                        setLoginEmail(e.target.value);
+                        setLoginError(null);
+                        setLoginNotice(null);
+                      }}
                       placeholder="you@example.com"
                       className="w-full apple-input"
                     />
@@ -721,19 +726,39 @@ if (validateError || !validatedInst) {
 
                   <div>
                     <label className="text-xs font-semibold text-[#515154] mb-1 block">Password</label>
-                    <input
-                      type="password"
-                      required
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="Enter your password"
-                      className="w-full apple-input"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showLoginPassword ? 'text' : 'password'}
+                        required
+                        value={loginPassword}
+                        onChange={(e) => {
+                          setLoginPassword(e.target.value);
+                          setLoginError(null);
+                        }}
+                        placeholder="Enter your password"
+                        className="w-full apple-input pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowLoginPassword((value) => !value)}
+                        className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[#515154] transition hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
+                        aria-label={showLoginPassword ? 'Hide Password' : 'Show Password'}
+                        title={showLoginPassword ? 'Hide Password' : 'Show Password'}
+                      >
+                        {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
 
                   {loginError && (
                     <div className="p-3 rounded-xl bg-[#FFF0F0] border border-[#FFD6D6] text-xs text-[#FF3B30]">
                       {loginError}
+                    </div>
+                  )}
+
+                  {loginNotice && (
+                    <div className="p-3 rounded-xl bg-[#F2FFF8] border border-[#B8F2D0] text-xs text-[#0A7A37]">
+                      {loginNotice}
                     </div>
                   )}
 
@@ -749,7 +774,7 @@ if (validateError || !validatedInst) {
                       </>
                     ) : (
                       <>
-                        <span>Login</span>
+                        <span>LOGIN</span>
                         <ArrowRight className="w-4 h-4 text-white" />
                       </>
                     )}
@@ -758,43 +783,11 @@ if (validateError || !validatedInst) {
 
                 <button
                   type="button"
+                  onClick={handleForgotPassword}
                   className="w-full text-center text-xs font-semibold text-[#0071E3] hover:underline"
                 >
                   Forgot Password?
                 </button>
-
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px bg-gray-200" />
-                  <span className="text-[10px] text-[#86868B] font-medium">OR</span>
-                  <div className="flex-1 h-px bg-gray-200" />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleGoogleSignIn}
-                  disabled={isGoogleLoading}
-                  className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border border-gray-200 bg-white hover:bg-gray-50 transition-all cursor-pointer disabled:opacity-60"
-                >
-                  {isGoogleLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-black" />
-                  ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                    </svg>
-                  )}
-                  <span className="text-sm font-semibold text-[#1D1D1F]">
-                    {isGoogleLoading ? 'Redirecting to Google...' : 'Continue with Google'}
-                  </span>
-                </button>
-
-                {googleError && (
-                  <div className="p-3 rounded-xl bg-[#FFF0F0] border border-[#FFD6D6] text-xs text-[#FF3B30]">
-                    {googleError}
-                  </div>
-                )}
 
                 <div className="p-3 bg-white/80 border border-gray-200 rounded-xl text-center text-xs text-[#86868B]">
                   <span>Institution Administrator? </span>

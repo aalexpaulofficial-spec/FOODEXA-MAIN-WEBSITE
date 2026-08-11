@@ -21,6 +21,7 @@ import { BookDemoModal } from './components/BookDemoModal';
 import { RoleSelectionModal } from './components/RoleSelectionModal';
 import { InstitutionRegistrationModal } from './components/InstitutionRegistrationModal';
 import { AuthModal } from './components/AuthModal';
+import { JoinInstitutionModal } from './components/JoinInstitutionModal';
 import { StudentPortalModal } from './components/StudentPortalModal';
 import { InstitutionDashboardModal } from './components/InstitutionDashboardModal';
 import { KitchenDashboardModal } from './components/KitchenDashboardModal';
@@ -41,7 +42,7 @@ const accountRoles: AccountRole[] = ['student', 'faculty', 'guest'];
 const isAccountRole = (role: string | null): role is AccountRole => !!role && accountRoles.includes(role as AccountRole);
 
 export default function App() {
-  const { user, profile, session, isEmailVerified, isPendingOtpVerification, loading: authLoading } = useAuth();
+  const { user, profile, session, isEmailVerified, isPendingOtpVerification, loading: authLoading, visitorSession, joinInstitutionAsVisitor, leaveVisitorInstitution } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const restoredDashboardRef = useRef(false);
@@ -58,6 +59,7 @@ export default function App() {
   const [isKitchenDashboardOpen, setIsKitchenDashboardOpen] = useState(false);
   const [isSuperAdminDashboardOpen, setIsSuperAdminDashboardOpen] = useState(false);
   const [isRoleSelectionOpen, setIsRoleSelectionOpen] = useState(false);
+  const [isJoinInstitutionOpen, setIsJoinInstitutionOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<'student' | 'faculty' | 'guest'>('student');
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [activePrompt, setActivePrompt] = useState<string>('');
@@ -102,6 +104,19 @@ export default function App() {
       // student, faculty, guest
       setIsStudentPortalOpen(true);
     }
+  };
+
+  // Open student portal for visitor (no-auth) session
+  const openVisitorPortal = (role: 'student' | 'faculty' | 'guest') => {
+    closeDashboards();
+    setCurrentUserRole(role);
+    setIsStudentPortalOpen(true);
+  };
+
+  const handleJoinInstitution = (institution: { id: string; name: string; campus: string; city: string; institution_code: string }, role: 'student' | 'faculty' | 'guest') => {
+    joinInstitutionAsVisitor(institution, role);
+    setIsJoinInstitutionOpen(false);
+    openVisitorPortal(role);
   };
 
   const getDashboardRoute = (role: UserRole | null): string | null => {
@@ -219,11 +234,8 @@ export default function App() {
   const handleOpenLogin = () => {
     setIsRoleSelectionOpen(false);
     setIsPortalAccessOpen(false);
-    setAuthInitialMode('login');
-    setIsAuthOpen(true);
-    if (location.pathname !== '/login') {
-      navigate('/login', { replace: false });
-    }
+    setIsAuthOpen(false);
+    setIsJoinInstitutionOpen(true);
   };
 
   const handleOpenCreateAccount = (role: AccountRole) => {
@@ -241,10 +253,8 @@ export default function App() {
   const handleOpenStudentRegister = () => {
     setIsAuthOpen(false);
     setIsPortalAccessOpen(false);
-    setIsRoleSelectionOpen(true);
-    if (location.pathname !== '/create-account') {
-      navigate('/create-account', { replace: false });
-    }
+    setIsRoleSelectionOpen(false);
+    setIsJoinInstitutionOpen(true);
   };
 
   const handleRoleSelected = (role: AccountRole) => {
@@ -405,6 +415,14 @@ export default function App() {
           navigate('/', { replace: false });
         }}
         onRoleSelected={handleRoleSelected}
+      />
+
+      <JoinInstitutionModal
+        isOpen={isJoinInstitutionOpen}
+        onClose={() => {
+          setIsJoinInstitutionOpen(false);
+        }}
+        onJoin={handleJoinInstitution}
       />
 
       <AuthModal

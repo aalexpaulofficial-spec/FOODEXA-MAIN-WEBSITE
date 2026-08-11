@@ -3,6 +3,12 @@ import { supabase } from '../lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 import type { UserRole, Profile, InstitutionData } from '../types';
 
+interface VisitorSession {
+  visitorId: string;
+  institution: InstitutionData | null;
+  role: 'student' | 'faculty' | 'guest' | null;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -13,7 +19,6 @@ interface AuthContextType {
   institutionData: InstitutionData | null;
   setInstitutionData: (data: InstitutionData | null) => void;
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
-  anonymousSignIn: (institutionCode: string, role: UserRole) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
   signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; institutionId?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
@@ -23,6 +28,9 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
   leaveInstitution: () => Promise<{ error: Error | null }>;
   switchInstitution: (institutionCode: string) => Promise<{ error: string | null }>;
+  visitorSession: VisitorSession;
+  joinInstitutionAsVisitor: (institution: InstitutionData, role: 'student' | 'faculty' | 'guest') => void;
+  leaveVisitorInstitution: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -49,6 +57,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     phone: string | null;
   } | null>(null);
   const pendingOtpProfileRef = React.useRef<typeof pendingOtpProfile>(null);
+
+  // ── Visitor session (no-auth public access) ──────────────────────────────
+  const [visitorSession, setVisitorSession] = useState<VisitorSession>(() => {
+    try {
+      const saved = localStorage.getItem('foodexa-visitor-session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.visitorId) return parsed;
+      }
+    } catch { /* ignore */ }
+    return { visitorId: '', institution: null, role: null };
+  });
+
+  const joinInstitutionAsVisitor = useCallback((institution: InstitutionData, role: 'student' | 'faculty' | 'guest') => {
+    const visitorId = crypto.randomUUID();
+    const newSession: VisitorSession = { visitorId, institution, role };
+    setVisitorSession(newSession);
+    localStorage.setItem('foodexa-visitor-session', JSON.stringify(newSession));
+  }, []);
+
+  const leaveVisitorInstitution = useCallback(() => {
+    setVisitorSession({ visitorId: '', institution: null, role: null });
+    localStorage.removeItem('foodexa-visitor-session');
+  }, []);
 
   const loadInstitutionForProfile = useCallback(async (profileData: Profile | null): Promise<InstitutionData | null> => {
     if (!profileData?.institution_id) {
@@ -371,37 +403,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { error: 'Institution Code is required.', data: null };
     }
     try {
-      const resp = await fetch('/api/validate-institution-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: trimmed }),
-      });
+      // Use the existing RPC function for institution code validation
+      const { data, error: rpcError } = await supabase
+        .rpc('get_institution_by_code', { p_institution_code: trimmed.toUpperCase() });
 
-      const json = await resp.json().catch(() => ({}));
-
-      if (!resp.ok) {
-        return { error: json.message || 'Unable to validate institution. Please try again.', data: null };
+      if (rpcError) {
+        console.error('[Auth] validateInstitutionCode RPC error:', rpcError.message);
+        return { error: 'Unable to verify Institution Code. Please try again.', data: null };
       }
 
-      if (!json.valid) {
-        return { error: json.message || 'Invalid Institution Code', data: null };
+      if (!data || (Array.isArray(data) && data.length === 0)) {
+        return { error: 'Institution code not found. Please check the code and try again.', data: null };
       }
 
-      if (!json.success || !json.institution || !json.institution.id || typeof json.institution.id !== 'string' || json.institution.id.length < 10) {
-        console.error('[Auth] validateInstitutionCode: invalid institution returned:', json.institution);
-        return { error: 'Institution data is invalid. Please contact support.', data: null };
-      }
+      // Handle both single object and array responses
+      const inst = Array.isArray(data) ? data[0] : data;
 
       return {
         error: null,
         data: {
-          institution_id: json.institution.id,
-          institution_name: json.institution.name || '',
-          campus: json.institution.campus || '',
-          city: json.institution.city || '',
-          state: json.institution.state || '',
-          country: json.institution.country || '',
-          institution_code: json.institution.code || '',
+          institution_id: inst.id,
+          institution_name: inst.institution_name || inst.name || '',
+          campus: inst.campus || '',
+          city: inst.city || '',
+          state: inst.state || '',
+          country: inst.country || '',
+          institution_code: inst.institution_code || trimmed.toUpperCase(),
         } as InstitutionData,
       };
     } catch (err: any) {
@@ -802,40 +829,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-    const anonymousSignIn = async (code: string, role: UserRole) => {
-      const { data, error } = await validateInstitutionCode(code);
-      if (error || !data) {
-        return { error: new Error(error || 'Invalid Institution Code'), profile: null, institution: null };
-      }
-      
-      const fakeUserId = `anon_${Math.random().toString(36).substring(2, 11)}`;
-      const fakeUser = { id: fakeUserId, email: `anon@${data.institution_code}.com` } as User;
-      const fakeProfile: Profile = {
-        user_id: fakeUserId,
-        role: role,
-        full_name: 'Guest User',
-        email: `anon@${data.institution_code}.com`,
-        institution_id: data.institution_id,
-        phone: null,
-        department: null,
-        semester: null,
-        programme: null,
-        campus_block: null,
-        designation: null,
-
-        avatar_url: null,
-        diet_preference: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      setUser(fakeUser);
-      setProfile(fakeProfile);
-      setInstitutionData(data);
-      
-      return { error: null, profile: fakeProfile, institution: data };
-    };
-
   return (
     <AuthContext.Provider value={{
       user,
@@ -847,7 +840,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       institutionData,
       setInstitutionData,
       validateInstitutionCode,
-      anonymousSignIn,
       signIn,
       signUpWithPassword,
       verifyOtp,
@@ -857,6 +849,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       refreshProfile,
       leaveInstitution,
       switchInstitution,
+      visitorSession,
+      joinInstitutionAsVisitor,
+      leaveVisitorInstitution,
     }}>
       {children}
     </AuthContext.Provider>

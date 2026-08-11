@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { X, Lock, User, ArrowRight, ArrowLeft, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2, RefreshCw } from 'lucide-react';
+import { X, Lock, User, ArrowRight, ArrowLeft, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2, RefreshCw, GraduationCap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { UserRole, Profile } from '../types';
@@ -34,7 +34,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onLoginSuccess,
   onBack,
 }) => {
-  const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile, anonymousSignIn } = useAuth();
+  const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
   const [mode, setMode] = useState<'login' | 'create' | 'quick'>(initialMode);
   const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success'>('form');
   const [loginUserId, setLoginUserId] = useState<string | null>(null);
@@ -725,120 +725,59 @@ if (validateError || !validatedInst) {
           <div>
             {mode === 'login' ? (
               <div className="space-y-5">
-                
+
                 {/* Header */}
                 <div className="space-y-1.5">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F5F5F7] text-[#1D1D1F] border-transparent text-[11px] font-mono">
                     <Lock className="w-3.5 h-3.5" />
-                    <span>Student Portal Login</span>
+                    <span>FOODEXA Login</span>
                   </div>
                   <h3 className="text-2xl font-bold text-black">Welcome Back</h3>
                   <p className="text-xs text-[#86868B] leading-relaxed">
-                    Sign in to your FOODEXA account to order food, manage orders, access QR pickup, and use LX AI.
+                    Students and faculty: enter your institution code to join directly — no email or password needed.
                   </p>
                 </div>
 
-                {/* Login Form */}
-                <form onSubmit={handleLoginSubmit} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold text-[#86868B] mb-1 block">Institution Code</label>
-                    <input
-                      type="text"
-                      required
-                      value={loginInstitutionCode}
-                      onChange={(e) => { setLoginInstitutionCode(e.target.value.toUpperCase()); setLoginError(null); }}
-                      className="w-full px-4 py-3 rounded-2xl bg-[#F5F5F7] border-0 text-[#1D1D1F] focus:ring-2 focus:ring-[#0066CC] focus:bg-white transition-all placeholder:text-[#86868B]"
-                      placeholder="e.g. CHRIST-BGR"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-[#86868B] mb-1 block">University Email</label>
-                    <input
-                      type="email"
-                      required
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="e.g. alex@christuniversity.in"
-                      className="w-full apple-input w-full"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-[#86868B] mb-1 block">Password</label>
-                    <input
-                      type="password"
-                      required
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="••••••••••••"
-                      className="w-full apple-input w-full"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs">
-                    <label className="flex items-center gap-2 text-[#86868B] cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={rememberMe}
-                        onChange={(e) => setRememberMe(e.target.checked)}
-                        className="w-4 h-4 rounded bg-white border-gray-300 text-[#0071E3] focus:ring-[#0071E3] rounded-sm"
-                      />
-                      <span>Remember Me</span>
-                    </label>
+                {/* Student/Faculty Join - No Login Required */}
+                <div className="space-y-3">
+                  <div className="p-4 rounded-2xl bg-[#F5F5F7] border-0 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-black flex items-center justify-center">
+                        <GraduationCap className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-[#1D1D1F]">Join Your Institution</p>
+                        <p className="text-[11px] text-[#86868B]">No sign-up required. Just enter your institution code.</p>
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => {}}
-                      className="text-black font-medium hover:underline cursor-pointer"
+                      onClick={() => {
+                        onClose();
+                        if (onBack) onBack();
+                      }}
+                      className="w-full py-3 rounded-xl bg-black text-white text-sm font-semibold flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors"
                     >
-                      Forgot Password?
+                      <span>Join as Student / Faculty / Guest</span>
+                      <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
+                </div>
 
-                  {loginError && (
-                    <div className="p-3 rounded-xl bg-[#FFF0F0] border border-[#FFD6D6] text-xs text-[#FF3B30]">
-                      {loginError}
-                    </div>
-                  )}
-
-                  {institutionError && step === 'form' && (
-                    <div className="p-3 rounded-xl bg-[#FFF0F0] border border-[#FFD6D6] text-xs text-[#FF3B30]">
-                      {institutionError}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={isLoginSubmitting}
-                    className="w-full btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                {/* Institution Admin Login Link */}
+                <div className="p-3 bg-white/80 border border-gray-200 rounded-xl text-center text-xs text-[#86868B]">
+                  <span>Institution Administrator? </span>
+                  <a
+                    href="https://foodexa-institution-platform.vercel.app/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-black font-bold hover:underline inline-flex items-center gap-1 ml-1"
                   >
-                    {isLoginSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin text-white" />
-                        <span>Signing in...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Login</span>
-                        <ArrowRight className="w-4 h-4 text-white" />
-                      </>
-                    )}
-                  </button>
+                    <span>Open Institution Portal</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
 
-                  {/* Institution Login Link */}
-                  <div className="p-3 bg-white/80 border border-gray-200 rounded-xl text-center text-xs text-[#86868B]">
-                    <span>Institution Login? </span>
-                    <a
-                      href="https://foodexa-institution-platform.vercel.app/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-black font-bold hover:underline inline-flex items-center gap-1 ml-1"
-                    >
-                      <span>Open Institution Portal</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-
-                </form>
               </div>
             ) : (
               /* Create Account View */

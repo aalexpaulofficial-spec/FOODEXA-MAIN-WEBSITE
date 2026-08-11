@@ -36,6 +36,7 @@ import { AnalyticsTab } from './StudentDashboard/AnalyticsTab';
 import { HistoryTab } from './StudentDashboard/HistoryTab';
 import { ProfileTab } from './StudentDashboard/ProfileTab';
 import { SwitchCanteenModal } from './StudentDashboard/SwitchCanteenModal';
+import { SwitchInstitutionModal } from './StudentDashboard/SwitchInstitutionModal';
 import { OffersTab } from './StudentDashboard/OffersTab';
 import { OrderCompletionScreen } from './StudentDashboard/OrderCompletionScreen';
 import { OrderDetailsModal } from './StudentDashboard/OrderDetailsModal';
@@ -300,17 +301,24 @@ const BannerCarousel = ({ banners }: { banners: any[] }) => {
 // ── Main Component ──────────────────────────────────────────────────────────
 
 export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, onClose, role, triggerToast }) => {
-  const { user, profile, refreshProfile, signOut, updateProfile, leaveInstitution, institutionData, switchInstitution } = useAuth();
+  const { user, profile, refreshProfile, signOut, updateProfile, leaveInstitution, institutionData, switchInstitution, visitorSession, leaveVisitorInstitution, joinInstitutionAsVisitor, validateInstitutionCode: validateInstitutionCodeForVisitor } = useAuth();
   const navigate = useNavigate();
+  const isVisitor = !user && !!visitorSession.visitorId;
   const [activeTab, setActiveTab] = useState<PortalTab>('explore');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
 
+  // Determine effective user ID and institution data (auth or visitor)
+  const effectiveUserId = user?.id || visitorSession.visitorId || '';
+  const effectiveInstitutionData = user ? institutionData : visitorSession.institution;
+  const effectiveProfile = user ? profile : null;
+  const effectiveRole = user ? (profile?.role || null) : (visitorSession.role);
+
   // Supabase Realtime orders — single source of truth
   const { orders, activeOrders, pastOrders, loading: ordersLoading, error: ordersError, refresh: refreshOrders } = useSupabaseOrders({
-    userId: user?.id,
-    enabled: isOpen && !!user?.id,
+    userId: effectiveUserId,
+    enabled: isOpen && !!effectiveUserId,
   });
 
   const [countersList, setCountersList] = useState<any[]>([]);
@@ -349,6 +357,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [leavingInstitution, setLeavingInstitution] = useState(false);
   const [leaveInstitutionMessage, setLeaveInstitutionMessage] = useState<string | null>(null);
   const [showSwitchCanteen, setShowSwitchCanteen] = useState(false);
+  const [showSwitchInstitution, setShowSwitchInstitution] = useState(false);
   const [activeCanteen, setActiveCanteen] = useState<Canteen | null>(null);
   const activeCanteenIdRef = useRef<string | null>(null);
   const hasHydratedCanteenRef = useRef(false);
@@ -374,33 +383,22 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const guard = async () => {
-      const { data: { session: s } } = await supabase.auth.getSession();
-      if (!s || !s.user?.email_confirmed_at) {
-        onClose();
-        navigate('/');
-      }
-    };
-    guard();
-  }, [isOpen]);
-
-  const liveRole = profile?.role || null;
-  const displayName = profile?.full_name || profile?.email || user?.email || 'User';
+  const liveRole = effectiveRole;
+  const displayName = effectiveProfile?.full_name || effectiveProfile?.email || user?.email || 'Student';
   const firstLetters = displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
   const firstItemCounter = cart.length > 0 ? cart[0].item.counter_name : '';
   const estimatedPrepTime = cart.length > 0 ? Math.max(...cart.map(c => c.item.prep_time_minutes || 15)) : 15;
 
+  const currentInstId = effectiveInstitutionData?.institution_id || profile?.institution_id;
+
   useEffect(() => {
     if (!isOpen) return;
-    if (!user) return;
+    if (!effectiveUserId) return;
     const load = async () => {
       setLoading(true); setError(null);
       try {
-        await refreshProfile();
-        const currentProfile = profile;
-        const instId = currentProfile?.institution_id;
+        if (user) await refreshProfile();
+        const instId = effectiveInstitutionData?.institution_id || profile?.institution_id;
 
           // Fetch banners
           const { data: bData } = await supabase.from('banners').select('*').eq('is_active', true).order('display_order', { ascending: true });
@@ -414,7 +412,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           const { data: cData } = await countersQuery;
           setCountersList((cData || []) as any[]);
 
-         // Fetch user favorites
+         // Fetch user favorites (only for authenticated users)
            if (user?.id) {
              const favIds = await fetchUserFavorites(user.id);
              setFavorites(new Set(favIds));
@@ -425,10 +423,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
              setCanteens(canteenResult);
 
              // Restore active canteen from localStorage (validated against live canteens)
-             const savedCanteenKey = `foodexa-active-canteen-${user?.id}`;
+             const savedCanteenKey = `foodexa-active-canteen-${effectiveUserId}`;
              const savedCanteenRaw = localStorage.getItem(savedCanteenKey);
              let resolvedCanteen: Canteen | null = null;
-             if (savedCanteenRaw && user?.id) {
+             if (savedCanteenRaw && effectiveUserId) {
                try {
                  const saved = JSON.parse(savedCanteenRaw) as { id: string };
                  const match = canteenResult.find((c: Canteen) => c.id === saved.id && isCanteenVisible(c));
@@ -456,7 +454,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
            }
            const menuResult = await menuQuery;
 
-           // Fetch user addresses
+           // Fetch user addresses (only for authenticated users)
            if (user?.id) {
              const addresses = await fetchUserAddresses(user.id);
              setUserAddresses(addresses);
@@ -478,13 +476,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           setUnreadNotif(notifs.filter(n => !n.read).length);
         }
 
-        // Fetch institution name — prefer AuthContext (already loaded), fallback to direct query
-        if (institutionData?.institution_name) {
-          const nameField = institutionData.institution_name;
-          setInstitutionName(`${nameField}${institutionData.campus ? ` · ${institutionData.campus}` : ''}`);
-          setInstitutionCode(institutionData.institution_code || '');
-          setInstitutionCampus(institutionData.campus || '');
-          setInstitutionCity(institutionData.city || '');
+        // Set institution name from effective data
+        if (effectiveInstitutionData?.institution_name) {
+          const nameField = effectiveInstitutionData.institution_name;
+          setInstitutionName(`${nameField}${effectiveInstitutionData.campus ? ` · ${effectiveInstitutionData.campus}` : ''}`);
+          setInstitutionCode(effectiveInstitutionData.institution_code || '');
+          setInstitutionCampus(effectiveInstitutionData.campus || '');
+          setInstitutionCity(effectiveInstitutionData.city || '');
         } else if (instId) {
           const { data: inst } = await supabase
             .from('institutions')
@@ -500,7 +498,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           }
         }
 
-        // Fetch user cart
+        // Fetch user cart (only for authenticated users)
         if (user?.id) {
           const loadedCart = await fetchUserCart(user.id);
           if (loadedCart.length > 0) {
@@ -516,11 +514,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     load();
 
     const unsubMenu = subscribeMenuItems((payload: any) => {
-      const instId = profile?.institution_id;
       const activeCId = activeCanteenIdRef.current;
       const record = payload.new || payload.old || {};
       // Scope by institution
-      if (instId && record.institution_id && record.institution_id !== instId) return;
+      if (currentInstId && record.institution_id && record.institution_id !== currentInstId) return;
       // Scope by active canteen (when set)
       if (activeCId && record.canteen_id && record.canteen_id !== activeCId) return;
 
@@ -531,7 +528,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       } else if (payload.eventType === 'DELETE') {
         setMenuItems((prev) => prev.filter((i) => i.id !== String(payload.old.id)));
       }
-    }, profile?.institution_id ? { institution_id: profile.institution_id } : undefined);
+    }, currentInstId ? { institution_id: currentInstId } : undefined);
     const unsubNotif = subscribeAnnouncements((payload: any) => {
       if (payload.eventType === 'INSERT') {
         setNotifications((prev) => [{
@@ -563,9 +560,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
     // Live notification subscription for order status updates
     const unsubOrderNotifs = subscribeOrders((payload: any) => {
-      if (!payload?.new || !user?.id) return;
+      if (!payload?.new || !effectiveUserId) return;
       const record = payload.new;
-      if (record.student_id && record.student_id !== user.id) return;
+      if (record.student_id && record.student_id !== effectiveUserId) return;
 
       const statusMap: Record<string, string> = {
         accepted: 'Order Accepted',
@@ -597,11 +594,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
        if (triggerToast && ['accepted', 'preparing', 'ready', 'completed'].includes(record.status)) {
          triggerToast(notifTitle, notifMsg, record.status === 'completed' ? 'success' : 'info');
        }
-     }, { user_id: user?.id });
+     }, { user_id: effectiveUserId });
 
      // Realtime canteens subscription
      const unsubCanteens = subscribeCanteens((payload: any) => {
-       const currentInstId = profile?.institution_id;
        if (!currentInstId) return;
        if (payload.eventType === 'INSERT' && payload.new?.institution_id === currentInstId && isCanteenVisible(payload.new)) {
          setCanteens((prev) => [...prev, payload.new]);
@@ -614,7 +610,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
          if (activeCanteenIdRef.current === payload.new.id && !isCanteenVisible(payload.new)) {
            setActiveCanteen(null);
            activeCanteenIdRef.current = null;
-           localStorage.removeItem(`foodexa-active-canteen-${user?.id}`);
+           localStorage.removeItem(`foodexa-active-canteen-${effectiveUserId}`);
            triggerToast?.('Canteen Unavailable', 'Your selected canteen is no longer available. Showing all canteens.', 'warning');
          }
        } else if (payload.eventType === 'DELETE') {
@@ -622,13 +618,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
          if (activeCanteenIdRef.current === payload.old.id) {
            setActiveCanteen(null);
            activeCanteenIdRef.current = null;
-           localStorage.removeItem(`foodexa-active-canteen-${user?.id}`);
+           localStorage.removeItem(`foodexa-active-canteen-${effectiveUserId}`);
            triggerToast?.('Canteen Unavailable', 'Your selected canteen has been removed. Showing all canteens.', 'warning');
          }
        }
-     }, profile?.institution_id || undefined);
+     }, currentInstId || undefined);
 
-     // Realtime user addresses subscription
+     // Realtime user addresses subscription (only for authenticated users)
      let unsubAddresses: (() => void) | undefined;
      if (user?.id) {
        unsubAddresses = subscribeUserAddresses(user.id, (payload: any) => {
@@ -642,11 +638,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
        });
      }
 
-     return () => { unsubMenu(); unsubNotif(); unsubBanners(); unsubCounters(); unsubOrderNotifs(); unsubCanteens(); if (unsubAddresses) unsubAddresses(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, profile?.institution_id, user?.id]);
+      return () => { unsubMenu(); unsubNotif(); unsubBanners(); unsubCounters(); unsubOrderNotifs(); unsubCanteens(); if (unsubAddresses) unsubAddresses(); };
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [isOpen, currentInstId, effectiveUserId]);
 
-  // Sync cart to Supabase when it changes
+  // Sync cart to Supabase when it changes (only for authenticated users)
   useEffect(() => {
     if (user?.id && !loading) {
       const timer = setTimeout(() => {
@@ -849,28 +845,34 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   // Order is ONLY created in Supabase AFTER payment succeeds.
   // Institution never sees unpaid orders.
   const handlePlaceOrder = async () => {
-    if (!user?.id || !profile?.email) { setError('Sign in required.'); return; }
-    if (!liveRole) { setError('Profile role missing.'); return; }
+    if (!effectiveUserId) { setError('Session error. Please rejoin.'); return; }
+    if (!effectiveRole) { setError('Role missing.'); return; }
     if (!cart.length) return;
 
     setSubmittingOrder(true); setError(null);
 
-    // Re-fetch institution_id fresh from DB — React state may be stale
-    const { data: freshProfileRow, error: profileFetchError } = await supabase
-      .from('profiles')
-      .select('institution_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    // Get institution_id — from profile (auth) or visitor session
+    let liveInstitutionId: string | null = null;
+    if (user?.id) {
+      // Re-fetch institution_id fresh from DB — React state may be stale
+      const { data: freshProfileRow, error: profileFetchError } = await supabase
+        .from('profiles')
+        .select('institution_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-    if (profileFetchError) {
-      const msg = 'Unable to verify your profile. Please try again.';
-      setError(msg);
-      if (triggerToast) triggerToast('Profile Error', msg, 'warning');
-      setSubmittingOrder(false);
-      return;
+      if (profileFetchError) {
+        const msg = 'Unable to verify your profile. Please try again.';
+        setError(msg);
+        if (triggerToast) triggerToast('Profile Error', msg, 'warning');
+        setSubmittingOrder(false);
+        return;
+      }
+      liveInstitutionId = freshProfileRow?.institution_id || profile?.institution_id || null;
+    } else {
+      // Visitor session — institution from visitor session
+      liveInstitutionId = visitorSession.institution?.institution_id || null;
     }
-
-    const liveInstitutionId = freshProfileRow?.institution_id || profile?.institution_id || null;
 
     if (!liveInstitutionId) {
       const msg = 'You must join an institution before placing an order.';
@@ -904,13 +906,16 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
        }));
 
       // ── STEP 1: Create Razorpay order (NO Supabase write yet) ──────────
+      const customerEmail = effectiveProfile?.email || `${effectiveUserId}@foodexa.guest`;
+      const customerName = effectiveProfile?.full_name || (effectiveRole ? effectiveRole.charAt(0).toUpperCase() + effectiveRole.slice(1) : 'Guest');
+      const customerPhone = effectiveProfile?.phone || '0000000000';
       const razorpayResult = await createRazorpayOrder({
         amount: cartGrandTotal,
         currency: 'INR',
-        user_id: user.id,
-        email: profile.email,
-        phone: profile.phone || undefined,
-        name: profile.full_name || undefined,
+        user_id: effectiveUserId,
+        email: customerEmail,
+        phone: customerPhone,
+        name: customerName,
         institution_id: liveInstitutionId,
         order_id: tempReceiptId,
         items: itemsForBackend,
@@ -946,7 +951,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               razorpay_order_id,
               razorpay_payment_id,
               razorpay_signature,
-              user_id: user.id,
+              user_id: effectiveUserId,
               order_id: tempReceiptId,
             });
 
@@ -963,11 +968,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             // ── STEP 4: Create order + order_items in Supabase ──────────
             // Only now does the institution see the order
             const createResult = await createOrderAfterPayment({
-              user_id: user.id,
-              email: profile.email,
-              role: liveRole,
-              customer_name: profile.full_name || user.email?.split('@')[0] || 'Customer',
-              phone: profile.phone || '0000000000',
+              user_id: effectiveUserId,
+              email: customerEmail,
+              role: effectiveRole,
+              customer_name: customerName,
+              phone: customerPhone,
               institution_id: liveInstitutionId,
               canteen_id: cart[0]?.item.canteen_id || cart[0]?.item.counter_id || null,
               items: itemsForBackend,
@@ -1043,7 +1048,16 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   };
 
   const handleSignOut = async () => {
-    await signOut();
+    if (user) {
+      await signOut();
+    } else {
+      // Visitor session — just clear the visitor session
+      leaveVisitorInstitution();
+      // Clear visitor-specific localStorage
+      if (visitorSession.visitorId) {
+        localStorage.removeItem(`foodexa-active-canteen-${visitorSession.visitorId}`);
+      }
+    }
     onClose();
     navigate('/', { replace: true });
   };
@@ -1084,14 +1098,26 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const handleLeaveInstitution = async () => {
     setLeavingInstitution(true);
     setLeaveInstitutionMessage(null);
-    const { error } = await leaveInstitution();
-    if (error) {
-      setLeaveInstitutionMessage(error.message || 'Failed to leave institution. Please try again.');
+    if (user) {
+      const { error } = await leaveInstitution();
+      if (error) {
+        setLeaveInstitutionMessage(error.message || 'Failed to leave institution. Please try again.');
+      } else {
+        setLeaveInstitutionMessage('Success! You have left your institution. You can join another institution anytime.');
+        setInstitutionName('');
+        setInstitutionCode('');
+        await refreshProfile();
+        setTimeout(() => {
+          setShowLeaveInstitution(false);
+          setLeaveInstitutionMessage(null);
+        }, 2000);
+      }
     } else {
-      setLeaveInstitutionMessage('Success! You have left your institution. You can join another institution anytime.');
+      // Visitor session — clear visitor institution
+      leaveVisitorInstitution();
       setInstitutionName('');
       setInstitutionCode('');
-      await refreshProfile();
+      setLeaveInstitutionMessage('Success! You have left the institution. You can join another institution anytime.');
       setTimeout(() => {
         setShowLeaveInstitution(false);
         setLeaveInstitutionMessage(null);
@@ -1232,11 +1258,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 )}
 
                 {activeTab === 'history' && (
-                  <HistoryTab 
+                  <HistoryTab
                     pastOrders={pastOrders}
                     institutionName={institutionName}
-                    userId={user?.id || ''}
-                    studentName={profile?.full_name || user?.email}
+                    userId={effectiveUserId}
+                    studentName={effectiveProfile?.full_name || user?.email}
                     triggerToast={triggerToast}
                     onReorder={(order) => {
                       order.items.forEach((item) => {
@@ -1269,14 +1295,16 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
                 {activeTab === 'profile' && (
                   <ProfileTab
-                    profile={profile}
+                    profile={effectiveProfile}
                     userEmail={user?.email}
-                    institutionData={institutionData}
+                    institutionData={effectiveInstitutionData}
                     institutionName={institutionName}
                     canteens={canteens}
                     activeCanteenName={activeCanteen?.name || null}
-                    onSignOut={() => signOut()}
+                    isVisitor={isVisitor}
+                    onSignOut={handleSignOut}
                     onSwitchCanteen={() => setShowSwitchCanteen(true)}
+                    onSwitchInstitution={() => setShowSwitchInstitution(true)}
                     triggerToast={triggerToast}
                   />
                 )}
@@ -1851,11 +1879,35 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         onSelect={(canteen) => {
           setActiveCanteen(canteen);
           activeCanteenIdRef.current = canteen.id;
-          localStorage.setItem(`foodexa-active-canteen-${user?.id}`, JSON.stringify({ id: canteen.id }));
+          localStorage.setItem(`foodexa-active-canteen-${effectiveUserId}`, JSON.stringify({ id: canteen.id }));
           setCart([]);
           triggerToast?.('Canteen Switched', `${canteen.name} is now selected.`, 'success');
         }}
         currentCanteenId={activeCanteen?.id || null}
+      />
+
+      {/* ── SWITCH INSTITUTION MODAL ──────────────────────────────── */}
+      <SwitchInstitutionModal
+        isOpen={showSwitchInstitution}
+        onClose={() => setShowSwitchInstitution(false)}
+        onSwitch={async (code) => {
+          if (user) {
+            return await switchInstitution(code);
+          }
+          // Visitor session — validate and switch
+          const { error, data } = await validateInstitutionCodeForVisitor(code);
+          if (error || !data) {
+            return { error: error || 'Invalid institution code.' };
+          }
+          // Update visitor session with new institution
+          joinInstitutionAsVisitor(data, visitorSession.role || 'student');
+          // Clear active canteen
+          setActiveCanteen(null);
+          activeCanteenIdRef.current = null;
+          localStorage.removeItem(`foodexa-active-canteen-${effectiveUserId}`);
+          return { error: null };
+        }}
+        currentInstitutionName={institutionName}
       />
 
       {/* ── LEAVE INSTITUTION MODAL ──────────────────────────────── */}

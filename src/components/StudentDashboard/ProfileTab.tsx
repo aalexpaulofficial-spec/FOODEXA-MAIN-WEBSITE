@@ -14,8 +14,10 @@ interface ProfileTabProps {
   institutionName: string;
   canteens: Canteen[];
   activeCanteenName?: string | null;
+  isVisitor?: boolean;
   onSignOut: () => void;
   onSwitchCanteen?: () => void;
+  onSwitchInstitution?: () => void;
   triggerToast?: (title: string, description: string, type?: 'success' | 'warning' | 'info' | 'ai' | 'error') => void;
 }
 
@@ -44,14 +46,16 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
   institutionName,
   canteens,
   activeCanteenName,
+  isVisitor,
   onSignOut,
   onSwitchCanteen,
+  onSwitchInstitution,
   triggerToast,
 }) => {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
 
-  const displayName = profile?.full_name || 'Student';
+  const displayName = profile?.full_name || (isVisitor ? 'Visitor' : 'Student');
   const displayEmail = profile?.email || userEmail || '';
   const displayInstitution = institutionData?.institution_name || '';
   const displayCampus = institutionData?.campus || '';
@@ -65,7 +69,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
 
   const detailRows: Array<{ label: string; value: string; icon: React.ReactNode }> = [
     ...(hasValue(profile?.full_name) ? [{ label: 'Student Name', value: profile!.full_name!, icon: <User className="w-4 h-4" /> }] : []),
-    ...(hasValue(displayEmail) ? [{ label: 'Email', value: displayEmail, icon: <Mail className="w-4 h-4" /> }] : []),
+    ...(!isVisitor && hasValue(displayEmail) ? [{ label: 'Email', value: displayEmail, icon: <Mail className="w-4 h-4" /> }] : []),
     ...(hasValue(profile?.phone) ? [{ label: 'Phone', value: profile!.phone!, icon: <Phone className="w-4 h-4" /> }] : []),
     ...(hasValue(displayInstitution) ? [{ label: 'Institution', value: displayInstitution, icon: <Building2 className="w-4 h-4" /> }] : []),
     ...(hasValue(profile?.department) ? [{ label: 'Department', value: profile!.department!, icon: <GraduationCap className="w-4 h-4" /> }] : []),
@@ -73,8 +77,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
     ...(hasValue(profile?.semester) ? [{ label: 'Semester', value: profile!.semester!, icon: <Calendar className="w-4 h-4" /> }] : []),
     ...(hasValue(profile?.campus_block) ? [{ label: 'Campus', value: profile!.campus_block!, icon: <MapPin className="w-4 h-4" /> }] : []),
     ...(hasValue(profile?.designation) ? [{ label: 'Registration No.', value: profile!.designation!, icon: <Hash className="w-4 h-4" /> }] : []),
-    ...(hasValue(profile?.user_id) ? [{ label: 'Student ID', value: profile!.user_id.slice(-6).toUpperCase(), icon: <Shield className="w-4 h-4" /> }] : []),
-    ...(hasValue(accountCreated) ? [{ label: 'Account Created', value: formatDate(accountCreated), icon: <Clock className="w-4 h-4" /> }] : []),
+    ...(!isVisitor && hasValue(profile?.user_id) ? [{ label: 'Student ID', value: profile!.user_id.slice(-6).toUpperCase(), icon: <Shield className="w-4 h-4" /> }] : []),
+    ...(!isVisitor && hasValue(accountCreated) ? [{ label: 'Account Created', value: formatDate(accountCreated), icon: <Clock className="w-4 h-4" /> }] : []),
   ];
 
   return (
@@ -162,27 +166,47 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
             </div>
           </div>
 
-          {/* ── SWITCH CANTEEN ── */}
-          <button
-            onClick={() => onSwitchCanteen?.()}
-            className="w-full glass-card dark:glass-card-dark rounded-[24px] p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-[12px] bg-[#0071E3]/10 dark:bg-[#0071E3]/15 flex items-center justify-center">
-                <Coffee className="w-5 h-5 text-[#0071E3]" />
+          {/* ── SWITCH INSTITUTION (visitors) / SWITCH CANTEEN (auth) ── */}
+          {isVisitor ? (
+            <button
+              onClick={() => onSwitchInstitution?.()}
+              className="w-full glass-card dark:glass-card-dark rounded-[24px] p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-[12px] bg-[#0071E3]/10 dark:bg-[#0071E3]/15 flex items-center justify-center">
+                  <Building2 className="w-5 h-5 text-[#0071E3]" />
+                </div>
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-semibold text-[#1D1D1F] dark:text-white">Switch Institution</span>
+                  {displayInstitution && (
+                    <span className="text-[11px] text-[#86868B] dark:text-[#A1A1A6] mt-0.5">Currently: {displayInstitution}</span>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-col items-start">
-                <span className="text-sm font-semibold text-[#1D1D1F] dark:text-white">Switch Canteen</span>
-                {activeCanteenName && (
-                  <span className="text-[11px] text-[#86868B] dark:text-[#A1A1A6] mt-0.5">Currently: {activeCanteenName}</span>
-                )}
-                {!activeCanteenName && canteens.length > 0 && (
-                  <span className="text-[11px] text-[#86868B] dark:text-[#A1A1A6] mt-0.5">All Canteens</span>
-                )}
+              <ChevronRight className="w-4 h-4 text-[#86868B] dark:text-[#86868B] group-hover:text-[#1D1D1F] dark:group-hover:text-white transition-colors" />
+            </button>
+          ) : (
+            <button
+              onClick={() => onSwitchCanteen?.()}
+              className="w-full glass-card dark:glass-card-dark rounded-[24px] p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-[12px] bg-[#0071E3]/10 dark:bg-[#0071E3]/15 flex items-center justify-center">
+                  <Coffee className="w-5 h-5 text-[#0071E3]" />
+                </div>
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-semibold text-[#1D1D1F] dark:text-white">Switch Canteen</span>
+                  {activeCanteenName && (
+                    <span className="text-[11px] text-[#86868B] dark:text-[#A1A1A6] mt-0.5">Currently: {activeCanteenName}</span>
+                  )}
+                  {!activeCanteenName && canteens.length > 0 && (
+                    <span className="text-[11px] text-[#86868B] dark:text-[#A1A1A6] mt-0.5">All Canteens</span>
+                  )}
+                </div>
               </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-[#86868B] dark:text-[#86868B] group-hover:text-[#1D1D1F] dark:group-hover:text-white transition-colors" />
-          </button>
+              <ChevronRight className="w-4 h-4 text-[#86868B] dark:text-[#86868B] group-hover:text-[#1D1D1F] dark:group-hover:text-white transition-colors" />
+            </button>
+          )}
 
           {/* ── PRIVACY & POLICY ── */}
           <button
@@ -212,13 +236,13 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
             <ChevronRight className="w-4 h-4 text-[#86868B] dark:text-[#86868B] group-hover:text-[#1D1D1F] dark:group-hover:text-white transition-colors" />
           </button>
 
-          {/* ── LOG OUT ── */}
+          {/* ── LOG OUT / LEAVE INSTITUTION ── */}
           <button
             onClick={onSignOut}
             className="w-full py-4 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 font-bold rounded-[20px] text-sm flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors border border-red-200/60 dark:border-red-900/40"
           >
             <LogOut className="w-4 h-4" />
-            Log Out
+            {isVisitor ? 'Leave Institution' : 'Log Out'}
           </button>
 
           {/* ── SUPPORT ── */}

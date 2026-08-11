@@ -21,6 +21,7 @@ import { BookDemoModal } from './components/BookDemoModal';
 import { RoleSelectionModal } from './components/RoleSelectionModal';
 import { InstitutionRegistrationModal } from './components/InstitutionRegistrationModal';
 import { AuthModal } from './components/AuthModal';
+import { StartFoodexaModal } from './components/StartFoodexaModal';
 import { JoinInstitutionModal } from './components/JoinInstitutionModal';
 import { StudentPortalModal } from './components/StudentPortalModal';
 import { InstitutionDashboardModal } from './components/InstitutionDashboardModal';
@@ -49,6 +50,7 @@ export default function App() {
   const [isBookDemoOpen, setIsBookDemoOpen] = useState(false);
   const [isInstitutionRegistrationOpen, setIsInstitutionRegistrationOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isStartFoodexaOpen, setIsStartFoodexaOpen] = useState(false);
   const [authInitialMode, setAuthInitialMode] = useState<'login' | 'create'>('login');
   const [isDownloadOpen, setIsDownloadOpen] = useState(false);
   const [isPortalAccessOpen, setIsPortalAccessOpen] = useState(false);
@@ -465,6 +467,24 @@ export default function App() {
           }
           const dashRoute = getDashboardRoute(liveProfile?.role || null) || '/student-dashboard';
           navigate(dashRoute, { replace: true });
+        }}
+      />
+
+      <StartFoodexaModal
+        isOpen={isStartFoodexaOpen}
+        onClose={() => setIsStartFoodexaOpen(false)}
+        onGoogleSignInStart={() => {
+          setIsStartFoodexaOpen(false);
+          setAuthInitialMode('login');
+          setIsAuthOpen(true);
+        }}
+        onLoginSuccess={({ role, institution }) => {
+          setIsStartFoodexaOpen(false);
+        }}
+        onOpenLogin={() => {
+          setIsStartFoodexaOpen(false);
+          setAuthInitialMode('login');
+          setIsAuthOpen(true);
         }}
       />
 

@@ -36,6 +36,7 @@ import { ScrollProgress } from './components/ScrollProgress';
 import { Footer } from './components/Footer';
 import { Sparkles, Mic } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
+import { supabase } from './lib/supabase';
 import type { Profile, UserRole } from './types';
 
 type AccountRole = 'student' | 'faculty' | 'guest';
@@ -270,7 +271,8 @@ export default function App() {
     setIsAuthOpen(false);
     setIsPortalAccessOpen(false);
     setIsRoleSelectionOpen(false);
-    setIsJoinInstitutionOpen(true);
+    setIsJoinInstitutionOpen(false);
+    setIsStartFoodexaOpen(true);
   };
 
   const handleRoleSelected = (role: AccountRole) => {
@@ -473,13 +475,22 @@ export default function App() {
       <StartFoodexaModal
         isOpen={isStartFoodexaOpen}
         onClose={() => setIsStartFoodexaOpen(false)}
-        onGoogleSignInStart={() => {
-          setIsStartFoodexaOpen(false);
-          setAuthInitialMode('login');
-          setIsAuthOpen(true);
+        onGoogleSignInStart={async () => {
+          const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+              redirectTo: `${window.location.origin}/student-login`,
+            },
+          });
+          if (error) {
+            addToast('Google Sign-In Failed', 'Unable to start Google Sign-In. Please try again.', 'warning');
+          }
         }}
-        onLoginSuccess={({ role, institution }) => {
+        onDirectAccessSuccess={({ role }) => {
           setIsStartFoodexaOpen(false);
+          restoredDashboardRef.current = true;
+          openVisitorPortal(role);
+          navigate('/student-dashboard', { replace: true });
         }}
         onOpenLogin={() => {
           setIsStartFoodexaOpen(false);

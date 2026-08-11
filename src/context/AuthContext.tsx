@@ -4,6 +4,7 @@ import { User, Session } from '@supabase/supabase-js';
 import type { UserRole, Profile, InstitutionData } from '../types';
 
 export interface DirectSession {
+  session_id: string;
   temporarySessionId: string;
   institutionId: string;
   institutionName: string;
@@ -726,9 +727,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { error: null, profile: fetchedProfile, institution: instData };
       }
 
-      // 3. Otherwise (Direct Login): create temporary frontend session (NO Supabase auth)
+      // 3. Otherwise (Direct Access): create temporary frontend session (NO Supabase auth)
+      const sessionId = crypto.randomUUID();
       const tempSession: DirectSession = {
-        temporarySessionId: crypto.randomUUID(),
+        session_id: sessionId,
+        temporarySessionId: sessionId,
         institutionId: instData.institution_id,
         institutionName: instData.institution_name,
         institutionCode: instData.institution_code,
@@ -806,8 +809,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       // 3. Otherwise (Direct Access): create temporary frontend session (NO Supabase auth)
+      const sessionId = crypto.randomUUID();
       const tempSession: DirectSession = {
-        temporarySessionId: crypto.randomUUID(),
+        session_id: sessionId,
+        temporarySessionId: sessionId,
         institutionId: instData.institution_id,
         institutionName: instData.institution_name,
         institutionCode: instData.institution_code,

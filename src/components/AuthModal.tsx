@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { X, Lock, User, ArrowRight, ArrowLeft, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2, RefreshCw, GraduationCap } from 'lucide-react';
+import { X, Lock, User, ArrowRight, ArrowLeft, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { UserRole, Profile } from '../types';
@@ -36,20 +36,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onBack,
   onDirectLogin,
 }) => {
-  const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile, joinWithCodeRoleName } = useAuth();
+  const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
   const [mode, setMode] = useState<'login' | 'create' | 'quick'>(initialMode);
   const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success'>('form');
   const [loginUserId, setLoginUserId] = useState<string | null>(null);
   const selectedAccountRole: AccountRole = ACCOUNT_ROLES.includes(selectedRole as AccountRole) ? (selectedRole as AccountRole) : 'student';
 
   // Login state
-  const [quickCode, setQuickCode] = useState('');
-  const [isQuickLoading, setIsQuickLoading] = useState(false);
-  const [quickError, setQuickError] = useState<string | null>(null);
-  const [loginInstitutionCode, setLoginInstitutionCode] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
 
@@ -249,26 +244,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
 
-  const handleQuickAccess = async () => {
-    setQuickError(null);
-    if (!quickCode.trim()) {
-      setQuickError('Please enter an institution code');
-      return;
-    }
-    setIsQuickLoading(true);
-    const { error, profile, institution } = await joinWithCodeRoleName(quickCode.trim(), selectedAccountRole, selectedAccountRole);
-    setIsQuickLoading(false);
-
-    if (error || !profile) {
-      setQuickError(error || 'Invalid code');
-    } else {
-      setStep('success');
-      if (onLoginSuccess) {
-        onLoginSuccess({ profile, institution: institution || null });
-      }
-    }
-  };
-
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
 
@@ -400,8 +375,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
    const handleLoginSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (isLoginSubmitting) return;
-      setIsLoginSubmitting(true);
-      const instCode = loginInstitutionCode.trim().toUpperCase();
       const normalizedLoginEmail = (loginEmail || '').trim().toLowerCase();
       setCurrentEmail(normalizedLoginEmail);
       setLoginError(null);
@@ -409,11 +382,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setStep('form');
 
       // 1. Validate required input
-      if (!instCode) {
-        setLoginError('Please enter your Institution Code.');
-        setIsLoginSubmitting(false);
-        return;
-      }
       if (!normalizedLoginEmail) {
         setLoginError('Please enter your email address.');
         setIsLoginSubmitting(false);
@@ -425,42 +393,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         return;
       }
 
-      // 2. Look up institution code from Supabase
-      console.info('[Auth] Validating institution code:', instCode);
-      const { data: instData, error: instFetchError } = await supabase
-        .from('institutions')
-        .select('id, name, institution_name, campus, city, state, country, institution_code, status')
-        .eq('institution_code', instCode)
-        .maybeSingle();
-
-      // 3. Confirm institution exists
-      if (instFetchError || !instData) {
-        setLoginError('That institution code was not found. Please check and try again.');
-        setIsLoginSubmitting(false);
-        return;
-      }
-
-      // 4. Confirm institution status is active
-      if (instData.status && instData.status !== 'active') {
-        setLoginError('This institution is currently unavailable. Please contact your institution administrator.');
-        setIsLoginSubmitting(false);
-        return;
-      }
-
-      const institution: InstitutionData = {
-        institution_id: instData.id,
-        institution_name: instData.institution_name || instData.name || '',
-        campus: instData.campus || '',
-        city: instData.city || '',
-        state: instData.state || '',
-        country: instData.country || '',
-        institution_code: instData.institution_code,
-      };
-
-      console.info('[Auth] Institution verified:', institution.institution_name, '| Login attempt for:', normalizedLoginEmail);
-
-      // 5. Authenticate email/password using Supabase Auth
-      // 6. Get auth.uid
+      setIsLoginSubmitting(true);
       const { error, user: authUser, profile: liveProfile } = await signIn(normalizedLoginEmail, loginPassword);
 
       if (error) {
@@ -496,20 +429,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       // 8. Confirm profile belongs to the selected institution (informational — update if different)
       setLoginUserId(authUser.id);
 
-      if (liveProfile.institution_id !== institution.institution_id) {
-        console.info('[Auth] Updating profile institution from', liveProfile.institution_id, 'to', institution.institution_id);
-        await supabase
-          .from('profiles')
-          .update({ institution_id: institution.institution_id })
-          .eq('user_id', authUser.id);
-      }
-
-      // 9. Create/load the student's institution session
-      setInstitutionData(institution);
-      setVerifiedInstitution(institution);
-      setValidatedInstitution(institution);
-      setInstitutionVerifyCode(institution.institution_code);
-
       // 10. Navigate to Student Dashboard
       const role = liveProfile.role;
 
@@ -525,7 +444,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setIsLoginSubmitting(false);
         setStep('success');
         if (onLoginSuccess) {
-          onLoginSuccess({ profile: liveProfile, institution });
+          onLoginSuccess({ profile: liveProfile, institution: institutionData });
         }
         return;
       }
@@ -533,7 +452,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setIsLoginSubmitting(false);
       setStep('success');
       if (onLoginSuccess) {
-        onLoginSuccess({ profile: liveProfile, institution });
+        onLoginSuccess({ profile: liveProfile, institution: institutionData });
       }
     };
 
@@ -761,13 +680,75 @@ if (validateError || !validatedInst) {
                     <Lock className="w-3.5 h-3.5" />
                     <span>FOODEXA Login</span>
                   </div>
-                  <h3 className="text-2xl font-bold text-black">Welcome to FOODEXA</h3>
+                  <h3 className="text-2xl font-bold text-black">Welcome Back</h3>
                   <p className="text-xs text-[#86868B] leading-relaxed">
-                    Sign in to access campus dining menus, order food, and track your meals in real time.
+                    Sign in to your FOODEXA account.
                   </p>
                 </div>
 
-                {/* OPTION 1: Continue with Google */}
+                <form onSubmit={handleLoginSubmit} className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-[#515154] mb-1 block">Email</label>
+                    <input
+                      type="email"
+                      required
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full apple-input"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-[#515154] mb-1 block">Password</label>
+                    <input
+                      type="password"
+                      required
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="w-full apple-input"
+                    />
+                  </div>
+
+                  {loginError && (
+                    <div className="p-3 rounded-xl bg-[#FFF0F0] border border-[#FFD6D6] text-xs text-[#FF3B30]">
+                      {loginError}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isLoginSubmitting}
+                    className="w-full btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isLoginSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        <span>Logging in...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Login</span>
+                        <ArrowRight className="w-4 h-4 text-white" />
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                <button
+                  type="button"
+                  className="w-full text-center text-xs font-semibold text-[#0071E3] hover:underline"
+                >
+                  Forgot Password?
+                </button>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <span className="text-[10px] text-[#86868B] font-medium">OR</span>
+                  <div className="flex-1 h-px bg-gray-200" />
+                </div>
+
                 <button
                   type="button"
                   onClick={handleGoogleSignIn}
@@ -788,29 +769,6 @@ if (validateError || !validatedInst) {
                     {isGoogleLoading ? 'Redirecting to Google...' : 'Continue with Google'}
                   </span>
                 </button>
-
-                {/* Divider */}
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px bg-gray-200" />
-                  <span className="text-[10px] text-[#86868B] font-medium">OR</span>
-                  <div className="flex-1 h-px bg-gray-200" />
-                </div>
-
-                {/* OPTION 2: Direct Login */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    if (onDirectLogin) onDirectLogin();
-                  }}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-black text-white text-sm font-semibold hover:bg-gray-800 transition-all cursor-pointer"
-                >
-                  <GraduationCap className="w-4 h-4" />
-                  <span>Direct Login</span>
-                </button>
-                <p className="text-center text-[11px] text-[#86868B] -mt-2">
-                  Enter your Institution Code, Name and Role — no email or password needed.
-                </p>
 
                 {googleError && (
                   <div className="p-3 rounded-xl bg-[#FFF0F0] border border-[#FFD6D6] text-xs text-[#FF3B30]">

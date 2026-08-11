@@ -1195,87 +1195,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 )}
 
                 {activeTab === 'profile' && (
-                  <ProfileTab 
+                  <ProfileTab
                     profile={profile}
                     userEmail={user?.email}
                     institutionData={institutionData}
                     institutionName={institutionName}
-                    userAddresses={userAddresses}
                     canteens={canteens}
                     onSignOut={() => signOut()}
-                    onEditProfileOpen={() => setEditingProfile(true)}
-                     onAddAddress={async (label, address, isDefault) => {
-                       if (!user?.id) return;
-                       const result = await addUserAddress(user.id, { label, address, institution_id: profile?.institution_id || null, is_default: isDefault });
-                       if (result.success) {
-                         const addresses = await fetchUserAddresses(user.id);
-                         setUserAddresses(addresses);
-                         triggerToast?.('Success', 'Delivery spot added', 'success');
-                       } else {
-                         triggerToast?.('Error', result.error || 'Failed to add address', 'error');
-                       }
-                     }}
-                     onUpdateAddress={async (id, label, address, isDefault) => {
-                       const result = await updateUserAddress(id, { label, address, is_default: isDefault });
-                      if (result.success) {
-                        if (user?.id) {
-                          const addresses = await fetchUserAddresses(user.id);
-                          setUserAddresses(addresses);
-                        }
-                        triggerToast?.('Success', 'Delivery spot updated', 'success');
-                      } else {
-                        triggerToast?.('Error', result.error || 'Failed to update address', 'error');
-                      }
-                    }}
-                    onDeleteAddress={async (id) => {
-                      const result = await deleteUserAddress(id);
-                      if (result.success) {
-                        if (user?.id) {
-                          const addresses = await fetchUserAddresses(user.id);
-                          setUserAddresses(addresses);
-                        }
-                        triggerToast?.('Success', 'Delivery spot removed', 'success');
-                      } else {
-                        triggerToast?.('Error', result.error || 'Failed to delete address', 'error');
-                      }
-                    }}
-                    onSetDefaultAddress={async (id) => {
-                      if (!user?.id) return;
-                      const result = await setDefaultAddress(user.id, id);
-                      if (result.success) {
-                        const addresses = await fetchUserAddresses(user.id);
-                        setUserAddresses(addresses);
-                        triggerToast?.('Success', 'Default address updated', 'success');
-                      } else {
-                        triggerToast?.('Error', result.error || 'Failed to set default', 'error');
-                      }
-                    }}
-                    onUploadAvatar={async (file) => {
-                      if (!user?.id) throw new Error('Not authenticated');
-                      const result = await uploadAvatarService(user.id, file);
-                      if (!result.success) throw new Error(result.error || 'Upload failed');
-                      await refreshProfile();
-                    }}
-                    onRemoveAvatar={async () => {
-                      if (!user?.id) return;
-                      const result = await removeAvatarService(user.id);
-                      if (!result.success) throw new Error(result.error || 'Remove failed');
-                      await refreshProfile();
-                    }}
-                    onUpdateDietPreference={async (pref) => {
-                      if (!user?.id) return;
-                      const result = await updateDietPreference(user.id, pref);
-                      if (!result.success) throw new Error(result.error || 'Update failed');
-                      await refreshProfile();
-                    }}
-                    refreshAddresses={async () => {
-                      if (user?.id) {
-                        const addresses = await fetchUserAddresses(user.id);
-                        setUserAddresses(addresses);
-                      }
-                    }}
-                    refreshProfile={refreshProfile}
-                    onSwitchInstitution={() => setShowSwitchInstitution(true)}
                     triggerToast={triggerToast}
                   />
                 )}

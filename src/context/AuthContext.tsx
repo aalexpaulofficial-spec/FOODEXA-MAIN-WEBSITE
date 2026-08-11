@@ -86,7 +86,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
     const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block'];
+        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference', 'wallet_balance', 'total_orders'];
        const safePayload: Record<string, any> = {};
        for (const key of KNOWN_PROFILE_COLUMNS) {
          if (key in payload) {
@@ -111,7 +111,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        return { error: null as Error | null };
      }, []);
 
-   const PROFILE_COLUMNS = 'user_id, email, full_name, phone, role, institution_id, department, semester, programme, campus_block';
+   const PROFILE_COLUMNS = 'user_id, email, full_name, phone, role, institution_id, department, semester, programme, campus_block, designation, avatar_url, diet_preference, wallet_balance, total_orders, created_at, updated_at';
 
     const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
       try {
@@ -126,7 +126,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
          }
 
         if (data) {
-          const fetchedProfile = { ...data, created_at: '', updated_at: '' } as Profile;
+          const fetchedProfile = { ...data } as Profile;
           setProfile(fetchedProfile);
           await loadInstitutionForProfile(fetchedProfile);
           return fetchedProfile;
@@ -172,7 +172,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return null;
         }
 
-        const createdProfile = { ...newProfile, created_at: '', updated_at: '' } as Profile;
+        const createdProfile = { ...newProfile } as Profile;
         setProfile(createdProfile);
         await loadInstitutionForProfile(createdProfile);
         return createdProfile;

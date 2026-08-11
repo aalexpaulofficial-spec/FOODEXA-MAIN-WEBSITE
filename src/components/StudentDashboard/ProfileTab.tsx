@@ -1,33 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  Building2, MapPin, LogOut, User, Mail, Phone, Edit3, Save, X,
-  ChevronRight, Globe, FileText, Shield, Hash, GraduationCap,
-  Plus, Trash2, Star, Loader2, Calendar
+  Building2, MapPin, LogOut, User, Mail, Phone, Shield,
+  ChevronRight, FileText, Coffee, Clock, Calendar,
+  GraduationCap, Hash, CreditCard
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { Profile, InstitutionData, UserAddress, Canteen, DietPreference } from '../../types';
-import { supabase } from '../../lib/supabase';
+import type { Profile, InstitutionData, Canteen } from '../../types';
 
 interface ProfileTabProps {
   profile: Profile | null;
   userEmail?: string | null;
   institutionData: InstitutionData | null;
   institutionName: string;
-  userAddresses: UserAddress[];
   canteens: Canteen[];
   onSignOut: () => void;
-  onEditProfileOpen: () => void;
-  onAddAddress: (label: string, address: string, isDefault: boolean) => Promise<void>;
-  onUpdateAddress: (id: string, label: string, address: string, isDefault: boolean) => Promise<void>;
-  onDeleteAddress: (id: string) => Promise<void>;
-  onSetDefaultAddress: (id: string) => Promise<void>;
-  onUploadAvatar: (file: File) => Promise<void>;
-  onRemoveAvatar: () => Promise<void>;
-  onUpdateDietPreference: (pref: DietPreference) => Promise<void>;
-  refreshAddresses: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
-  onSwitchInstitution: () => void;
   triggerToast?: (title: string, description: string, type?: 'success' | 'warning' | 'info' | 'ai' | 'error') => void;
+}
+
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch {
+    return '';
+  }
+}
+
+function getInitials(name: string | null | undefined, email: string | null | undefined): string {
+  if (name && name.trim()) {
+    return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  }
+  return (email?.[0] || 'S').toUpperCase();
 }
 
 export const ProfileTab: React.FC<ProfileTabProps> = ({
@@ -35,378 +40,357 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
   userEmail,
   institutionData,
   institutionName,
-  userAddresses,
   canteens,
   onSignOut,
-  onEditProfileOpen,
-  onAddAddress,
-  onUpdateAddress,
-  onDeleteAddress,
-  onSetDefaultAddress,
-  onUploadAvatar,
-  onRemoveAvatar,
-  onUpdateDietPreference,
-  refreshAddresses,
-  refreshProfile,
-  onSwitchInstitution,
   triggerToast,
 }) => {
-  const [showAddressModal, setShowAddressModal] = useState(false);
-  const [editingAddress, setEditingAddress] = useState<UserAddress | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [showCanteenPicker, setShowCanteenPicker] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   const displayName = profile?.full_name || 'Student';
   const displayEmail = profile?.email || userEmail || '';
-  const displayInstitution = institutionData?.institution_name || institutionName || '';
+  const displayInstitution = institutionData?.institution_name || '';
   const displayCampus = institutionData?.campus || '';
-  const firstLetter = displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const displayCity = institutionData?.city || '';
 
-  const handleAvatarUpload = async (file: File) => {
-    setIsUploading(true);
-    try {
-      await onUploadAvatar(file);
-      triggerToast?.('Success', 'Profile picture updated', 'success');
-      await refreshProfile();
-    } catch (err: any) {
-      triggerToast?.('Error', err?.message || 'Failed to upload photo', 'error');
-    } finally {
-      setIsUploading(false);
-    }
+  const accountCreated = profile?.created_at || '';
+
+  const hasValue = (val: string | null | undefined): boolean => {
+    return !!val && val.trim().length > 0;
   };
 
-  const handleDietChange = async (pref: DietPreference) => {
-    try {
-      await onUpdateDietPreference(pref);
-      triggerToast?.('Updated', 'Diet preference saved', 'success');
-    } catch (err: any) {
-      triggerToast?.('Error', err?.message || 'Failed to update diet preference', 'error');
-    }
-  };
-
-  const currentPref = profile?.diet_preference || 'all';
-
-  const profileFields = [
-    { label: 'Student Name', value: profile?.full_name, icon: User },
-    { label: 'Email', value: profile?.email || userEmail, icon: Mail },
-    { label: 'Phone', value: profile?.phone, icon: Phone },
-    { label: 'Institution', value: displayInstitution, icon: Building2 },
-    { label: 'Department', value: profile?.department, icon: GraduationCap },
-    { label: 'Programme', value: profile?.programme, icon: GraduationCap },
-    { label: 'Semester', value: profile?.semester, icon: Calendar },
-    { label: 'Campus', value: displayCampus || profile?.campus_block, icon: MapPin },
-    { label: 'Student ID', value: profile?.user_id?.slice(-8).toUpperCase(), icon: Shield },
-    { label: 'Registration No.', value: profile?.designation, icon: Hash },
-  ].filter(f => f.value && String(f.value).trim());
+  const detailRows: Array<{ label: string; value: string; icon: React.ReactNode }> = [
+    ...(hasValue(profile?.full_name) ? [{ label: 'Student Name', value: profile!.full_name!, icon: <User className="w-4 h-4" /> }] : []),
+    ...(hasValue(displayEmail) ? [{ label: 'Email', value: displayEmail, icon: <Mail className="w-4 h-4" /> }] : []),
+    ...(hasValue(profile?.phone) ? [{ label: 'Phone', value: profile!.phone!, icon: <Phone className="w-4 h-4" /> }] : []),
+    ...(hasValue(displayInstitution) ? [{ label: 'Institution', value: displayInstitution, icon: <Building2 className="w-4 h-4" /> }] : []),
+    ...(hasValue(profile?.department) ? [{ label: 'Department', value: profile!.department!, icon: <GraduationCap className="w-4 h-4" /> }] : []),
+    ...(hasValue(profile?.programme) ? [{ label: 'Programme', value: profile!.programme!, icon: <GraduationCap className="w-4 h-4" /> }] : []),
+    ...(hasValue(profile?.semester) ? [{ label: 'Semester', value: profile!.semester!, icon: <Calendar className="w-4 h-4" /> }] : []),
+    ...(hasValue(profile?.campus_block) ? [{ label: 'Campus', value: profile!.campus_block!, icon: <MapPin className="w-4 h-4" /> }] : []),
+    ...(hasValue(profile?.designation) ? [{ label: 'Registration No.', value: profile!.designation!, icon: <Hash className="w-4 h-4" /> }] : []),
+    ...(hasValue(profile?.user_id) ? [{ label: 'Student ID', value: profile!.user_id.slice(-6).toUpperCase(), icon: <Shield className="w-4 h-4" /> }] : []),
+    ...(hasValue(accountCreated) ? [{ label: 'Account Created', value: formatDate(accountCreated), icon: <Clock className="w-4 h-4" /> }] : []),
+  ];
 
   return (
-    <div className="w-full my-6 max-w-4xl mx-auto space-y-5 px-4 pb-32">
-      {/* ── Profile Header ── */}
-      <div className="glass-card dark:glass-card-dark rounded-[24px] p-6">
-        <div className="flex items-center gap-4">
-          {profile?.avatar_url ? (
-            <img
-              src={profile.avatar_url}
-              alt={displayName}
-              referrerPolicy="no-referrer"
-              className="w-16 h-16 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700 shadow-md"
-            />
-          ) : (
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 dark:from-slate-600 dark:to-slate-700 flex items-center justify-center text-xl font-black text-white shadow-md">
-              {firstLetter}
+    <div className="w-full my-6 max-w-2xl mx-auto space-y-6 px-4 pb-28 lg:pb-8">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key="profile"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.25 }}
+          className="space-y-6"
+        >
+          {/* ── PROFILE HEADER ── */}
+          <div className="glass-card dark:glass-card-dark rounded-[24px] p-6 text-center">
+            <div className="flex flex-col items-center gap-4">
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt={displayName}
+                  referrerPolicy="no-referrer"
+                  className="w-20 h-20 rounded-full object-cover ring-4 ring-slate-200 dark:ring-slate-600 shadow-lg"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-[#1D1D1F] dark:bg-slate-100 flex items-center justify-center text-2xl font-black text-white dark:text-[#1D1D1F] shadow-lg ring-4 ring-slate-200 dark:ring-slate-600">
+                  {getInitials(profile?.full_name, profile?.email || userEmail)}
+                </div>
+              )}
+              <div className="text-center space-y-1">
+                <h1 className="text-xl font-bold text-[#1D1D1F] dark:text-white tracking-tight">
+                  {displayName}
+                </h1>
+                <p className="text-sm text-[#6E6E73] dark:text-[#A1A1A6] font-medium">
+                  {displayEmail}
+                </p>
+                {(displayInstitution || displayCampus) && (
+                  <p className="text-xs text-[#86868B] dark:text-[#86868B] font-medium">
+                    {[displayInstitution, displayCampus || displayCity].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+              </div>
             </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-black text-slate-900 dark:text-slate-100 truncate">{displayName}</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{displayEmail}</p>
-            {displayInstitution && (
-              <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-0.5 truncate">
-                {displayInstitution}{displayCampus ? ` · ${displayCampus}` : ''}
-              </p>
-            )}
           </div>
-          <button
-            onClick={onEditProfileOpen}
-            className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shrink-0"
-          >
-            <Edit3 className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
 
-      {/* ── Account Information ── */}
-      {profileFields.length > 0 && (
-        <div className="glass-card dark:glass-card-dark rounded-[24px] p-6">
-          <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4">Account Information</h2>
-          <div className="space-y-1">
-            {profileFields.map((field) => {
-              const Icon = field.icon;
-              return (
-                <div key={field.label} className="flex items-center gap-3 py-2.5">
-                  <Icon className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{field.label}</p>
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100 mt-0.5 truncate">{String(field.value)}</p>
+          {/* ── ACCOUNT INFORMATION ── */}
+          <div className="glass-card dark:glass-card-dark rounded-[24px] p-6">
+            <h2 className="text-[11px] font-bold text-[#86868B] dark:text-[#A1A1A6] uppercase tracking-widest mb-4">
+              Account Information
+            </h2>
+            <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+              {detailRows.map((row) => (
+                <div key={row.label} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                  <span className="text-[#86868B] dark:text-[#86868B] shrink-0">{row.icon}</span>
+                  <div className="flex-1 min-w-0 flex items-center justify-between gap-3">
+                    <span className="text-[11px] font-semibold text-[#86868B] dark:text-[#A1A1A6] uppercase tracking-wider shrink-0">
+                      {row.label}
+                    </span>
+                    <span className="text-sm font-medium text-[#1D1D1F] dark:text-white text-right truncate">
+                      {row.value}
+                    </span>
                   </div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* ── Subscription ── */}
-      <div className="glass-card dark:glass-card-dark rounded-[24px] p-6">
-        <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4">Subscription</h2>
-        <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-          <div>
-            <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Current Plan</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Free Plan · ₹0 / month</p>
-          </div>
-          <span className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 rounded-full text-[11px] font-bold border border-emerald-200 dark:border-emerald-900/40">
-            Active
-          </span>
-        </div>
-      </div>
-
-      {/* ── Diet Preference ── */}
-      <div className="glass-card dark:glass-card-dark rounded-[24px] p-6">
-        <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4">Diet Preference</h2>
-        <div className="grid grid-cols-3 gap-3">
-          {([
-            { value: 'all' as DietPreference, label: 'All Meals', emoji: '🍽️' },
-            { value: 'veg' as DietPreference, label: 'Pure Veg', emoji: '🥦' },
-            { value: 'non-veg' as DietPreference, label: 'Non-Veg', emoji: '🍗' },
-          ]).map((pref) => (
-            <button
-              key={pref.value}
-              onClick={() => handleDietChange(pref.value)}
-              className={`flex flex-col items-center gap-1.5 py-3 px-4 rounded-2xl border-2 transition-all ${
-                currentPref === pref.value
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
-              }`}
-            >
-              <span className="text-xl">{pref.emoji}</span>
-              <span className="text-xs font-bold">{pref.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Saved Delivery Spots ── */}
-      <div className="glass-card dark:glass-card-dark rounded-[24px] p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Saved Spots</h2>
-          <button
-            onClick={() => { setEditingAddress(null); setShowAddressModal(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add
-          </button>
-        </div>
-
-        {userAddresses.length === 0 ? (
-          <div className="text-center py-6">
-            <MapPin className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-            <p className="text-xs text-slate-400">No saved spots yet.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {userAddresses.map((address) => (
-              <div
-                key={address.id}
-                className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">{address.label}</p>
-                    {address.is_default && (
-                      <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 rounded-full text-[9px] font-bold">Default</span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-400 mt-0.5 truncate">{address.address}</p>
+          {/* ── FOODEXA PLAN ── */}
+          <div className="glass-card dark:glass-card-dark rounded-[24px] p-6">
+            <h2 className="text-[11px] font-bold text-[#86868B] dark:text-[#A1A1A6] uppercase tracking-widest mb-3">
+              FOODEXA Plan
+            </h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-[12px] bg-[#30D158]/10 dark:bg-[#30D158]/15 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-[#30D158]" />
                 </div>
-                <div className="flex items-center gap-1 ml-2">
-                  {!address.is_default && (
-                    <button onClick={() => onSetDefaultAddress(address.id)} className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg transition-colors" title="Set default">
-                      <Star className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  <button onClick={() => { setEditingAddress(address); setShowAddressModal(true); }} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg transition-colors">
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={() => onDeleteAddress(address.id)} className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                <div>
+                  <p className="text-sm font-bold text-[#1D1D1F] dark:text-white">Free</p>
+                  <p className="text-xs text-[#86868B] dark:text-[#86868B]">&#8377;0 &middot; 1 Month</p>
                 </div>
               </div>
-            ))}
+              <span className="px-3 py-1 bg-[#30D158]/10 text-[#30D158] text-[10px] font-bold rounded-full uppercase tracking-wider">
+                Active
+              </span>
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* ── Footer Links ── */}
-      <div className="space-y-2 pt-2">
-        <a
-          href="mailto:foodexaofficial@gmail.com"
-          className="flex items-center gap-3 p-4 glass-card dark:glass-card-dark rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-        >
-          <FileText className="w-4 h-4 text-slate-400" />
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Privacy & Policy</span>
-          <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 ml-auto" />
-        </a>
-
-        <a
-          href="mailto:foodexaofficial@gmail.com"
-          className="flex items-center gap-3 p-4 glass-card dark:glass-card-dark rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-        >
-          <FileText className="w-4 h-4 text-slate-400" />
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Terms & Service</span>
-          <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 ml-auto" />
-        </a>
-
-        <button
-          onClick={onSwitchInstitution}
-          className="w-full flex items-center gap-3 p-4 glass-card dark:glass-card-dark rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-        >
-          <Building2 className="w-4 h-4 text-blue-500" />
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Switch Institution</span>
-          <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 ml-auto" />
-        </button>
-
-        <button
-          onClick={onSignOut}
-          className="w-full flex items-center gap-3 p-4 rounded-2xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 hover:bg-red-100 dark:hover:bg-red-950/30 transition-colors"
-        >
-          <LogOut className="w-4 h-4 text-red-500" />
-          <span className="text-sm font-bold text-red-600 dark:text-red-400">Log Out</span>
-        </button>
-
-        <p className="text-center text-[10px] text-slate-300 dark:text-slate-600 pt-2">
-          Support: foodexaofficial@gmail.com
-        </p>
-      </div>
-
-      {/* ── Address Modal ── */}
-      <AddressModal
-        isOpen={showAddressModal}
-        onClose={() => { setShowAddressModal(false); setEditingAddress(null); }}
-        editingAddress={editingAddress}
-        onSave={async (label, address, isDefault) => {
-          try {
-            if (editingAddress) {
-              await onUpdateAddress(editingAddress.id, label, address, isDefault);
-              triggerToast?.('Updated', 'Delivery spot updated', 'success');
-            } else {
-              await onAddAddress(label, address, isDefault);
-              triggerToast?.('Added', 'Delivery spot saved', 'success');
-            }
-            await refreshAddresses();
-          } catch (err: any) {
-            triggerToast?.('Error', err?.message || 'Failed to save address', 'error');
-          }
-        }}
-      />
-    </div>
-  );
-};
-
-// ── Address Modal ──
-const AddressModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  editingAddress: UserAddress | null;
-  onSave: (label: string, address: string, isDefault: boolean) => Promise<void>;
-}> = ({ isOpen, onClose, editingAddress, onSave }) => {
-  const [label, setLabel] = useState('');
-  const [address, setAddress] = useState('');
-  const [isDefault, setIsDefault] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (editingAddress) {
-      setLabel(editingAddress.label);
-      setAddress(editingAddress.address);
-      setIsDefault(editingAddress.is_default);
-    } else {
-      setLabel('');
-      setAddress('');
-      setIsDefault(false);
-    }
-  }, [editingAddress]);
-
-  const handleSave = async () => {
-    if (!label.trim() || !address.trim()) return;
-    setSaving(true);
-    try {
-      await onSave(label.trim(), address.trim(), isDefault);
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 20 }}
-        className="w-full max-w-md rounded-[24px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800">
-          <h3 className="text-lg font-black text-slate-900 dark:text-slate-100">
-            {editingAddress ? 'Edit Spot' : 'Add Spot'}
-          </h3>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-            <X className="w-4 h-4" />
+          {/* ── SWITCH CANTEEN ── */}
+          <button
+            onClick={() => setShowCanteenPicker(true)}
+            className="w-full glass-card dark:glass-card-dark rounded-[24px] p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-[12px] bg-[#0071E3]/10 dark:bg-[#0071E3]/15 flex items-center justify-center">
+                <Coffee className="w-5 h-5 text-[#0071E3]" />
+              </div>
+              <span className="text-sm font-semibold text-[#1D1D1F] dark:text-white">Switch Canteen</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-[#86868B] dark:text-[#86868B] group-hover:text-[#1D1D1F] dark:group-hover:text-white transition-colors" />
           </button>
-        </div>
-        <div className="p-5 space-y-4">
-          <div>
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Label</label>
-            <input
-              type="text"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. Dorm Room, Library"
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-blue-500 outline-none transition-colors"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Address</label>
-            <textarea
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Enter address or pickup location"
-              rows={3}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-blue-500 outline-none resize-none transition-colors"
-            />
-          </div>
-          <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Set as default</label>
-            <button
-              onClick={() => setIsDefault(!isDefault)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isDefault ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+
+          {/* ── PRIVACY & POLICY ── */}
+          <button
+            onClick={() => setShowPrivacy(true)}
+            className="w-full glass-card dark:glass-card-dark rounded-[24px] p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-[12px] bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center">
+                <Shield className="w-5 h-5 text-[#6E6E73] dark:text-[#A1A1A6]" />
+              </div>
+              <span className="text-sm font-semibold text-[#1D1D1F] dark:text-white">Privacy & Policy</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-[#86868B] dark:text-[#86868B] group-hover:text-[#1D1D1F] dark:group-hover:text-white transition-colors" />
+          </button>
+
+          {/* ── TERMS & SERVICE ── */}
+          <button
+            onClick={() => setShowTerms(true)}
+            className="w-full glass-card dark:glass-card-dark rounded-[24px] p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-[12px] bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-[#6E6E73] dark:text-[#A1A1A6]" />
+              </div>
+              <span className="text-sm font-semibold text-[#1D1D1F] dark:text-white">Terms & Service</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-[#86868B] dark:text-[#86868B] group-hover:text-[#1D1D1F] dark:group-hover:text-white transition-colors" />
+          </button>
+
+          {/* ── LOG OUT ── */}
+          <button
+            onClick={onSignOut}
+            className="w-full py-4 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 font-bold rounded-[20px] text-sm flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors border border-red-200/60 dark:border-red-900/40"
+          >
+            <LogOut className="w-4 h-4" />
+            Log Out
+          </button>
+
+          {/* ── SUPPORT ── */}
+          <p className="text-center text-xs text-[#86868B] dark:text-[#6E6E73] pt-2 pb-4">
+            Support: <a href="mailto:foodexaofficial@gmail.com" className="text-[#0071E3] dark:text-[#2997FF] font-medium hover:underline">foodexaofficial@gmail.com</a>
+          </p>
+        </motion.div>
+      </AnimatePresence>
+
+      {/* ── CANTEEN PICKER MODAL ── */}
+      <AnimatePresence>
+        {showCanteenPicker && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+            onClick={() => setShowCanteenPicker(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-[24px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
             >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isDefault ? 'translate-x-5' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-        </div>
-        <div className="flex gap-3 p-5 border-t border-slate-100 dark:border-slate-800">
-          <button onClick={onClose} disabled={saving} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-sm font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-            Cancel
-          </button>
-          <button onClick={handleSave} disabled={saving || !label.trim() || !address.trim()} className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            {saving ? 'Saving...' : 'Save'}
-          </button>
-        </div>
-      </motion.div>
+              <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
+                <h3 className="text-lg font-bold text-[#1D1D1F] dark:text-white">Switch Canteen</h3>
+                <button
+                  onClick={() => setShowCanteenPicker(false)}
+                  className="p-1.5 text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  &#x2715;
+                </button>
+              </div>
+              <div className="p-4 max-h-80 overflow-y-auto">
+                {canteens.length === 0 ? (
+                  <div className="text-center py-10">
+                    <Coffee className="w-10 h-10 text-slate-300 dark:text-[#6E6E73] mx-auto mb-3" />
+                    <p className="text-sm text-[#86868B] dark:text-[#86868B]">No canteens available for your institution yet.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {canteens.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => {
+                          triggerToast?.('Canteen', c.name, 'info');
+                          setShowCanteenPicker(false);
+                        }}
+                        className="w-full flex items-center gap-3 p-3 rounded-[16px] text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                      >
+                        <div className="w-10 h-10 rounded-[12px] bg-[#0071E3]/10 dark:bg-[#0071E3]/15 flex items-center justify-center shrink-0">
+                          <Coffee className="w-5 h-5 text-[#0071E3]" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-[#1D1D1F] dark:text-white truncate">{c.name}</p>
+                          {c.location && (
+                            <p className="text-[11px] text-[#86868B] dark:text-[#86868B] truncate mt-0.5">{c.location}</p>
+                          )}
+                        </div>
+                        {c.is_ordering_enabled && (
+                          <span className="px-2 py-0.5 bg-[#30D158]/10 text-[#30D158] text-[10px] font-bold rounded-full shrink-0">
+                            Open
+                          </span>
+                        )}
+                        {!c.is_ordering_enabled && (
+                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-[#86868B] text-[10px] font-bold rounded-full shrink-0">
+                            Closed
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── PRIVACY MODAL ── */}
+      <AnimatePresence>
+        {showPrivacy && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+            onClick={() => setShowPrivacy(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-[24px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
+                <h3 className="text-lg font-bold text-[#1D1D1F] dark:text-white">Privacy Policy</h3>
+                <button onClick={() => setShowPrivacy(false)} className="p-1.5 text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">&#x2715;</button>
+              </div>
+              <div className="p-5 space-y-4 max-h-96 overflow-y-auto">
+                <p className="text-sm text-[#6E6E73] dark:text-[#A1A1A6] leading-relaxed">
+                  FOODEXA is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use our campus food ordering platform.
+                </p>
+                <div className="space-y-3">
+                  <h4 className="text-sm font-bold text-[#1D1D1F] dark:text-white">Information We Collect</h4>
+                  <p className="text-sm text-[#6E6E73] dark:text-[#A1A1A6] leading-relaxed">
+                    We collect your name, email, phone number, institution details, and order history to provide and improve our campus dining services. We do not sell your personal data to third parties.
+                  </p>
+                  <h4 className="text-sm font-bold text-[#1D1D1F] dark:text-white">How We Use Your Information</h4>
+                  <p className="text-sm text-[#6E6E73] dark:text-[#A1A1A6] leading-relaxed">
+                    Your information is used to process orders, provide customer support, and improve your campus dining experience. Order data may be shared with your institution&apos;s dining administration for operational purposes.
+                  </p>
+                  <h4 className="text-sm font-bold text-[#1D1D1F] dark:text-white">Data Security</h4>
+                  <p className="text-sm text-[#6E6E73] dark:text-[#A1A1A6] leading-relaxed">
+                    We implement industry-standard security measures to protect your personal information. Your payment data is processed securely through Razorpay and is never stored on our servers.
+                  </p>
+                  <h4 className="text-sm font-bold text-[#1D1D1F] dark:text-white">Contact Us</h4>
+                  <p className="text-sm text-[#6E6E73] dark:text-[#A1A1A6] leading-relaxed">
+                    If you have questions about this policy, contact us at{' '}
+                    <a href="mailto:foodexaofficial@gmail.com" className="text-[#0071E3] dark:text-[#2997FF] font-medium hover:underline">foodexaofficial@gmail.com</a>
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── TERMS MODAL ── */}
+      <AnimatePresence>
+        {showTerms && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+            onClick={() => setShowTerms(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-[24px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-slate-700">
+                <h3 className="text-lg font-bold text-[#1D1D1F] dark:text-white">Terms of Service</h3>
+                <button onClick={() => setShowTerms(false)} className="p-1.5 text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">&#x2715;</button>
+              </div>
+              <div className="p-5 space-y-4 max-h-96 overflow-y-auto">
+                <p className="text-sm text-[#6E6E73] dark:text-[#A1A1A6] leading-relaxed">
+                  By using FOODEXA, you agree to the following terms and conditions. Please read them carefully before placing orders on our platform.
+                </p>
+                <div className="space-y-3">
+                  <h4 className="text-sm font-bold text-[#1D1D1F] dark:text-white">Ordering & Payments</h4>
+                  <p className="text-sm text-[#6E6E73] dark:text-[#A1A1A6] leading-relaxed">
+                    All orders placed through FOODEXA are final. Payments are processed securely via Razorpay. FOODEXA acts as an intermediary between you and campus dining providers.
+                  </p>
+                  <h4 className="text-sm font-bold text-[#1D1D1F] dark:text-white">User Responsibilities</h4>
+                  <p className="text-sm text-[#6E6E73] dark:text-[#A1A1A6] leading-relaxed">
+                    You are responsible for maintaining the confidentiality of your account. You agree to provide accurate information during registration and to only use the platform for lawful purposes.
+                  </p>
+                  <h4 className="text-sm font-bold text-[#1D1D1F] dark:text-white">Service Availability</h4>
+                  <p className="text-sm text-[#6E6E73] dark:text-[#A1A1A6] leading-relaxed">
+                    FOODEXA reserves the right to modify, suspend, or discontinue any part of the service at any time. Canteen availability and menu items are subject to change without notice.
+                  </p>
+                  <h4 className="text-sm font-bold text-[#1D1D1F] dark:text-white">Contact</h4>
+                  <p className="text-sm text-[#6E6E73] dark:text-[#A1A1A6] leading-relaxed">
+                    For questions regarding these terms, contact us at{' '}
+                    <a href="mailto:foodexaofficial@gmail.com" className="text-[#0071E3] dark:text-[#2997FF] font-medium hover:underline">foodexaofficial@gmail.com</a>
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

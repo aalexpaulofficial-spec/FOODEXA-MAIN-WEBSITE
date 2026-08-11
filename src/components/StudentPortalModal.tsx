@@ -363,6 +363,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [showVegFilter, setShowVegFilter] = useState(false);
   const [showNonVeg, setShowNonVeg] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qrOrder, setQrOrder] = useState<Order | null>(null);
@@ -479,6 +480,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
              menuQuery = menuQuery.eq('canteen_id', resolvedCanteen.id);
            }
            const menuResult = await menuQuery;
+           if (menuResult.error) {
+             console.error('[StudentPortal] Menu load error:', menuResult.error.message);
+             throw new Error('Menu loading failure');
+           }
+           setMenuItems((menuResult.data || []).map(mapMenuItem));
 
            // Fetch user addresses (only for authenticated users)
            if (user?.id) {
@@ -532,7 +538,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           }
         }
       } catch (err: any) {
-        setError(err?.message || 'Failed to load portal data.');
+        console.error('[StudentPortal] Campus data load failed:', err?.message || err);
+        setError("We couldn't load your campus data.");
       } finally {
         setLoading(false);
       }
@@ -666,7 +673,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
       return () => { unsubMenu(); unsubNotif(); unsubBanners(); unsubCounters(); unsubOrderNotifs(); unsubCanteens(); if (unsubAddresses) unsubAddresses(); };
      // eslint-disable-next-line react-hooks/exhaustive-deps
-   }, [isOpen, currentInstId, effectiveUserId]);
+   }, [isOpen, currentInstId, effectiveUserId, reloadNonce]);
 
   // Sync cart to Supabase when it changes (only for authenticated users)
   useEffect(() => {
@@ -1185,6 +1192,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-red-300">{error}</p>
                 </div>
+                <button onClick={() => setReloadNonce((value) => value + 1)} className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-red-600">
+                  Retry
+                </button>
                 <button onClick={() => setError(null)} className="p-1 text-red-500 hover:text-red-300">
                   <X className="w-4 h-4" />
                 </button>
@@ -1213,8 +1223,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             )}
 
             {loading ? (
-              /* Skeleton */
               <div className="space-y-6">
+                <div className="flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white p-4 text-sm font-bold text-slate-700">
+                  <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                  <span>{institutionName ? 'Loading menu...' : 'Loading your campus...'}</span>
+                </div>
                 <div className="h-48 rounded-3xl bg-gray-100 animate-pulse" />
                 <div className="flex gap-3">
                   {[1,2,3,4].map(i => <div key={i} className="h-20 flex-1 rounded-2xl bg-gray-100 animate-pulse" />)}

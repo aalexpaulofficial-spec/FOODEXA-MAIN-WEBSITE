@@ -36,7 +36,6 @@ import { ScrollProgress } from './components/ScrollProgress';
 import { Footer } from './components/Footer';
 import { Sparkles, Mic } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
-import { supabase } from './lib/supabase';
 import type { Profile, UserRole } from './types';
 
 type AccountRole = 'student' | 'faculty' | 'guest';
@@ -475,22 +474,12 @@ export default function App() {
       <StartFoodexaModal
         isOpen={isStartFoodexaOpen}
         onClose={() => setIsStartFoodexaOpen(false)}
-        onGoogleSignInStart={async () => {
-          const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-              redirectTo: `${window.location.origin}/student-login`,
-            },
-          });
-          if (error) {
-            addToast('Google Sign-In Failed', 'Unable to start Google Sign-In. Please try again.', 'warning');
-          }
-        }}
-        onDirectAccessSuccess={({ role }) => {
+        onAccountSetupSuccess={({ profile: liveProfile }) => {
           setIsStartFoodexaOpen(false);
           restoredDashboardRef.current = true;
-          openVisitorPortal(role);
-          navigate('/student-dashboard', { replace: true });
+          openDashboardForProfile(liveProfile);
+          const dashRoute = getDashboardRoute(liveProfile.role) || '/student-dashboard';
+          navigate(dashRoute, { replace: true });
         }}
         onOpenLogin={() => {
           setIsStartFoodexaOpen(false);

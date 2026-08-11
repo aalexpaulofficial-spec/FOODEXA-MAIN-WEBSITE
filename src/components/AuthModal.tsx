@@ -60,7 +60,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 }) => {
   const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
   const [mode, setMode] = useState<'login' | 'create' | 'quick'>(initialMode);
-  const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success'>('form');
+  const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success' | 'profile_completion' | 'forgot_password'>('form');
   const [loginUserId, setLoginUserId] = useState<string | null>(null);
   const selectedAccountRole: AccountRole = ACCOUNT_ROLES.includes(selectedRole as AccountRole) ? (selectedRole as AccountRole) : 'student';
 
@@ -426,7 +426,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       // 7. Load existing profile — handle missing profile gracefully
       if (!liveProfile) {
         console.warn('[Auth] Profile not found for authenticated user:', authUser.id);
-        setLoginError('We found your account, but your student profile is missing. Please contact FOODEXA support.');
+        setLoginUserId(authUser.id);
+        setStep('profile_completion');
         setIsLoginSubmitting(false);
         return;
       }
@@ -461,18 +462,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     };
 
-  const handleForgotPassword = async () => {
+  const handleForgotPassword = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const normalizedLoginEmail = (loginEmail || '').trim().toLowerCase();
     setLoginError(null);
     setLoginNotice(null);
 
     if (!normalizedLoginEmail) {
-      setLoginError('Please enter your email address first.');
+      setStep('forgot_password');
       return;
     }
 
     const { error } = await supabase.auth.resetPasswordForEmail(normalizedLoginEmail, {
-      redirectTo: `${window.location.origin}/login`,
+      redirectTo: `${window.location.origin}/reset-password`,
     });
 
     if (error) {
@@ -481,6 +483,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
+    setStep('forgot_password');
     setLoginNotice('Password reset link sent. Please check your email.');
   };
 

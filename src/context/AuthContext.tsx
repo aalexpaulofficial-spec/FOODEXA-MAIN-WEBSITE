@@ -199,6 +199,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const fullName = authUser.user_metadata?.full_name || null;
         const phone = authUser.user_metadata?.phone || null;
 
+        if (!role || !fullName || !authUser.user_metadata?.institution_id) {
+          console.warn('[Auth] Required profile metadata missing. Returning null to trigger profile completion screen.');
+          return null;
+        }
+
         const { error: upsertError } = await upsertProfileSafely({
           user_id: userId,
           email: authUser.email || '',
@@ -279,7 +284,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
      initAuth();
 
-     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+       if (event === 'PASSWORD_RECOVERY') {
+         window.location.href = '/reset-password';
+       }
        setSession(newSession);
        setUser(newSession?.user ?? null);
        setIsEmailVerified(!!newSession?.user?.email_confirmed_at);

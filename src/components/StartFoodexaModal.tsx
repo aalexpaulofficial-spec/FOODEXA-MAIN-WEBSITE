@@ -23,6 +23,7 @@ interface StartFoodexaModalProps {
   onClose: () => void;
   onAccountSetupSuccess: (data: { profile: Profile; institution: InstitutionData | null }) => void;
   onOpenLogin: () => void;
+  mode?: 'entry' | 'google-onboarding';
 }
 
 type AccountRole = 'student' | 'faculty' | 'guest';
@@ -47,7 +48,7 @@ const detailsFormInitial = {
   institutionCode: '',
 };
 
-const otpPattern = /^\d{6,8}$/;
+const otpPattern = /^\d{8}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const safeTrim = (value: string) => value.trim();
@@ -76,8 +77,9 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   onClose,
   onAccountSetupSuccess,
   onOpenLogin,
+  mode = 'entry',
 }) => {
-  const { validateInstitutionCode, setInstitutionData, refreshProfile } = useAuth();
+  const { validateInstitutionCode, setInstitutionData, refreshProfile, user, profile: authProfile } = useAuth();
 
   const [step, setStep] = useState<Step>('choice');
   const [selectedRole, setSelectedRole] = useState<AccountRole | null>(null);
@@ -94,16 +96,24 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   const verificationRequestRef = useRef(0);
   const validationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const googleLoadingRef = useRef(false);
+  const onboardingMode = mode === 'google-onboarding';
 
   const normalizedEmail = useMemo(() => emailForm.email.trim().toLowerCase(), [emailForm.email]);
   const displayName = useMemo(() => safeTrim(detailsForm.fullName || emailForm.fullName), [detailsForm.fullName, emailForm.fullName]);
   const isBusy = loading || resending;
 
   const resetState = () => {
-    setStep('choice');
+    const suggestedName = safeTrim(authProfile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || '');
+    setStep(onboardingMode ? 'role' : 'choice');
     setSelectedRole(null);
-    setEmailForm(emailFormInitial);
-    setDetailsForm(detailsFormInitial);
+    setEmailForm({
+      ...emailFormInitial,
+      fullName: onboardingMode ? suggestedName : '',
+    });
+    setDetailsForm({
+      ...detailsFormInitial,
+      fullName: onboardingMode ? suggestedName : '',
+    });
     setOtpCode('');
     setLoading(false);
     setResending(false);
@@ -122,7 +132,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     if (isOpen) {
       resetState();
     }
-  }, [isOpen]);
+  }, [isOpen, mode, authProfile?.full_name, user?.email]);
 
   useEffect(() => {
     if (!isOpen || step !== 'details') return;
@@ -188,7 +198,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 
@@ -352,9 +362,10 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
   const handleRoleSelect = (role: AccountRole) => {
     setSelectedRole(role);
+    const suggestedName = safeTrim(authProfile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || emailForm.fullName);
     setDetailsForm((prev) => ({
       ...prev,
-      fullName: safeTrim(prev.fullName) || safeTrim(emailForm.fullName),
+      fullName: safeTrim(prev.fullName) || suggestedName,
     }));
     setStep('details');
   };
@@ -465,7 +476,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
           <X className="h-4 w-4" />
         </button>
 
-        {step !== 'choice' && (
+        {!(onboardingMode && step === 'role') && step !== 'choice' && (
           <button
             type="button"
             onClick={() => {
@@ -491,7 +502,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
                 WELCOME TO FOODEXA
               </div>
               {renderHeader(
-                'Choose how you want to create your FOODEXA account.',
+                'Choose how you\'d like to continue.',
                 'Use Google for a fast start, or create your account with email and password.'
               )}
             </div>
@@ -514,7 +525,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
                   <Chrome className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-[#1D1D1F]">Continue with Google</p>
+                  <p className="text-sm font-semibold text-[#1D1D1F]">CONTINUE WITH GOOGLE</p>
                   <p className="mt-1 text-xs text-[#515154]">
                     Create your account securely with Google. Your account and order history will be saved.
                   </p>
@@ -531,7 +542,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
                   <Mail className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-[#1D1D1F]">Create account with email</p>
+                  <p className="text-sm font-semibold text-[#1D1D1F]">CREATE ACCOUNT WITH EMAIL</p>
                   <p className="mt-1 text-xs text-[#515154]">
                     Create a FOODEXA account using your email and password.
                   </p>
@@ -647,7 +658,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
         {step === 'otp' && (
           <form onSubmit={handleVerifyOtp} className="space-y-5">
             {renderHeader(
-              'Check your email for your verification code.',
+              'CHECK YOUR EMAIL FOR YOUR VERIFICATION CODE',
               'Enter the code Supabase sent to your email address to continue.'
             )}
 
@@ -703,10 +714,10 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
                 {resending ? (
                   <span className="inline-flex items-center gap-2">
                     <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    Resending
+                    SENDING...
                   </span>
                 ) : (
-                  'Resend Code'
+                  'RESEND CODE'
                 )}
               </button>
               <button

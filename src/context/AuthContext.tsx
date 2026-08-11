@@ -18,6 +18,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  isProfileComplete: boolean;
   loading: boolean;
   isEmailVerified: boolean;
   isPendingOtpVerification: boolean;
@@ -80,6 +81,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   });
 
   const isDirectUser = !!directSession && !user;
+  const isProfileComplete = !!user && !!profile?.role && !!profile?.institution_id;
 
   const clearDirectSession = useCallback(() => {
     setDirectSession(null);
@@ -123,7 +125,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
     const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'profile_image'];
+    const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block'];
        const safePayload: Record<string, any> = {};
        for (const key of KNOWN_PROFILE_COLUMNS) {
          if (key in payload) {
@@ -148,7 +150,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        return { error: null as Error | null };
      }, []);
 
-   const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, profile_image, role, created_at, updated_at, campus_block, programme, department, semester';
+   const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, campus_block, programme, department, semester';
 
     const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
       try {
@@ -788,6 +790,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setProfile(null);
     setInstitutionData(null);
     setIsEmailVerified(false);
+    setIsPendingOtpVerification(false);
+    setPendingRegistrationProfile(null);
   };
 
   const leaveInstitution = async () => {
@@ -983,6 +987,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       directSession,
       clearDirectSession,
       isDirectUser,
+      isProfileComplete,
     }}>
       {children}
     </AuthContext.Provider>

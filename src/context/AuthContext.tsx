@@ -49,6 +49,24 @@ const normalizeRole = (value: unknown): UserRole | null => {
 };
 
 const DIRECT_SESSION_KEY = 'foodexa-direct-session';
+const PENDING_VERIFICATION_EMAIL_KEY = 'foodexa_pending_verification_email';
+
+const mapOtpErrorMessage = (message: string) => {
+  const lower = message.toLowerCase();
+  if (lower.includes('expired')) {
+    return 'This verification code has expired. Please request a new code.';
+  }
+  if (lower.includes('rate limit') || lower.includes('too many')) {
+    return 'Verification service is temporarily unavailable. Please try again.';
+  }
+  if (lower.includes('network') || lower.includes('fetch')) {
+    return 'Verification service is temporarily unavailable. Please try again.';
+  }
+  if (lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
+    return 'Invalid verification code. Please check the latest code in your email.';
+  }
+  return message;
+};
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -237,7 +255,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    }, [fetchProfile, directSession]);
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const normalizedEmail = email.trim().toLowerCase();
+    const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
     if (error) {
       return {
         error: new Error(error.message),
@@ -284,6 +303,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Block any auto-redirect while OTP is pending
     setIsPendingOtpVerification(true);
+    sessionStorage.setItem(PENDING_VERIFICATION_EMAIL_KEY, trimmedEmail);
 
      setPendingRegistrationProfile({
        email: trimmedEmail,
@@ -318,11 +338,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (error) {
       console.error('[Auth] Signup signUp() error:', error.name, '-', error.message);
       setIsPendingOtpVerification(false);
+      sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
       return { error: new Error(error.message) };
     }
 
     const authUser = data?.user;
     console.info('[Auth] Signup signUp() succeeded | authUser:', authUser?.id || '<none>', '| session:', !!data?.session, '| email_confirmed_at:', authUser?.email_confirmed_at || 'NULL');
+
+    if (authUser && Array.isArray(authUser.identities) && authUser.identities.length === 0) {
+      console.warn('[Auth] Signup attempted with an existing email address:', trimmedEmail);
+      setIsPendingOtpVerification(false);
+      sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
+      return { error: new Error('This email is already registered. Please log in instead.') };
+    }
 
     // PRODUCTION FIX: OTP verification is mandatory regardless of whether
     // `mailer_autoconfirm` is on or off. Supabase sends the OTP via the
@@ -344,6 +372,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!authUser) {
       console.error('[Auth] Signup signUp() returned no user object despite success.');
       setIsPendingOtpVerification(false);
+      sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
       return { error: new Error('Registration succeeded but no user was returned. Please try again.') };
     }
 
@@ -369,6 +398,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // misconfigured / missing "Magic Link" email template in the dashboard.
       console.error('[Auth] OTP email request (signInWithOtp) failed:', otpError.name, '-', otpError.message);
       setIsPendingOtpVerification(false);
+      sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
       return { error: new Error(otpError.message) };
     }
 
@@ -420,9 +450,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   // FIX: Strengthened institution_id resolution with last-resort API lookup
-   const verifyOtp = async (email: string, token: string) => {
-     const normalizedEmail = (email || '').trim().toLowerCase();
-     const safeToken = (token || '').trim();
+  const verifyOtp = async (email: string, token: string) => {
+     const normalizedEmail = (email || sessionStorage.getItem(PENDING_VERIFICATION_EMAIL_KEY) || '').trim().toLowerCase();
+     const safeToken = (token || '').replace(/\D/g, '').trim();
      console.info('[Auth] OTP verification request | email:', normalizedEmail, '| token length:', safeToken.length, '| authUser:', user?.id || '<none>');
 
      if (!normalizedEmail) {
@@ -431,47 +461,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
      if (!safeToken) {
        return { error: new Error('Please enter the OTP code sent to your email.'), profile: null, institution: null };
      }
+     if (safeToken.length !== 8) {
+       return { error: new Error('Please enter the 8-digit verification code sent to your email.'), profile: null, institution: null };
+     }
 
-     let authData = null as Awaited<ReturnType<typeof supabase.auth.verifyOtp>>['data'] | null;
-
-      // PRIMARY: the OTP is issued by signInWithOtp (Magic Link flow) → type 'email'.
-     // FALLBACK: if "Confirm email" is enabled in the dashboard, the signup
-     // confirmation email uses an OTP verified with type 'signup'.
-     console.info('[Auth] Attempting OTP verification with type "email" (Magic Link/OTP flow)...');
-     const emailAttempt = await supabase.auth.verifyOtp({
+     console.info('[Auth] Attempting OTP verification with type "email"...');
+     const { data: authData, error } = await supabase.auth.verifyOtp({
        email: normalizedEmail,
        token: safeToken,
        type: 'email',
      });
 
-     if (emailAttempt.error) {
-       console.warn('[Auth] verifyOtp type=email failed:', emailAttempt.error.name, '-', emailAttempt.error.message);
-       console.info('[Auth] Fallback: attempting OTP verification with type "signup" (email confirmation flow)...');
-       const signupAttempt = await supabase.auth.verifyOtp({
-         email: normalizedEmail,
-         token: safeToken,
-         type: 'signup',
-       });
-
-        if (signupAttempt.error) {
-          console.error('[Auth] OTP verification FAILED — both types rejected. | email:', normalizedEmail, '| type=email error:', emailAttempt.error.message, '| type=signup error:', signupAttempt.error.message);
-         return {
-           error: new Error(signupAttempt.error.message || emailAttempt.error.message),
-           profile: null,
-           institution: null,
-         };
-       }
-
-       authData = signupAttempt.data;
-       console.info('[Auth] OTP verification SUCCEEDED via type "signup" | user:', authData?.user?.id || '<none>');
-     } else {
-       authData = emailAttempt.data;
-       console.info('[Auth] OTP verification SUCCEEDED via type "email" | user:', authData?.user?.id || '<none>');
+     if (error) {
+       console.error('[Auth] OTP verification FAILED | email:', normalizedEmail, '| error:', error.message);
+       return {
+         error: new Error(mapOtpErrorMessage(error.message)),
+         profile: null,
+         institution: null,
+       };
      }
+
+     if (!authData?.session || !authData?.user) {
+       console.error('[Auth] OTP verification returned no authenticated session/user.');
+       return {
+         error: new Error('Verification succeeded, but no authenticated session was returned. Please try again.'),
+         profile: null,
+         institution: null,
+       };
+     }
+
+     console.info('[Auth] OTP verification SUCCEEDED via type "email" | user:', authData.user.id || '<none>');
 
      // OTP verified — clear the pending flag and mark email as confirmed
      setIsPendingOtpVerification(false);
      setIsEmailVerified(true);
+     sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
 
      // verifyOtp already establishes a session; fetch the freshly authenticated user.
      const { data: currentUserData, error: userError } = await supabase.auth.getUser();
@@ -560,10 +584,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        campus_block: userData.campus_block || null,
      });
 
-     if (upsertError) {
-       console.error('[Auth] Profile upsert error | userId:', userId, '| reason:', upsertError.message);
-       return { error: new Error(upsertError.message), profile: null, institution: null };
-     }
+    if (upsertError) {
+      console.error('[Auth] Profile upsert error | userId:', userId, '| reason:', upsertError.message);
+      return { error: new Error(upsertError.message), profile: null, institution: null };
+    }
 
       console.info('[Auth] Profile upsert succeeded | userId:', userId);
 
@@ -620,6 +644,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     keysToRemove.forEach((key) => localStorage.removeItem(key));
     sessionStorage.removeItem(DIRECT_SESSION_KEY);
+    sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
   };
 
   const joinWithCodeRoleName = useCallback(async (
@@ -792,6 +817,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsEmailVerified(false);
     setIsPendingOtpVerification(false);
     setPendingRegistrationProfile(null);
+    sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
   };
 
   const leaveInstitution = async () => {

@@ -26,6 +26,28 @@ interface AuthModalProps {
 
 type AccountRole = 'student' | 'faculty' | 'guest';
 const ACCOUNT_ROLES: AccountRole[] = ['student', 'faculty', 'guest'];
+const PENDING_VERIFICATION_EMAIL_KEY = 'foodexa_pending_verification_email';
+const RESEND_COOLDOWN_SECONDS = 30;
+
+const getPendingVerificationEmail = () =>
+  (sessionStorage.getItem(PENDING_VERIFICATION_EMAIL_KEY) || '').trim().toLowerCase();
+
+const mapOtpErrorMessage = (message: string) => {
+  const lower = message.toLowerCase();
+  if (lower.includes('expired')) {
+    return 'This verification code has expired. Please request a new code.';
+  }
+  if (lower.includes('rate limit') || lower.includes('too many')) {
+    return 'Verification service is temporarily unavailable. Please try again.';
+  }
+  if (lower.includes('network') || lower.includes('fetch')) {
+    return 'Verification service is temporarily unavailable. Please try again.';
+  }
+  if (lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
+    return 'Invalid verification code. Please check the latest code in your email.';
+  }
+  return message;
+};
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
@@ -54,6 +76,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // OTP state
   const [otpCode, setOtpCode] = useState('');
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [resendCountdown, setResendCountdown] = useState(0);
   const [registrationPhase, setRegistrationPhase] = useState<'idle' | 'validating' | 'connecting' | 'sending' | 'sent'>('idle');
 
   // Institution validation state
@@ -153,7 +176,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setOtpError(null);
     setRegistrationPhase('idle');
     setIsLoginSubmitting(false);
+    setResendCountdown(0);
   }, [initialMode, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || resendCountdown <= 0) return;
+    const timer = setTimeout(() => setResendCountdown((value) => Math.max(0, value - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [isOpen, resendCountdown]);
 
   useEffect(() => () => {
     if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
@@ -254,7 +284,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/student-login`,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
       if (error) {
@@ -511,6 +541,15 @@ if (validateError || !validatedInst) {
 
     if (error) {
       console.error('[Auth] signUpWithPassword rejected:', error.message);
+      if (error.message.toLowerCase().includes('already registered')) {
+        setMode('login');
+        setLoginEmail(normalizedEmail);
+        setLoginPassword('');
+        setLoginError(error.message);
+        setInstitutionError(null);
+        setRegistrationPhase('idle');
+        return;
+      }
       setInstitutionError(error.message || 'Registration failed. Please try again.');
       setRegistrationPhase('idle');
       return;
@@ -518,12 +557,13 @@ if (validateError || !validatedInst) {
 
     console.info('[Auth] signUpWithPassword succeeded; OTP email dispatched to:', normalizedEmail);
     setRegistrationPhase('sent');
+    setResendCountdown(RESEND_COOLDOWN_SECONDS);
     setOtpError(null);
     setStep('otp');
   };
   const handleResendOtp = async () => {
-    if (!currentEmail || registrationPhase === 'sending') return;
-    const normalizedEmail = currentEmail.trim().toLowerCase();
+    if (!currentEmail || registrationPhase === 'sending' || resendCountdown > 0) return;
+    const normalizedEmail = (getPendingVerificationEmail() || currentEmail).trim().toLowerCase();
     setOtpError(null);
     setRegistrationPhase('sending');
     console.info('[Auth] Resending OTP email for:', normalizedEmail);
@@ -538,17 +578,16 @@ if (validateError || !validatedInst) {
       });
       if (error) {
         console.error('[Auth] OTP resend (signInWithOtp) failed:', error.name, '-', error.message);
-        setOtpError(error.message?.toLowerCase().includes('rate limit')
-          ? 'Too many requests. Please wait a few minutes before requesting another OTP.'
-          : (error.message || 'Failed to resend OTP. Please try again.'));
+        setOtpError(mapOtpErrorMessage(error.message || 'Failed to resend OTP. Please try again.'));
         setRegistrationPhase('sent');
         return;
       }
       console.info('[Auth] OTP email resent successfully for:', normalizedEmail);
+      setResendCountdown(RESEND_COOLDOWN_SECONDS);
       setRegistrationPhase('sent');
     } catch (err: any) {
       console.error('[Auth] OTP resend threw:', err?.message || err);
-      setOtpError('Network error. Please check your connection and try again.');
+      setOtpError('Verification service is temporarily unavailable. Please try again.');
       setRegistrationPhase('sent');
     }
   };
@@ -556,15 +595,12 @@ if (validateError || !validatedInst) {
    const handleVerifyOtp = async (e: React.FormEvent) => {
       e.preventDefault();
 
-      const normalizedEmail = currentEmail.trim().toLowerCase();
-      const normalizedToken = otpCode.trim();
+      const normalizedEmail = (getPendingVerificationEmail() || currentEmail).trim().toLowerCase();
+      const normalizedToken = otpCode.replace(/\D/g, '').trim();
       console.info('[Auth] OTP submit | email:', normalizedEmail, '| token length:', normalizedToken.length);
 
-      // Supabase OTP tokens are 6 digits by default (configurable to 8 in the
-      // Supabase dashboard). Accept any token between 6 and 8 digits so the
-      // form works regardless of that dashboard setting.
-      if (normalizedToken.length < 6 || normalizedToken.length > 8) {
-        setOtpError('Please enter the verification code sent to your email.');
+      if (normalizedToken.length !== 8) {
+        setOtpError('Please enter the 8-digit verification code sent to your email.');
         return;
       }
 
@@ -578,13 +614,14 @@ if (validateError || !validatedInst) {
 
        if (!liveProfile) {
          console.warn('[Auth] verifyOtp returned null profile; profile setup is required before dashboard entry.');
-         setOtpError('Your email is verified. Please complete your profile setup before opening the dashboard.');
+         setOtpError('Verification succeeded, but no authenticated session was returned. Please try again.');
          setRegistrationPhase('idle');
          return;
        }
 
        console.info('[Auth] OTP verified and profile ready | user:', liveProfile.user_id, '| institution:', institution?.institution_id || 'NULL');
        setRegistrationPhase('idle');
+       sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
 
        if (institution?.institution_code) {
          setInstitutionVerifyCode(institution.institution_code);
@@ -663,7 +700,7 @@ if (validateError || !validatedInst) {
                     <Lock className="w-3.5 h-3.5" />
                     <span>FOODEXA Login</span>
                   </div>
-                  <h3 className="text-2xl font-bold text-black">Welcome Back</h3>
+                  <h3 className="text-2xl font-bold text-black">Login to FOODEXA</h3>
                   <p className="text-xs text-[#86868B] leading-relaxed">
                     Sign in to your FOODEXA account.
                   </p>
@@ -1039,9 +1076,9 @@ onChange={(e) => {
               </div>
               <h3 className="text-xl font-bold text-black">Verify Your Email OTP</h3>
                <p className="text-xs text-[#86868B] leading-relaxed">
-                 We sent a security code to{' '}
-                 <strong className="text-black">{currentEmail || ''}</strong>
-                 . Check your inbox (and spam folder) and enter the code below.
+                 Enter the 8-digit verification code sent to:
+                 <br />
+                 <strong className="text-black">{getPendingVerificationEmail() || currentEmail || ''}</strong>
                </p>
             </div>
 
@@ -1074,17 +1111,20 @@ onChange={(e) => {
                  <input
                    type="text"
                    inputMode="numeric"
+                   autoComplete="one-time-code"
                    maxLength={8}
                    required
                    value={otpCode}
-                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                   className="w-full apple-input py-3 text-center text-xl font-mono tracking-[0.5em] font-bold w-full"
+                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                   className="w-full apple-input py-3 text-center text-xl font-mono tracking-[0.35em] font-bold w-full"
+                   placeholder="1 2 3 4 5 6 7 8"
                  />
                </div>
 
               <button
                 type="submit"
-                className="w-full btn-primary"
+                disabled={otpCode.replace(/\D/g, '').length !== 8 || isCreatingAccount}
+                className="w-full btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <ShieldCheck className="w-4 h-4 text-white" />
                 <span>Verify & Join Campus Portal</span>
@@ -1095,10 +1135,14 @@ onChange={(e) => {
                <button
                  type="button"
                  onClick={handleResendOtp}
-                 disabled={registrationPhase === 'sending'}
+                 disabled={registrationPhase === 'sending' || resendCountdown > 0}
                  className="text-black font-bold hover:underline cursor-pointer disabled:text-gray-400 inline-block"
                >
-                 {registrationPhase === 'sending' ? 'Sending...' : 'Resend OTP'}
+                 {registrationPhase === 'sending'
+                   ? 'Sending...'
+                   : resendCountdown > 0
+                     ? `Resend available in ${resendCountdown}s`
+                     : 'Resend OTP'}
                </button>
                </div>
              </form>

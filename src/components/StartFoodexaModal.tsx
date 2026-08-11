@@ -49,10 +49,32 @@ const detailsFormInitial = {
   institutionCode: '',
 };
 
-const otpPattern = /^\d{6,8}$/;
+const PENDING_VERIFICATION_EMAIL_KEY = 'foodexa_pending_verification_email';
+const RESEND_COOLDOWN_SECONDS = 30;
+const otpPattern = /^\d{8}$/;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const safeTrim = (value: string) => value.trim();
+
+const getPendingVerificationEmail = () =>
+  (sessionStorage.getItem(PENDING_VERIFICATION_EMAIL_KEY) || '').trim().toLowerCase();
+
+const mapOtpErrorMessage = (message: string) => {
+  const lower = message.toLowerCase();
+  if (lower.includes('expired')) {
+    return 'This verification code has expired. Please request a new code.';
+  }
+  if (lower.includes('rate limit') || lower.includes('too many')) {
+    return 'Verification service is temporarily unavailable. Please try again.';
+  }
+  if (lower.includes('network') || lower.includes('fetch')) {
+    return 'Verification service is temporarily unavailable. Please try again.';
+  }
+  if (lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
+    return 'Invalid verification code. Please check the latest code in your email.';
+  }
+  return message;
+};
 
 const friendlyAuthError = (message: string) => {
   const lower = message.toLowerCase();
@@ -90,6 +112,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   const [otpCode, setOtpCode] = useState('');
   const [pendingSignupEmail, setPendingSignupEmail] = useState('');
   const [otpSuccessMessage, setOtpSuccessMessage] = useState<string | null>(null);
+  const [resendCountdown, setResendCountdown] = useState(0);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,6 +143,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setOtpCode('');
     setPendingSignupEmail('');
     setOtpSuccessMessage(null);
+    setResendCountdown(0);
     setLoading(false);
     setResending(false);
     setError(null);
@@ -138,6 +162,12 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       resetState();
     }
   }, [isOpen, mode, authProfile?.full_name, user?.email]);
+
+  useEffect(() => {
+    if (!isOpen || resendCountdown <= 0) return;
+    const timer = setTimeout(() => setResendCountdown((value) => Math.max(0, value - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [isOpen, resendCountdown]);
 
   useEffect(() => {
     if (!isOpen || step !== 'details') return;
@@ -274,6 +304,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     }
 
     setPendingSignupEmail(email);
+    sessionStorage.setItem(PENDING_VERIFICATION_EMAIL_KEY, email);
 
     if (data.session) {
       await supabase.auth.signOut();
@@ -290,6 +321,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     }
 
     setOtpCode('');
+    setResendCountdown(RESEND_COOLDOWN_SECONDS);
     setStep('otp');
   };
 
@@ -299,11 +331,11 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
     const token = otpCode.trim();
     if (!otpPattern.test(token)) {
-      setError('Please enter the verification code from your email.');
+      setError('Please enter the 8-digit verification code from your email.');
       return;
     }
 
-    const signupEmail = (pendingSignupEmail || normalizedEmail).trim().toLowerCase();
+    const signupEmail = (getPendingVerificationEmail() || pendingSignupEmail || normalizedEmail).trim().toLowerCase();
     if (!signupEmail) {
       setError('Please restart signup so we can verify the correct email address.');
       return;
@@ -313,34 +345,32 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setError(null);
     setOtpSuccessMessage(null);
 
-    const emailAttempt = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       email: signupEmail,
       token,
       type: 'email',
     });
 
-    const result = emailAttempt.error
-      ? await supabase.auth.verifyOtp({
-          email: signupEmail,
-          token,
-          type: 'signup',
-        })
-      : emailAttempt;
-
     setLoading(false);
 
-    if (result.error) {
-      console.error('[StartFoodexa] OTP verification failed:', result.error.message);
-      setError('Invalid or expired verification code. Please try again.');
+    if (error) {
+      console.error('[StartFoodexa] OTP verification failed:', error.message);
+      setError(mapOtpErrorMessage(error.message));
       return;
     }
 
+    if (!data?.session || !data?.user) {
+      setError('Verification succeeded, but no authenticated session was returned. Please try again.');
+      return;
+    }
+
+    sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
     setStep('role');
   };
 
   const handleResendCode = async () => {
-    const signupEmail = (pendingSignupEmail || normalizedEmail).trim().toLowerCase();
-    if (resending || !signupEmail) return;
+    const signupEmail = (getPendingVerificationEmail() || pendingSignupEmail || normalizedEmail).trim().toLowerCase();
+    if (resending || resendCountdown > 0 || !signupEmail) return;
     setResending(true);
     setError(null);
     setOtpSuccessMessage(null);
@@ -349,9 +379,10 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
     if (otpError) {
       console.error('[StartFoodexa] OTP resend failed:', otpError.message);
-      setError('Unable to resend the code right now. Please try again.');
+      setError(mapOtpErrorMessage(otpError.message));
       return;
     }
+    setResendCountdown(RESEND_COOLDOWN_SECONDS);
     setOtpSuccessMessage('New verification code sent.');
   };
 
@@ -657,7 +688,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
           <form onSubmit={handleVerifyOtp} className="space-y-5">
             {renderHeader(
               'CHECK YOUR EMAIL FOR YOUR VERIFICATION CODE',
-              'Enter the verification code sent to your email.'
+              'Enter the 8-digit verification code sent to your email.'
             )}
 
             {error && (
@@ -677,7 +708,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
             <div>
               <p className="mb-3 rounded-2xl bg-[#F5F5F7] px-4 py-3 text-center text-xs font-semibold text-[#515154]">
                 Enter the verification code sent to:<br />
-                <span className="text-[#1D1D1F]">{pendingSignupEmail || normalizedEmail}</span>
+                <span className="text-[#1D1D1F]">{getPendingVerificationEmail() || pendingSignupEmail || normalizedEmail}</span>
               </p>
               <label className="mb-1 block text-xs font-semibold text-[#515154]">Verification Code *</label>
               <input
@@ -692,13 +723,13 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
                   setOtpSuccessMessage(null);
                 }}
                 className={`${fieldClass} text-center font-mono text-xl tracking-[0.35em]`}
-                placeholder="123456"
+                placeholder="1 2 3 4 5 6 7 8"
               />
             </div>
 
             <button
               type="submit"
-              disabled={isBusy}
+              disabled={isBusy || otpCode.replace(/\D/g, '').length !== 8}
               className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
@@ -718,7 +749,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
               <button
                 type="button"
                 onClick={handleResendCode}
-                disabled={resending}
+                disabled={resending || resendCountdown > 0}
                 className="rounded-2xl border border-[#D2D2D7] px-4 py-3 text-xs font-semibold text-[#1D1D1F] disabled:opacity-60"
               >
                 {resending ? (
@@ -726,6 +757,8 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
                     <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                     SENDING...
                   </span>
+                ) : resendCountdown > 0 ? (
+                  `RESEND AVAILABLE IN ${resendCountdown}s`
                 ) : (
                   'RESEND CODE'
                 )}

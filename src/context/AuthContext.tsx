@@ -210,12 +210,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           full_name: fullName,
           phone,
           role,
+          designation: role,
           institution_id: authUser.user_metadata?.institution_id || null,
           department: authUser.user_metadata?.department || null,
           semester: authUser.user_metadata?.semester || null,
           programme: authUser.user_metadata?.programme || null,
           campus_block: authUser.user_metadata?.campus_block || null,
-
         });
 
         if (upsertError) {
@@ -385,12 +385,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       },
     });
 
-    if (error) {
-      console.error('[Auth] Signup signUp() error:', error.name, '-', error.message);
-      setIsPendingOtpVerification(false);
-      sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
-      return { error: new Error(error.message) };
-    }
+     if (error) {
+       console.error('[FOODEXA SIGNUP ERROR]', error);
+       setIsPendingOtpVerification(false);
+       sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
+       return { error: new Error(error.message) };
+     }
 
     const authUser = data?.user;
     console.info('[Auth] Signup signUp() succeeded | authUser:', authUser?.id || '<none>', '| session:', !!data?.session, '| email_confirmed_at:', authUser?.email_confirmed_at || 'NULL');
@@ -402,14 +402,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { error: new Error('This email is already registered. Please log in instead.') };
     }
 
-    // PRODUCTION FIX: OTP verification is mandatory regardless of whether
-    // `mailer_autoconfirm` is on or off. Supabase sends the OTP via the
-    // "Magic Link" email template whenever signInWithOtp is invoked. Sending
-    // the OTP explicitly (instead of relying solely on the confirm-signup email)
-    // keeps the flow deterministic in BOTH autoconfirm modes.
+    // If a session was returned (autoconfirm ON), the user is already
+    // email-confirmed and signed in. Sign out to enforce the OTP gate.
+    // Supabase Auth's signUp() automatically sends the "Confirm signup"
+    // email (containing the 8-digit OTP) when email confirmation is enabled.
     if (data?.session) {
-      // autoconfirm ON → the user is instantly email-confirmed and logged in.
-      // Sign out so they cannot reach the dashboard before completing OTP.
       console.info('[Auth] Signup returned an immediate session (autoconfirm ON). Signing out to enforce the OTP gate.');
       await supabase.auth.signOut();
       setSession(null);
@@ -417,42 +414,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsEmailVerified(false);
     }
 
-    // Always send the OTP email explicitly so the code path is identical
-    // whether or not email confirmation is enabled in the dashboard.
     if (!authUser) {
-      console.error('[Auth] Signup signUp() returned no user object despite success.');
+      console.error('[FOODEXA SIGNUP ERROR] Registration succeeded but no user was returned.');
       setIsPendingOtpVerification(false);
       sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
       return { error: new Error('Registration succeeded but no user was returned. Please try again.') };
     }
 
-    console.info('[Auth] Sending OTP email via signInWithOtp for:', trimmedEmail, '| authUser:', authUser.id);
-
-    const { error: otpError } = await supabase.auth.signInWithOtp({
-      email: trimmedEmail,
-      options: {
-        // The account already exists (just created via signUp), so we only
-        // need to deliver the verification OTP to an existing user.
-        shouldCreateUser: false,
-        data: {
-          full_name: fullName.trim(),
-          role,
-          institution_id: resolvedInstitutionId,
-          institution_code: metadata?.institutionCode?.trim() || null,
-        },
-      },
-    });
-
-    if (otpError) {
-      // Common causes: rate limit (already-pending OTP/60-per-hour cap), or a
-      // misconfigured / missing "Magic Link" email template in the dashboard.
-      console.error('[Auth] OTP email request (signInWithOtp) failed:', otpError.name, '-', otpError.message);
-      setIsPendingOtpVerification(false);
-      sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
-      return { error: new Error(otpError.message) };
-    }
-
-    console.info('[Auth] OTP email request accepted by Supabase. User must enter the code from the email.');
+    // The confirmation OTP email is sent automatically by Supabase Auth via
+    // signUp() when "Confirm email" is enabled in the Supabase dashboard.
+    // Do NOT call signInWithOtp() — that sends a second email via the
+    // "Magic Link" template and can cause rate-limit / delivery conflicts.
+    console.info('[Auth] signUp() succeeded. Supabase Auth dispatches the confirmation OTP email.');
     return { error: null };
   };
 
@@ -515,32 +488,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        return { error: new Error('Please enter the 8-digit verification code sent to your email.'), profile: null, institution: null };
      }
 
-     console.info('[Auth] Attempting OTP verification with type "email"...');
-     const { data: authData, error } = await supabase.auth.verifyOtp({
-       email: normalizedEmail,
-       token: safeToken,
-       type: 'email',
-     });
+      console.info('[Auth] Attempting OTP verification with type "signup"...');
+      const { data: authData, error } = await supabase.auth.verifyOtp({
+        email: normalizedEmail,
+        token: safeToken,
+        type: 'signup',
+      });
 
-     if (error) {
-       console.error('[Auth] OTP verification FAILED | email:', normalizedEmail, '| error:', error.message);
-       return {
-         error: new Error(mapOtpErrorMessage(error.message)),
-         profile: null,
-         institution: null,
-       };
-     }
+      if (error) {
+        console.error('[FOODEXA OTP ERROR]', error);
+        return {
+          error: new Error(mapOtpErrorMessage(error.message)),
+          profile: null,
+          institution: null,
+        };
+      }
 
-     if (!authData?.session || !authData?.user) {
-       console.error('[Auth] OTP verification returned no authenticated session/user.');
-       return {
-         error: new Error('Verification succeeded, but no authenticated session was returned. Please try again.'),
-         profile: null,
-         institution: null,
-       };
-     }
+      if (!authData?.session || !authData?.user) {
+        console.error('[FOODEXA OTP ERROR] Verification returned no authenticated session.');
+        return {
+          error: new Error('Verification succeeded, but no authenticated session was returned. Please try again.'),
+          profile: null,
+          institution: null,
+        };
+      }
 
-     console.info('[Auth] OTP verification SUCCEEDED via type "email" | user:', authData.user.id || '<none>');
+      console.info('[Auth] OTP verification SUCCEEDED via type "signup" | user:', authData.user.id || '<none>');
 
      // OTP verified — clear the pending flag and mark email as confirmed
      setIsPendingOtpVerification(false);

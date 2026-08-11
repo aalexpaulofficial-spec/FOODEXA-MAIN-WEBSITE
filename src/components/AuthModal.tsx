@@ -539,7 +539,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const { error } = await signUpWithPassword(normalizedEmail, currentForm.password, currentForm.fullName, selectedAccountRole);
 
     if (error) {
-      console.error('[Auth] signUpWithPassword rejected:', error.message);
+      console.error('[FOODEXA SIGNUP ERROR]', error);
       if (error.message.toLowerCase().includes('already registered')) {
         setMode('login');
         setLoginEmail(normalizedEmail);
@@ -572,7 +572,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         email: normalizedEmail,
       });
       if (error) {
-        console.error('[Auth] OTP resend failed:', error.name, '-', error.message);
+        console.error('[FOODEXA RESEND ERROR]', error);
         setOtpError(mapOtpErrorMessage(error.message || 'Failed to resend OTP. Please try again.'));
         setRegistrationPhase('sent');
         return;
@@ -602,7 +602,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
        const { error, profile: liveProfile, institution } = await verifyOtp(normalizedEmail, normalizedToken);
 
        if (error) {
-         console.error('[Auth] OTP verification rejected:', error.message);
+         console.error('[FOODEXA OTP ERROR]', error);
          setOtpError(error.message || 'OTP verification failed. Please check the code and try again.');
          return;
        }

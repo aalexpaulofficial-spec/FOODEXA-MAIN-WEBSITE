@@ -379,9 +379,10 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS razorpay_payment_id TEXT;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS razorpay_signature TEXT;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_method TEXT;
 
--- 18. Add avatar_url and diet_preference to profiles
+-- 18. Add avatar_url, diet_preference, and designation to profiles
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS diet_preference TEXT DEFAULT 'all' CHECK (diet_preference IN ('all', 'veg', 'non-veg'));
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS designation TEXT;
 -- Add canteen_id to menu_items if missing
 ALTER TABLE public.menu_items ADD COLUMN IF NOT EXISTS canteen_id UUID REFERENCES public.canteens(id) ON DELETE SET NULL;
 

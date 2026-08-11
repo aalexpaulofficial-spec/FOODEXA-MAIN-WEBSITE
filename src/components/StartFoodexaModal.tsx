@@ -221,7 +221,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     });
 
     if (signUpError) {
-      console.error('[StartFoodexa] signUp failed:', signUpError.message);
+      console.error('[FOODEXA SIGNUP ERROR]', signUpError);
       setLoading(false);
       if (isExistingEmailError(signUpError.message)) {
         setDuplicateEmail(true);
@@ -305,7 +305,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setLoading(false);
 
     if (verifyError) {
-      console.error('[StartFoodexa] OTP verification failed:', verifyError.message);
+      console.error('[FOODEXA OTP ERROR]', verifyError);
       setError(mapOtpErrorMessage(verifyError.message));
       return;
     }
@@ -338,7 +338,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setResending(false);
 
     if (otpError) {
-      console.error('[StartFoodexa] OTP resend failed:', otpError.message);
+      console.error('[FOODEXA RESEND ERROR]', otpError);
       setError(mapOtpErrorMessage(otpError.message));
       return;
     }

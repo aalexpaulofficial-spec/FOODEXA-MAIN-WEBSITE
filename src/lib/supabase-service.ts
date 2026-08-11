@@ -523,9 +523,9 @@ export async function createOrderAfterPayment(params: {
   // Insert notifications (best-effort)
   try {
     const notifs: Record<string, any>[] = [];
-    notifs.push({ type: 'order_confirmed', title: 'Order Confirmed!', message: 'Your order has been confirmed and is being prepared.', user_id: params.user_id, created_at: nowISO, is_read: false, order_id: orderData.id });
+    notifs.push({ type: 'order_confirmed', title: 'Order Confirmed!', message: 'Your order has been confirmed and is being prepared.', user_id: params.user_id, created_at: nowISO, read: false, order_id: orderData.id });
     if (actualInstitutionId) {
-      notifs.push({ type: 'new_order', title: 'New Order Received', message: 'A new order has been placed and payment confirmed.', institution_id: actualInstitutionId, created_at: nowISO, is_read: false, order_id: orderData.id });
+      notifs.push({ type: 'new_order', title: 'New Order Received', message: 'A new order has been placed and payment confirmed.', institution_id: actualInstitutionId, created_at: nowISO, read: false, order_id: orderData.id });
     }
     await supabase.from('notifications').insert(notifs);
   } catch (_) { /* best-effort */ }
@@ -742,7 +742,7 @@ export async function updateOrderAfterPayment(params: {
     const notifs: Record<string, any>[] = [];
     const baseNotif = {
       created_at: now,
-      is_read: false,
+      read: false,
       order_id: params.order_id,
     };
     if (params.student_id) {
@@ -907,7 +907,7 @@ export async function fetchNotifications(): Promise<NotificationItem[]> {
     message: String(r.message || ''),
     created_at: r.created_at || '',
     type: String(r.type || 'announcement'),
-    read: Boolean(r.is_read),
+    read: Boolean(r.read),
   }));
 }
 

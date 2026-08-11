@@ -45,10 +45,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [isQuickLoading, setIsQuickLoading] = useState(false);
   const [quickError, setQuickError] = useState<string | null>(null);
   const [loginInstitutionCode, setLoginInstitutionCode] = useState('');
-    const [loginEmail, setLoginEmail] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
 
   // Track the email used for the current OTP flow (login or create)
   const [currentEmail, setCurrentEmail] = useState('');
@@ -155,6 +156,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoginError(null);
     setOtpError(null);
     setRegistrationPhase('idle');
+    setIsLoginSubmitting(false);
   }, [initialMode, isOpen]);
 
   useEffect(() => () => {
@@ -367,109 +369,144 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   if (!isOpen) return null;
 
    const handleLoginSubmit = async (e: React.FormEvent) => {
-     e.preventDefault();
-     const instCode = loginInstitutionCode.trim().toUpperCase();
-     const normalizedLoginEmail = (loginEmail || '').trim().toLowerCase();
-     setCurrentEmail(normalizedLoginEmail);
-     setLoginError(null);
-     setInstitutionError(null);
-     setStep('form');
+      e.preventDefault();
+      if (isLoginSubmitting) return;
+      setIsLoginSubmitting(true);
+      const instCode = loginInstitutionCode.trim().toUpperCase();
+      const normalizedLoginEmail = (loginEmail || '').trim().toLowerCase();
+      setCurrentEmail(normalizedLoginEmail);
+      setLoginError(null);
+      setInstitutionError(null);
+      setStep('form');
 
-     // 1. Validate institution code first
-     if (!instCode) {
-       setLoginError('Please enter your Institution Code.');
-       return;
-     }
+      // 1. Validate required input
+      if (!instCode) {
+        setLoginError('Please enter your Institution Code.');
+        setIsLoginSubmitting(false);
+        return;
+      }
+      if (!normalizedLoginEmail) {
+        setLoginError('Please enter your email address.');
+        setIsLoginSubmitting(false);
+        return;
+      }
+      if (!loginPassword) {
+        setLoginError('Please enter your password.');
+        setIsLoginSubmitting(false);
+        return;
+      }
 
-     console.info('[Auth] Validating institution code:', instCode);
-     const { data: instData, error: instFetchError } = await supabase
-       .from('institutions')
-       .select('id, name, campus, city, state, country, institution_code')
-       .eq('institution_code', instCode)
-       .maybeSingle();
+      // 2. Look up institution code from Supabase
+      console.info('[Auth] Validating institution code:', instCode);
+      const { data: instData, error: instFetchError } = await supabase
+        .from('institutions')
+        .select('id, name, institution_name, campus, city, state, country, institution_code, status')
+        .eq('institution_code', instCode)
+        .maybeSingle();
 
-     if (instFetchError || !instData) {
-       setLoginError('Invalid Institution Code. Please check the code and try again.');
-       return;
-     }
+      // 3. Confirm institution exists
+      if (instFetchError || !instData) {
+        setLoginError('That institution code was not found. Please check and try again.');
+        setIsLoginSubmitting(false);
+        return;
+      }
 
-     const institution: InstitutionData = {
-       institution_id: instData.id,
-       institution_name: instData.name,
-       campus: instData.campus || '',
-       city: instData.city || '',
-       state: instData.state || '',
-       country: instData.country || '',
-       institution_code: instData.institution_code,
-     };
+      // 4. Confirm institution status is active
+      if (instData.status && instData.status !== 'active') {
+        setLoginError('This institution is currently unavailable. Please contact your institution administrator.');
+        setIsLoginSubmitting(false);
+        return;
+      }
 
-     console.info('[Auth] Institution verified:', institution.institution_name, '| Login attempt for:', normalizedLoginEmail);
+      const institution: InstitutionData = {
+        institution_id: instData.id,
+        institution_name: instData.institution_name || instData.name || '',
+        campus: instData.campus || '',
+        city: instData.city || '',
+        state: instData.state || '',
+        country: instData.country || '',
+        institution_code: instData.institution_code,
+      };
 
-     // 2. Sign in with email/password
-     const { error, session: authSession, user: authUser, profile: liveProfile } = await signIn(normalizedLoginEmail, loginPassword);
+      console.info('[Auth] Institution verified:', institution.institution_name, '| Login attempt for:', normalizedLoginEmail);
 
-     if (error) {
-       const msg = error.message.toLowerCase();
-       console.error('[Auth] Login rejected:', error.message);
-       if (msg.includes('invalid login') || msg.includes('invalid credentials')) {
-         setLoginError('Invalid email or password. Please check your credentials and try again.');
-       } else if (msg.includes('email not confirmed')) {
-         setLoginError('Please verify your email before signing in. Check your inbox for the OTP emailed after registration.');
-       } else if (msg.includes('rate limit')) {
-         setLoginError('Too many login attempts. Please wait a moment and try again.');
-       } else {
-         setLoginError(error.message);
-       }
-       return;
-     }
+      // 5. Authenticate email/password using Supabase Auth
+      // 6. Get auth.uid
+      const { error, user: authUser, profile: liveProfile } = await signIn(normalizedLoginEmail, loginPassword);
 
-    if (!authUser) {
-      setLoginError('Unable to sign in. Please try again or contact support.');
-      return;
-    }
+      if (error) {
+        const msg = error.message.toLowerCase();
+        console.error('[Auth] Login rejected:', error.message);
+        if (msg.includes('invalid login') || msg.includes('invalid credentials') || msg.includes('invalid email or password')) {
+          setLoginError('Incorrect email or password. Please check your credentials and try again.');
+        } else if (msg.includes('email not confirmed')) {
+          setLoginError('Please verify your email before signing in. Check your inbox for the OTP emailed after registration.');
+        } else if (msg.includes('rate limit')) {
+          setLoginError('Too many login attempts. Please wait a moment and try again.');
+        } else {
+          setLoginError(error.message);
+        }
+        setIsLoginSubmitting(false);
+        return;
+      }
 
-    if (!liveProfile) {
-      setLoginError('Your account is not fully set up. Please contact support or register again.');
-      return;
-    }
+      if (!authUser) {
+        setLoginError('Unable to sign in. Please try again or contact support.');
+        setIsLoginSubmitting(false);
+        return;
+      }
 
-    setLoginUserId(authUser.id);
+      // 7. Load existing profile — handle missing profile gracefully
+      if (!liveProfile) {
+        console.warn('[Auth] Profile not found for authenticated user:', authUser.id);
+        setLoginError('We found your account, but your student profile is missing. Please contact FOODEXA support.');
+        setIsLoginSubmitting(false);
+        return;
+      }
 
-    // 3. Update profile with the validated institution if different
-    if (liveProfile.institution_id !== institution.institution_id) {
-      console.info('[Auth] Updating profile institution from', liveProfile.institution_id, 'to', institution.institution_id);
-      await supabase
-        .from('profiles')
-        .update({ institution_id: institution.institution_id })
-        .eq('user_id', authUser.id);
-    }
+      // 8. Confirm profile belongs to the selected institution (informational — update if different)
+      setLoginUserId(authUser.id);
 
-    setInstitutionData(institution);
-    setVerifiedInstitution(institution);
-    setValidatedInstitution(institution);
-    setInstitutionVerifyCode(institution.institution_code);
+      if (liveProfile.institution_id !== institution.institution_id) {
+        console.info('[Auth] Updating profile institution from', liveProfile.institution_id, 'to', institution.institution_id);
+        await supabase
+          .from('profiles')
+          .update({ institution_id: institution.institution_id })
+          .eq('user_id', authUser.id);
+      }
 
-     const role = liveProfile.role;
+      // 9. Create/load the student's institution session
+      setInstitutionData(institution);
+      setVerifiedInstitution(institution);
+      setValidatedInstitution(institution);
+      setInstitutionVerifyCode(institution.institution_code);
 
-     if (role === 'institution_admin') {
-       setStep('institution_verify');
-       return;
-     } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
-       setStep('counter_verify');
-       return;
-     } else if (role === 'student' || role === 'faculty' || role === 'guest') {
+      // 10. Navigate to Student Dashboard
+      const role = liveProfile.role;
+
+      if (role === 'institution_admin') {
+        setIsLoginSubmitting(false);
+        setStep('institution_verify');
+        return;
+      } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
+        setIsLoginSubmitting(false);
+        setStep('counter_verify');
+        return;
+      } else if (role === 'student' || role === 'faculty' || role === 'guest') {
+        setIsLoginSubmitting(false);
         setStep('success');
         if (onLoginSuccess) {
           onLoginSuccess({ profile: liveProfile, institution });
         }
         return;
-     }
+      }
 
-     setStep('success');
-     if (onLoginSuccess) {
-       onLoginSuccess({ profile: liveProfile, institution });
-     }
-   };
+      setIsLoginSubmitting(false);
+      setStep('success');
+      if (onLoginSuccess) {
+        onLoginSuccess({ profile: liveProfile, institution });
+      }
+    };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -656,6 +693,7 @@ if (validateError || !validatedInst) {
     setLoginError(null);
     setOtpError(null);
     setRegistrationPhase('idle');
+    setIsLoginSubmitting(false);
   };
 
   const handleContinueToPortal = () => {
@@ -770,10 +808,20 @@ if (validateError || !validatedInst) {
 
                   <button
                     type="submit"
-                    className="w-full btn-primary"
+                    disabled={isLoginSubmitting}
+                    className="w-full btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <span>Login</span>
-                    <ArrowRight className="w-4 h-4 text-white" />
+                    {isLoginSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        <span>Signing in...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Login</span>
+                        <ArrowRight className="w-4 h-4 text-white" />
+                      </>
+                    )}
                   </button>
 
                   {/* Institution Login Link */}

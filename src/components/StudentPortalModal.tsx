@@ -35,7 +35,7 @@ import { NutritionTab } from './StudentDashboard/NutritionTab';
 import { AnalyticsTab } from './StudentDashboard/AnalyticsTab';
 import { HistoryTab } from './StudentDashboard/HistoryTab';
 import { ProfileTab } from './StudentDashboard/ProfileTab';
-import { SwitchInstitutionModal } from './StudentDashboard/SwitchInstitutionModal';
+import { SwitchCanteenModal } from './StudentDashboard/SwitchCanteenModal';
 import { OffersTab } from './StudentDashboard/OffersTab';
 import { OrderCompletionScreen } from './StudentDashboard/OrderCompletionScreen';
 import { OrderDetailsModal } from './StudentDashboard/OrderDetailsModal';
@@ -348,7 +348,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [showLeaveInstitution, setShowLeaveInstitution] = useState(false);
   const [leavingInstitution, setLeavingInstitution] = useState(false);
   const [leaveInstitutionMessage, setLeaveInstitutionMessage] = useState<string | null>(null);
-  const [showSwitchInstitution, setShowSwitchInstitution] = useState(false);
+  const [showSwitchCanteen, setShowSwitchCanteen] = useState(false);
+  const [activeCanteen, setActiveCanteen] = useState<Canteen | null>(null);
+  const activeCanteenIdRef = useRef<string | null>(null);
+  const hasHydratedCanteenRef = useRef(false);
   
    // Checkout States
    const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'wallet' | 'cash'>('razorpay');
@@ -417,7 +420,30 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
              setFavorites(new Set(favIds));
            }
 
-           // Fetch menu items — only for this student's institution
+             // Fetch canteens for this institution
+             const canteenResult = await fetchCanteens(instId || undefined);
+             setCanteens(canteenResult);
+
+             // Restore active canteen from localStorage (validated against live canteens)
+             const savedCanteenKey = `foodexa-active-canteen-${user?.id}`;
+             const savedCanteenRaw = localStorage.getItem(savedCanteenKey);
+             let resolvedCanteen: Canteen | null = null;
+             if (savedCanteenRaw && user?.id) {
+               try {
+                 const saved = JSON.parse(savedCanteenRaw) as { id: string };
+                 const match = canteenResult.find((c: Canteen) => c.id === saved.id && isCanteenVisible(c));
+                 if (match) {
+                   resolvedCanteen = match;
+                 } else {
+                   localStorage.removeItem(savedCanteenKey);
+                 }
+               } catch { localStorage.removeItem(savedCanteenKey); }
+             }
+             setActiveCanteen(resolvedCanteen);
+             activeCanteenIdRef.current = resolvedCanteen?.id || null;
+             hasHydratedCanteenRef.current = true;
+
+           // Fetch menu items — scoped to institution and active canteen
            let menuQuery = supabase
              .from('menu_items')
              .select('*')
@@ -425,15 +451,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
            if (instId) {
              menuQuery = menuQuery.eq('institution_id', instId);
            }
-           const menuResult = await menuQuery;
-
-           if (!menuResult.error) {
-             setMenuItems((menuResult.data || []).map(mapMenuItem));
+           if (resolvedCanteen?.id) {
+             menuQuery = menuQuery.eq('canteen_id', resolvedCanteen.id);
            }
-
-           // Fetch canteens for this institution
-           const canteenResult = await fetchCanteens(instId || undefined);
-           setCanteens(canteenResult);
+           const menuResult = await menuQuery;
 
            // Fetch user addresses
            if (user?.id) {
@@ -444,14 +465,14 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         // Fetch notifications — silently ignore RLS errors
         const notifResult = await supabase
           .from('notifications')
-          .select('id, title, message, created_at, type, is_read')
+          .select('id, title, message, created_at, type, read')
           .order('created_at', { ascending: false })
           .limit(50);
         if (!notifResult.error) {
           const notifs = (notifResult.data || []).map((r: any) => ({
             id: String(r.id), title: String(r.title || 'Update'),
             message: String(r.message || ''),
-            created_at: r.created_at || '', type: String(r.type || 'announcement'), read: Boolean(r.is_read),
+            created_at: r.created_at || '', type: String(r.type || 'announcement'), read: Boolean(r.read),
           }));
           setNotifications(notifs);
           setUnreadNotif(notifs.filter(n => !n.read).length);
@@ -495,6 +516,14 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     load();
 
     const unsubMenu = subscribeMenuItems((payload: any) => {
+      const instId = profile?.institution_id;
+      const activeCId = activeCanteenIdRef.current;
+      const record = payload.new || payload.old || {};
+      // Scope by institution
+      if (instId && record.institution_id && record.institution_id !== instId) return;
+      // Scope by active canteen (when set)
+      if (activeCId && record.canteen_id && record.canteen_id !== activeCId) return;
+
       if (payload.eventType === 'INSERT') {
         setMenuItems((prev) => { const exists = prev.find((i) => i.id === String(payload.new.id)); return exists ? prev : [...prev, mapMenuItem(payload.new)]; });
       } else if (payload.eventType === 'UPDATE') {
@@ -581,8 +610,21 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
            const next = prev.map((c) => c.id === payload.new.id ? payload.new : c);
            return isCanteenVisible(payload.new) ? next : next.filter((c) => c.id !== payload.new.id);
          });
+         // If active canteen was updated to inactive, clear it
+         if (activeCanteenIdRef.current === payload.new.id && !isCanteenVisible(payload.new)) {
+           setActiveCanteen(null);
+           activeCanteenIdRef.current = null;
+           localStorage.removeItem(`foodexa-active-canteen-${user?.id}`);
+           triggerToast?.('Canteen Unavailable', 'Your selected canteen is no longer available. Showing all canteens.', 'warning');
+         }
        } else if (payload.eventType === 'DELETE') {
          setCanteens((prev) => prev.filter((c) => c.id !== payload.old.id));
+         if (activeCanteenIdRef.current === payload.old.id) {
+           setActiveCanteen(null);
+           activeCanteenIdRef.current = null;
+           localStorage.removeItem(`foodexa-active-canteen-${user?.id}`);
+           triggerToast?.('Canteen Unavailable', 'Your selected canteen has been removed. Showing all canteens.', 'warning');
+         }
        }
      }, profile?.institution_id || undefined);
 
@@ -613,6 +655,37 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       return () => clearTimeout(timer);
     }
   }, [cart, user?.id, loading]);
+
+  // Refetch menu when activeCanteen changes (after initial hydration)
+  const hasInitialMenuRef = useRef(false);
+  useEffect(() => {
+    if (!isOpen || !user?.id || !hasHydratedCanteenRef.current) return;
+    // Skip the very first run (load() handles initial menu fetch)
+    if (!hasInitialMenuRef.current) {
+      hasInitialMenuRef.current = true;
+      return;
+    }
+    const instId = profile?.institution_id;
+    const fetchMenu = async () => {
+      let menuQuery = supabase
+        .from('menu_items')
+        .select('*')
+        .order('food_name', { ascending: true });
+      if (instId) {
+        menuQuery = menuQuery.eq('institution_id', instId);
+      }
+      if (activeCanteen?.id) {
+        menuQuery = menuQuery.eq('canteen_id', activeCanteen.id);
+      }
+      const menuResult = await menuQuery;
+      if (!menuResult.error) {
+        setMenuItems((menuResult.data || []).map(mapMenuItem));
+      }
+    };
+    fetchMenu();
+    setCart([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCanteen?.id]);
 
   // Derived data
   const allCategories = useMemo(() => {
@@ -1201,7 +1274,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     institutionData={institutionData}
                     institutionName={institutionName}
                     canteens={canteens}
+                    activeCanteenName={activeCanteen?.name || null}
                     onSignOut={() => signOut()}
+                    onSwitchCanteen={() => setShowSwitchCanteen(true)}
                     triggerToast={triggerToast}
                   />
                 )}
@@ -1769,22 +1844,18 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         </div>
       )}
 
-      {/* ── SWITCH INSTITUTION MODAL ──────────────────────────────── */}
-      <SwitchInstitutionModal
-        isOpen={showSwitchInstitution}
-        onClose={() => setShowSwitchInstitution(false)}
-        onSwitch={async (code) => {
-          const result = await switchInstitution(code);
-          if (!result.error) {
-            triggerToast?.('Switched', 'Institution updated successfully.', 'success');
-            // Refresh all data
-            setTimeout(() => {
-              window.location.reload();
-            }, 1500);
-          }
-          return result;
+      {/* ── SWITCH CANTEEN MODAL ──────────────────────────────── */}
+      <SwitchCanteenModal
+        isOpen={showSwitchCanteen}
+        onClose={() => setShowSwitchCanteen(false)}
+        onSelect={(canteen) => {
+          setActiveCanteen(canteen);
+          activeCanteenIdRef.current = canteen.id;
+          localStorage.setItem(`foodexa-active-canteen-${user?.id}`, JSON.stringify({ id: canteen.id }));
+          setCart([]);
+          triggerToast?.('Canteen Switched', `${canteen.name} is now selected.`, 'success');
         }}
-        currentInstitutionName={institutionName}
+        currentCanteenId={activeCanteen?.id || null}
       />
 
       {/* ── LEAVE INSTITUTION MODAL ──────────────────────────────── */}

@@ -1303,7 +1303,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     activeCanteenName={activeCanteen?.name || null}
                     isVisitor={isVisitor}
                     onSignOut={handleSignOut}
-                    onSwitchCanteen={() => setShowSwitchCanteen(true)}
+                    onSwitchCanteen={() => setShowSwitchInstitution(true)}
                     onSwitchInstitution={() => setShowSwitchInstitution(true)}
                     triggerToast={triggerToast}
                   />

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Building2, MapPin, LogOut, User, Mail, Phone, Shield,
-  ChevronRight, FileText, Coffee, Clock, Calendar,
+  ChevronRight, FileText, Clock, Calendar,
   GraduationCap, Hash, CreditCard
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -166,47 +166,24 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
             </div>
           </div>
 
-          {/* ── SWITCH INSTITUTION (visitors) / SWITCH CANTEEN (auth) ── */}
-          {isVisitor ? (
-            <button
-              onClick={() => onSwitchInstitution?.()}
-              className="w-full glass-card dark:glass-card-dark rounded-[24px] p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-[12px] bg-[#0071E3]/10 dark:bg-[#0071E3]/15 flex items-center justify-center">
-                  <Building2 className="w-5 h-5 text-[#0071E3]" />
-                </div>
-                <div className="flex flex-col items-start">
-                  <span className="text-sm font-semibold text-[#1D1D1F] dark:text-white">Switch Institution</span>
-                  {displayInstitution && (
-                    <span className="text-[11px] text-[#86868B] dark:text-[#A1A1A6] mt-0.5">Currently: {displayInstitution}</span>
-                  )}
-                </div>
+          {/* ── SWITCH INSTITUTION ── */}
+          <button
+            onClick={() => onSwitchInstitution?.()}
+            className="w-full glass-card dark:glass-card-dark rounded-[24px] p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-[12px] bg-[#0071E3]/10 dark:bg-[#0071E3]/15 flex items-center justify-center">
+                <Building2 className="w-5 h-5 text-[#0071E3]" />
               </div>
-              <ChevronRight className="w-4 h-4 text-[#86868B] dark:text-[#86868B] group-hover:text-[#1D1D1F] dark:group-hover:text-white transition-colors" />
-            </button>
-          ) : (
-            <button
-              onClick={() => onSwitchCanteen?.()}
-              className="w-full glass-card dark:glass-card-dark rounded-[24px] p-5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-[12px] bg-[#0071E3]/10 dark:bg-[#0071E3]/15 flex items-center justify-center">
-                  <Coffee className="w-5 h-5 text-[#0071E3]" />
-                </div>
-                <div className="flex flex-col items-start">
-                  <span className="text-sm font-semibold text-[#1D1D1F] dark:text-white">Switch Canteen</span>
-                  {activeCanteenName && (
-                    <span className="text-[11px] text-[#86868B] dark:text-[#A1A1A6] mt-0.5">Currently: {activeCanteenName}</span>
-                  )}
-                  {!activeCanteenName && canteens.length > 0 && (
-                    <span className="text-[11px] text-[#86868B] dark:text-[#A1A1A6] mt-0.5">All Canteens</span>
-                  )}
-                </div>
+              <div className="flex flex-col items-start">
+                <span className="text-sm font-semibold text-[#1D1D1F] dark:text-white">Switch Institution</span>
+                {displayInstitution && (
+                  <span className="text-[11px] text-[#86868B] dark:text-[#A1A1A6] mt-0.5">Currently: {displayInstitution}</span>
+                )}
               </div>
-              <ChevronRight className="w-4 h-4 text-[#86868B] dark:text-[#86868B] group-hover:text-[#1D1D1F] dark:group-hover:text-white transition-colors" />
-            </button>
-          )}
+            </div>
+            <ChevronRight className="w-4 h-4 text-[#86868B] dark:text-[#86868B] group-hover:text-[#1D1D1F] dark:group-hover:text-white transition-colors" />
+          </button>
 
           {/* ── PRIVACY & POLICY ── */}
           <button

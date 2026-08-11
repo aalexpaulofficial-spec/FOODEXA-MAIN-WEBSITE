@@ -22,6 +22,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
   signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; institutionId?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
+  signInAnonymously: () => Promise<{ error: Error | null; user: User | null }>;
+  joinWithCodeRoleName: (institutionCode: string, role: 'student' | 'faculty' | 'guest', displayName: string) => Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }>;
   signOut: () => Promise<void>;
   clearAllSessionData: () => void;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
@@ -676,8 +678,77 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     sessionStorage.clear();
   };
 
+  const signInAnonymously = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.auth.signInAnonymously();
+      if (error) {
+        console.error('[Auth] Anonymous sign-in error:', error.message);
+        return { error: new Error(error.message), user: null };
+      }
+      return { error: null, user: data?.user || null };
+    } catch (err: any) {
+      console.error('[Auth] Anonymous sign-in exception:', err);
+      return { error: new Error(err?.message || 'Anonymous sign-in failed'), user: null };
+    }
+  }, []);
+
+  const joinWithCodeRoleName = useCallback(async (
+    institutionCode: string,
+    role: 'student' | 'faculty' | 'guest',
+    displayName: string
+  ): Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }> => {
+    try {
+      // 1. Validate institution code against live Supabase
+      const { error: instError, data: instData } = await validateInstitutionCode(institutionCode);
+      if (instError || !instData) {
+        return { error: instError || 'Invalid institution code.', profile: null, institution: null };
+      }
+
+      // 2. Ensure anonymous auth session exists
+      let currentUser = user;
+      if (!currentUser) {
+        const { error: anonError, user: anonUser } = await signInAnonymously();
+        if (anonError || !anonUser) {
+          return { error: 'Unable to create session. Please try again.', profile: null, institution: null };
+        }
+        currentUser = anonUser;
+      }
+
+      const userId = currentUser.id;
+
+      // 3. Upsert profile with display name, role, institution_id
+      const { error: upsertError } = await upsertProfileSafely({
+        user_id: userId,
+        email: currentUser.email || '',
+        full_name: displayName.trim(),
+        role,
+        institution_id: instData.institution_id,
+      });
+
+      if (upsertError) {
+        console.error('[Auth] joinWithCodeRoleName profile upsert error:', upsertError.message);
+        return { error: upsertError.message, profile: null, institution: null };
+      }
+
+      // 4. Fetch the complete profile
+      const fetchedProfile = await fetchProfile(userId);
+
+      // 5. Load institution data
+      setInstitutionData(instData);
+
+      // 6. Set email verified flag for anonymous users
+      setIsEmailVerified(true);
+
+      return { error: null, profile: fetchedProfile, institution: instData };
+    } catch (err: any) {
+      console.error('[Auth] joinWithCodeRoleName exception:', err);
+      return { error: err?.message || 'Something went wrong. Please try again.', profile: null, institution: null };
+    }
+  }, [user, validateInstitutionCode, signInAnonymously, upsertProfileSafely, fetchProfile, setInstitutionData]);
+
   const signOut = async () => {
-    await supabase.auth.signOut();
+    // NON-DESTRUCTIVE SIGN OUT: Only clear UI state, preserve anonymous identity
+    // The Supabase session (and anonymous UUID) is preserved in localStorage
     clearAllSessionData();
     setUser(null);
     setSession(null);
@@ -843,6 +914,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       signIn,
       signUpWithPassword,
       verifyOtp,
+      signInAnonymously,
+      joinWithCodeRoleName,
       signOut,
       clearAllSessionData,
       updateProfile,

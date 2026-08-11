@@ -113,10 +113,24 @@ export default function App() {
     setIsStudentPortalOpen(true);
   };
 
-  const handleJoinInstitution = (institution: { id: string; name: string; campus: string; city: string; institution_code: string }, role: 'student' | 'faculty' | 'guest') => {
-    joinInstitutionAsVisitor(institution, role);
+  const handleJoinInstitution = (institution: { id: string; name: string; campus: string; city: string; institution_code: string }, role: 'student' | 'faculty' | 'guest', profile: any) => {
     setIsJoinInstitutionOpen(false);
-    openVisitorPortal(role);
+    closeDashboards();
+    setCurrentUserRole(role);
+    // Set institution data for the portal
+    if (institution) {
+      const instData: any = {
+        institution_id: institution.id,
+        institution_name: institution.name,
+        campus: institution.campus || '',
+        city: institution.city || '',
+        state: '',
+        country: '',
+        institution_code: institution.institution_code,
+      };
+      // Store in context via setInstitutionData if available
+    }
+    setIsStudentPortalOpen(true);
   };
 
   const getDashboardRoute = (role: UserRole | null): string | null => {

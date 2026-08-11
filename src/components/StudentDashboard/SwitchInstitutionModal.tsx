@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Building2, Loader2, CheckCircle2, AlertCircle, ArrowRight, RefreshCw } from 'lucide-react';
+import { X, Building2, Loader2, CheckCircle2, AlertCircle, ArrowRight, RefreshCw, GraduationCap, Users, User } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 interface SwitchInstitutionModalProps {
   isOpen: boolean;
@@ -15,7 +16,10 @@ export const SwitchInstitutionModal: React.FC<SwitchInstitutionModalProps> = ({
   onSwitch,
   currentInstitutionName,
 }) => {
+  const { profile, updateProfile } = useAuth();
   const [code, setCode] = useState('');
+  const [role, setRole] = useState<'student' | 'faculty' | 'guest'>((profile?.role as any) || 'student');
+  const [name, setName] = useState(profile?.full_name || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -31,6 +35,15 @@ export const SwitchInstitutionModal: React.FC<SwitchInstitutionModalProps> = ({
       setError(result.error);
       setLoading(false);
     } else {
+      // Update profile with new role and name if changed
+      if (profile) {
+        const updates: any = {};
+        if (role !== profile.role) updates.role = role;
+        if (name.trim() && name.trim() !== profile.full_name) updates.full_name = name.trim();
+        if (Object.keys(updates).length > 0) {
+          await updateProfile(updates);
+        }
+      }
       setSuccess(true);
       setLoading(false);
       setTimeout(() => {
@@ -47,6 +60,12 @@ export const SwitchInstitutionModal: React.FC<SwitchInstitutionModalProps> = ({
     setSuccess(false);
     onClose();
   };
+
+  const roles = [
+    { id: 'student' as const, icon: GraduationCap, label: 'Student' },
+    { id: 'faculty' as const, icon: Users, label: 'Faculty' },
+    { id: 'guest' as const, icon: User, label: 'Guest' },
+  ];
 
   if (!isOpen) return null;
 
@@ -96,6 +115,7 @@ export const SwitchInstitutionModal: React.FC<SwitchInstitutionModalProps> = ({
             </motion.div>
           ) : (
             <>
+              {/* Institution Code */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   Institution Code
@@ -104,11 +124,54 @@ export const SwitchInstitutionModal: React.FC<SwitchInstitutionModalProps> = ({
                   type="text"
                   value={code}
                   onChange={(e) => { setCode(e.target.value.toUpperCase()); setError(null); }}
-                  placeholder="e.g. YESHUA339537"
+                  placeholder="e.g. CHRIST-BGR"
                   className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm font-mono text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   disabled={loading}
                   autoFocus
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSwitch(); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && code.trim()) handleSwitch(); }}
+                />
+              </div>
+
+              {/* Role Selection */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Your Role
+                </label>
+                <div className="flex gap-2">
+                  {roles.map((r) => {
+                    const Icon = r.icon;
+                    const isSelected = role === r.id;
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setRole(r.id)}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        {r.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Name */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Your Name
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Alex Paul"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                  disabled={loading}
                 />
               </div>
 

@@ -1,28 +1,32 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, ArrowRight, GraduationCap, Users, User, Loader2, AlertCircle, Building2, Sparkles, Shield } from 'lucide-react';
+import { X, ArrowRight, ArrowLeft, GraduationCap, Users, User, Loader2, AlertCircle, Building2, Sparkles, Shield, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 
 interface JoinInstitutionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onJoin: (institution: { id: string; name: string; campus: string; city: string; institution_code: string }, role: 'student' | 'faculty' | 'guest') => void;
+  onJoin: (institution: { id: string; name: string; campus: string; city: string; institution_code: string }, role: 'student' | 'faculty' | 'guest', profile: any) => void;
 }
 
-type Step = 'code' | 'role' | 'loading';
+type Step = 'code' | 'role' | 'name' | 'confirm' | 'loading';
 
 export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
   isOpen,
   onClose,
   onJoin,
 }) => {
+  const { joinWithCodeRoleName } = useAuth();
   const [step, setStep] = useState<Step>('code');
   const [institutionCode, setInstitutionCode] = useState('');
   const [selectedRole, setSelectedRole] = useState<'student' | 'faculty' | 'guest' | null>(null);
+  const [displayName, setDisplayName] = useState('');
   const [validating, setValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validatedInstitution, setValidatedInstitution] = useState<{
     id: string; name: string; campus: string; city: string; institution_code: string;
   } | null>(null);
+  const [joining, setJoining] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -30,9 +34,11 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
       setStep('code');
       setInstitutionCode('');
       setSelectedRole(null);
+      setDisplayName('');
       setError(null);
       setValidatedInstitution(null);
       setValidating(false);
+      setJoining(false);
     } else {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
@@ -49,7 +55,6 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
     setError(null);
 
     try {
-      // Use the existing RPC function for institution code validation
       const { data, error: rpcError } = await supabase
         .rpc('get_institution_by_code', { p_institution_code: trimmed });
 
@@ -66,8 +71,13 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
         return;
       }
 
-      // Handle both single object and array responses
       const inst = Array.isArray(data) ? data[0] : data;
+
+      if (inst.status && inst.status !== 'active') {
+        setError('This institution is currently unavailable. Please contact your institution administrator.');
+        setValidating(false);
+        return;
+      }
 
       setValidatedInstitution({
         id: inst.id,
@@ -88,17 +98,58 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
     setSelectedRole(role);
   };
 
-  const handleJoin = () => {
-    if (!selectedRole || !validatedInstitution) return;
-    onJoin(validatedInstitution, selectedRole);
+  const handleContinueFromRole = () => {
+    if (!selectedRole) return;
+    setStep('name');
+  };
+
+  const handleContinueFromName = () => {
+    if (!displayName.trim()) return;
+    setStep('confirm');
+  };
+
+  const handleConfirmJoin = async () => {
+    if (!selectedRole || !validatedInstitution || !displayName.trim()) return;
+
+    setJoining(true);
+    setError(null);
+
+    try {
+      const result = await joinWithCodeRoleName(
+        validatedInstitution.institution_code,
+        selectedRole,
+        displayName.trim()
+      );
+
+      if (result.error || !result.profile) {
+        setError(result.error || 'Failed to join. Please try again.');
+        setJoining(false);
+        return;
+      }
+
+      setJoining(false);
+      onJoin(validatedInstitution, selectedRole, result.profile);
+    } catch (err: any) {
+      console.error('[JoinInstitution] Join error:', err);
+      setError('Something went wrong. Please try again.');
+      setJoining(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       if (step === 'code') handleValidateCode();
-      else if (step === 'role' && selectedRole) handleJoin();
+      else if (step === 'name' && displayName.trim()) handleContinueFromName();
+      else if (step === 'confirm' && !joining) handleConfirmJoin();
     }
+  };
+
+  const handleBack = () => {
+    if (step === 'role') setStep('code');
+    else if (step === 'name') setStep('role');
+    else if (step === 'confirm') setStep('name');
+    setError(null);
   };
 
   if (!isOpen) return null;
@@ -108,6 +159,8 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
     { id: 'faculty' as const, icon: Users, title: 'Faculty', description: 'Access campus dining with faculty benefits.', color: 'blue' },
     { id: 'guest' as const, icon: User, title: 'Guest', description: 'Explore and order as a guest visitor.', color: 'amber' },
   ];
+
+  const roleLabel = selectedRole ? (selectedRole === 'student' ? 'Student' : selectedRole === 'faculty' ? 'Faculty' : 'Guest') : '';
 
   return (
     <div
@@ -136,7 +189,20 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
           <X className="w-4 h-4" />
         </button>
 
-        {/* STEP 1: Institution Code Entry */}
+        {/* Back button */}
+        {(step === 'role' || step === 'name' || step === 'confirm') && (
+          <button
+            onClick={handleBack}
+            className="absolute top-4 left-4 w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer"
+            style={{ background: '#F5F5F7', color: '#86868B' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#E8E8ED'; e.currentTarget.style.color = '#1D1D1F'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = '#F5F5F7'; e.currentTarget.style.color = '#86868B'; }}
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* ═══════════════════ STEP 1: INSTITUTION CODE ═══════════════════ */}
         {step === 'code' && (
           <div>
             <div className="mb-6">
@@ -218,7 +284,7 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
           </div>
         )}
 
-        {/* STEP 2: Role Selection */}
+        {/* ═══════════════════ STEP 2: ROLE SELECTION ═══════════════════ */}
         {step === 'role' && (
           <div>
             <div className="mb-6">
@@ -287,7 +353,7 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
             </div>
 
             <button
-              onClick={handleJoin}
+              onClick={handleContinueFromRole}
               disabled={!selectedRole}
               className="w-full flex items-center justify-center gap-2 apple-press"
               style={{
@@ -303,16 +369,154 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
               }}
             >
               <Shield className="w-4 h-4" />
-              <span>{selectedRole ? `Join as ${selectedRole === 'student' ? 'Student' : selectedRole === 'faculty' ? 'Faculty' : 'Guest'}` : 'Select a Role'}</span>
+              <span>{selectedRole ? 'Continue' : 'Select a Role'}</span>
               {selectedRole && <ArrowRight className="w-4 h-4" />}
             </button>
+          </div>
+        )}
+
+        {/* ═══════════════════ STEP 3: NAME ENTRY ═══════════════════ */}
+        {step === 'name' && (
+          <div>
+            <div className="mb-6">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-4" style={{ background: '#F5F5F7' }}>
+                <User className="w-3.5 h-3.5" style={{ color: '#0071E3' }} />
+                <span className="text-xs font-semibold" style={{ color: '#1D1D1F' }}>
+                  {roleLabel} at {validatedInstitution?.name}
+                </span>
+              </div>
+              <h3 className="text-[28px] font-bold leading-tight" style={{ color: '#1D1D1F', letterSpacing: '-0.02em' }}>
+                Your Name
+              </h3>
+              <p className="text-sm mt-2" style={{ color: '#86868B' }}>
+                Enter your display name. This is how others will see you.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold mb-1.5 block" style={{ color: '#86868B' }}>
+                  Display Name
+                </label>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => { setDisplayName(e.target.value); setError(null); }}
+                  onKeyDown={handleKeyDown}
+                  placeholder="e.g. A. Alex Paul"
+                  className="w-full px-4 py-3.5 rounded-2xl text-sm font-medium outline-none transition-all"
+                  style={{
+                    background: '#F5F5F7',
+                    color: '#1D1D1F',
+                    border: error ? '1.5px solid #FF3B30' : '1.5px solid transparent',
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.border = '1.5px solid #0071E3'; e.currentTarget.style.background = '#FFFFFF'; }}
+                  onBlur={(e) => { e.currentTarget.style.border = error ? '1.5px solid #FF3B30' : '1.5px solid transparent'; e.currentTarget.style.background = '#F5F5F7'; }}
+                  autoFocus
+                />
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2 p-3 rounded-xl" style={{ background: '#FFF0F0', border: '1px solid #FFD6D6' }}>
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#FF3B30' }} />
+                  <p className="text-xs font-medium" style={{ color: '#FF3B30' }}>{error}</p>
+                </div>
+              )}
+
+              <button
+                onClick={handleContinueFromName}
+                disabled={!displayName.trim()}
+                className="w-full flex items-center justify-center gap-2 apple-press"
+                style={{
+                  padding: '14px',
+                  borderRadius: '14px',
+                  background: displayName.trim() ? '#1D1D1F' : '#D2D2D7',
+                  color: displayName.trim() ? '#FFFFFF' : '#86868B',
+                  fontWeight: 600,
+                  fontSize: '15px',
+                  cursor: displayName.trim() ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.2s ease',
+                  border: 'none',
+                }}
+              >
+                <span>Continue</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════════════ STEP 4: CONFIRMATION ═══════════════════ */}
+        {step === 'confirm' && (
+          <div>
+            <div className="mb-6 text-center">
+              <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4" style={{ background: '#F0FDF4' }}>
+                <CheckCircle2 className="w-8 h-8" style={{ color: '#30D158' }} />
+              </div>
+              <h3 className="text-[28px] font-bold leading-tight" style={{ color: '#1D1D1F', letterSpacing: '-0.02em' }}>
+                Continue as
+              </h3>
+            </div>
+
+            {/* Confirmation Card */}
+            <div className="rounded-2xl p-5 mb-6" style={{ background: '#F5F5F7', border: '1px solid rgba(0,0,0,0.04)' }}>
+              <div className="text-center space-y-3">
+                <p className="text-xl font-bold" style={{ color: '#1D1D1F' }}>
+                  {displayName}
+                </p>
+                <div className="flex items-center justify-center gap-2">
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold" style={{ background: '#E8F5E9', color: '#1B8A2D' }}>
+                    {roleLabel}
+                  </span>
+                </div>
+                <div className="pt-2" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                  <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>
+                    {validatedInstitution?.name}
+                  </p>
+                  {validatedInstitution?.campus && (
+                    <p className="text-xs mt-0.5" style={{ color: '#86868B' }}>
+                      {validatedInstitution.campus}{validatedInstitution.city ? ` · ${validatedInstitution.city}` : ''}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {error && (
+              <div className="flex items-start gap-2 p-3 rounded-xl mb-4" style={{ background: '#FFF0F0', border: '1px solid #FFD6D6' }}>
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#FF3B30' }} />
+                <p className="text-xs font-medium" style={{ color: '#FF3B30' }}>{error}</p>
+              </div>
+            )}
 
             <button
-              onClick={() => { setStep('code'); setSelectedRole(null); setError(null); }}
-              className="w-full mt-3 text-center text-xs font-medium cursor-pointer"
-              style={{ color: '#86868B', background: 'none', border: 'none' }}
+              onClick={handleConfirmJoin}
+              disabled={joining}
+              className="w-full flex items-center justify-center gap-2 apple-press"
+              style={{
+                padding: '14px',
+                borderRadius: '14px',
+                background: joining ? '#D2D2D7' : '#1D1D1F',
+                color: joining ? '#86868B' : '#FFFFFF',
+                fontWeight: 600,
+                fontSize: '15px',
+                cursor: joining ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease',
+                border: 'none',
+              }}
             >
-              ← Use a different institution code
+              {joining ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Setting up...</span>
+                </>
+              ) : (
+                <>
+                  <span>Continue</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </div>
         )}

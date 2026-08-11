@@ -62,7 +62,7 @@ export const Hero: React.FC<HeroProps> = ({
           ) : (
             <>
               <button onClick={onOpenGetStarted} className="btn-primary flex items-center gap-2 cursor-pointer">
-                Start using Foodexa <ArrowUpRight className="w-4 h-4" />
+                Start with FOODEXA <ArrowUpRight className="w-4 h-4" />
               </button>
               <button onClick={onOpenRegisterInstitution} className="btn-secondary flex items-center gap-2 cursor-pointer">
                 Register Institution

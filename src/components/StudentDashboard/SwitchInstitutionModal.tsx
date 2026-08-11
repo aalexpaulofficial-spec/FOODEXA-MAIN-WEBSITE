@@ -34,7 +34,7 @@ export const SwitchInstitutionModal: React.FC<SwitchInstitutionModalProps> = ({
 
     try {
       const { data, error: rpcError } = await supabase
-        .rpc('get_institution_by_code', { p_code: code.trim() });
+        .rpc('get_institution_by_code', { p_institution_code: code.trim() });
 
       if (rpcError) {
         setError('Unable to verify institution code. Please try again.');

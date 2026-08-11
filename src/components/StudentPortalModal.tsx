@@ -320,11 +320,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     city: '',
     state: '',
     country: '',
-    institution_code: '',
+    institution_code: directSession.institutionCode || '',
   } : null);
   const effectiveProfile = user ? profile : (directSession ? {
     user_id: '',
-    email: '',
+    email: directSession.email || '',
     full_name: directSession.name,
     phone: null,
     institution_id: directSession.institutionId,

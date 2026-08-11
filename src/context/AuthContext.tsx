@@ -7,7 +7,9 @@ export interface DirectSession {
   temporarySessionId: string;
   institutionId: string;
   institutionName: string;
+  institutionCode: string;
   name: string;
+  email: string;
   role: 'student' | 'faculty' | 'guest';
 }
 
@@ -25,6 +27,7 @@ interface AuthContextType {
   signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; institutionId?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
   joinWithCodeRoleName: (institutionCode: string, role: 'student' | 'faculty' | 'guest', displayName: string) => Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }>;
+  joinWithDirectAccess: (institutionCode: string, role: 'student' | 'faculty' | 'guest', displayName: string, email: string) => Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }>;
   signOut: () => Promise<void>;
   clearAllSessionData: () => void;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
@@ -236,20 +239,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        setIsEmailVerified(!!existingSession?.user?.email_confirmed_at);
        if (existingSession?.user) {
          await fetchProfile(existingSession.user.id);
-       } else if (directSession) {
-         // Direct user session: load institution data
-         const inst = {
-           institution_id: directSession.institutionId,
-           institution_name: directSession.institutionName,
-           campus: '',
-           city: '',
-           state: '',
-           country: '',
-           institution_code: '',
-         };
-         setInstitutionData(inst);
-         setIsEmailVerified(true);
-       }
+} else if (directSession) {
+          // Direct user session: load institution data
+          const inst = {
+            institution_id: directSession.institutionId,
+            institution_name: directSession.institutionName,
+            campus: '',
+            city: '',
+            state: '',
+            country: '',
+            institution_code: directSession.institutionCode || '',
+          };
+          setInstitutionData(inst);
+          setIsEmailVerified(true);
+        }
        setLoading(false);
      };
 
@@ -418,7 +421,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     try {
       const { data, error: rpcError } = await supabase
-        .rpc('get_institution_by_code', { p_code: trimmed.trim() });
+        .rpc('get_institution_by_code', { p_institution_code: trimmed.trim() });
 
       if (rpcError) {
         console.error('[Auth] validateInstitutionCode RPC error:', rpcError.message);
@@ -728,7 +731,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         temporarySessionId: crypto.randomUUID(),
         institutionId: instData.institution_id,
         institutionName: instData.institution_name,
+        institutionCode: instData.institution_code,
         name: displayName.trim(),
+        email: '',
         role,
       };
 
@@ -763,6 +768,85 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { error: null, profile: profileLike, institution: instData };
     } catch (err: any) {
       console.error('[Auth] joinWithCodeRoleName exception:', err);
+      return { error: err?.message || 'Something went wrong. Please try again.', profile: null, institution: null };
+    }
+  }, [user, validateInstitutionCode, upsertProfileSafely, fetchProfile, setInstitutionData]);
+
+  // Direct Access flow: role + name + email + institution code → temporary session
+  const joinWithDirectAccess = useCallback(async (
+    institutionCode: string,
+    role: 'student' | 'faculty' | 'guest',
+    displayName: string,
+    email: string
+  ): Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }> => {
+    try {
+      // 1. Validate institution code against live Supabase
+      const { error: instError, data: instData } = await validateInstitutionCode(institutionCode);
+      if (instError || !instData) {
+        return { error: instError || 'Invalid institution code.', profile: null, institution: null };
+      }
+
+      // 2. If an authenticated (Google) user exists, persist institution to their Supabase profile
+      if (user) {
+        const { error: upsertError } = await upsertProfileSafely({
+          user_id: user.id,
+          full_name: displayName.trim(),
+          role,
+          institution_id: instData.institution_id,
+        });
+
+        if (upsertError) {
+          console.error('[Auth] joinWithDirectAccess profile upsert error:', upsertError.message);
+          return { error: upsertError.message, profile: null, institution: null };
+        }
+
+        const fetchedProfile = await fetchProfile(user.id);
+        setInstitutionData(instData);
+        return { error: null, profile: fetchedProfile, institution: instData };
+      }
+
+      // 3. Otherwise (Direct Access): create temporary frontend session (NO Supabase auth)
+      const tempSession: DirectSession = {
+        temporarySessionId: crypto.randomUUID(),
+        institutionId: instData.institution_id,
+        institutionName: instData.institution_name,
+        institutionCode: instData.institution_code,
+        name: displayName.trim(),
+        email: email.trim().toLowerCase(),
+        role,
+      };
+
+      setDirectSession(tempSession);
+      sessionStorage.setItem(DIRECT_SESSION_KEY, JSON.stringify(tempSession));
+
+      // 4. Set institution data for the portal
+      setInstitutionData(instData);
+
+      // 5. Build a minimal profile-like object for display purposes
+      const profileLike: Profile = {
+        user_id: '',
+        email: email.trim().toLowerCase(),
+        full_name: displayName.trim(),
+        phone: null,
+        institution_id: instData.institution_id,
+        role,
+        department: null,
+        semester: null,
+        programme: null,
+        campus_block: null,
+        designation: null,
+        avatar_url: null,
+        diet_preference: null,
+        created_at: '',
+        updated_at: '',
+      };
+
+      setProfile(profileLike);
+      setIsEmailVerified(true);
+
+      return { error: null, profile: profileLike, institution: instData };
+    } catch (err: any) {
+      console.error('[Auth] joinWithDirectAccess exception:', err);
       return { error: err?.message || 'Something went wrong. Please try again.', profile: null, institution: null };
     }
   }, [user, validateInstitutionCode, upsertProfileSafely, fetchProfile, setInstitutionData]);
@@ -966,6 +1050,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       signUpWithPassword,
       verifyOtp,
       joinWithCodeRoleName,
+      joinWithDirectAccess,
       signOut,
       clearAllSessionData,
       updateProfile,

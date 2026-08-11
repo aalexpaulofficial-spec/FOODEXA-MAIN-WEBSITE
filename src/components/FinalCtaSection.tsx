@@ -19,7 +19,7 @@ export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ onOpenCreateAc
         </p>
         <div className="flex items-center justify-center gap-4">
           <button onClick={onOpenCreateAccount} className="btn-primary flex items-center gap-2 cursor-pointer">
-            Start using Foodexa <ArrowUpRight className="w-4 h-4" />
+            Start with FOODEXA <ArrowUpRight className="w-4 h-4" />
           </button>
           <button onClick={onOpenRegisterInstitution} className="btn-secondary flex items-center gap-2 cursor-pointer">
             Register Institution
@@ -29,3 +29,4 @@ export const FinalCtaSection: React.FC<FinalCtaSectionProps> = ({ onOpenCreateAc
     </section>
   );
 };
+

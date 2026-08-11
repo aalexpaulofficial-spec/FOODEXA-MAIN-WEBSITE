@@ -56,7 +56,7 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
 
     try {
       const { data, error: rpcError } = await supabase
-        .rpc('get_institution_by_code', { p_code: trimmed });
+        .rpc('get_institution_by_code', { p_institution_code: trimmed });
 
       if (rpcError) {
         console.error('[JoinInstitution] RPC error:', rpcError);

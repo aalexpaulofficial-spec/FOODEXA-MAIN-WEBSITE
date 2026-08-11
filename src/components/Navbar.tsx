@@ -66,10 +66,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           ) : (
             <>
               <button onClick={onOpenLogin} className="hidden sm:flex items-center gap-1.5 nav-link">
-                Log in
+                Login
               </button>
               <button onClick={onOpenGetStarted} className="btn-primary flex items-center gap-1.5">
-                Start using Foodexa <ArrowUpRight className="w-3.5 h-3.5" />
+                Start with FOODEXA <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </>
           )}
@@ -78,3 +78,4 @@ export const Navbar: React.FC<NavbarProps> = ({
     </nav>
   );
 };
+

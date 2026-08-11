@@ -59,6 +59,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   const [institutionStatus, setInstitutionStatus] = useState<InstitutionStatus>('idle');
   const [verifiedInstitution, setVerifiedInstitution] = useState<InstitutionData | null>(null);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const verificationRequestRef = useRef(0);
 
   useEffect(() => {
     if (!isOpen) {
@@ -235,6 +236,33 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!isOpen || step !== 'details') return;
+    const institutionCode = detailsForm.institutionCode.trim();
+    setVerifiedInstitution(null);
+    if (!institutionCode) {
+      setInstitutionStatus('idle');
+      return;
+    }
+
+    const requestId = ++verificationRequestRef.current;
+    setInstitutionStatus('checking');
+    const timer = window.setTimeout(async () => {
+      const verifyResult = await validateInstitutionCode(institutionCode);
+      if (verificationRequestRef.current !== requestId) return;
+      if (verifyResult.error || !verifyResult.data) {
+        const isRpcError = verifyResult.error?.toLowerCase().includes('unable to verify');
+        setInstitutionStatus(isRpcError ? 'error' : 'invalid');
+        setVerifiedInstitution(null);
+        return;
+      }
+      setInstitutionStatus('valid');
+      setVerifiedInstitution(verifyResult.data);
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [detailsForm.institutionCode, isOpen, step, validateInstitutionCode]);
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRole || loading) return;
@@ -251,22 +279,16 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       setError('Please enter your institution code.');
       return;
     }
-
-    setLoading(true);
-    setInstitutionStatus('checking');
-    setVerifiedInstitution(null);
-
-    const verifyResult = await validateInstitutionCode(institutionCode);
-    if (verifyResult.error || !verifyResult.data) {
-      setLoading(false);
-      const isRpcError = verifyResult.error?.toLowerCase().includes('unable to verify');
-      setInstitutionStatus(isRpcError ? 'error' : 'invalid');
-      setError(isRpcError ? 'Unable to verify the institution right now. Please try again.' : null);
+    if (institutionStatus !== 'valid' || !verifiedInstitution) {
+      setError(institutionStatus === 'invalid'
+        ? null
+        : institutionStatus === 'error'
+          ? 'Unable to verify the institution right now. Please try again.'
+          : 'Please wait for your institution code to be verified.');
       return;
     }
 
-    setInstitutionStatus('valid');
-    setVerifiedInstitution(verifyResult.data);
+    setLoading(true);
 
     const { data: authData, error: userError } = await supabase.auth.getUser();
     const authUser = authData.user;
@@ -282,13 +304,13 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       email: authUser.email || normalizedEmail,
       full_name: fullName,
       role: selectedRole,
-      institution_id: verifyResult.data.institution_id,
+      institution_id: verifiedInstitution.institution_id,
     };
 
     const { data: savedProfile, error: profileError } = await supabase
       .from('profiles')
       .upsert(profilePayload, { onConflict: 'user_id' })
-      .select('user_id, email, full_name, phone, role, institution_id, department, semester, programme, campus_block, designation, avatar_url, diet_preference, created_at, updated_at')
+      .select('id, user_id, institution_id, full_name, email, phone, profile_image, role, created_at, updated_at, campus_block, programme, department, semester')
       .maybeSingle();
 
     setLoading(false);
@@ -299,10 +321,10 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       return;
     }
 
-    setInstitutionData(verifyResult.data);
+    setInstitutionData(verifiedInstitution);
     await refreshProfile();
     setStep('verified');
-    onAccountSetupSuccess({ profile: savedProfile as Profile, institution: verifyResult.data });
+    onAccountSetupSuccess({ profile: savedProfile as Profile, institution: verifiedInstitution });
   };
 
   const fieldClass = 'w-full rounded-2xl border border-[#D2D2D7] bg-white px-4 py-3 text-sm font-medium text-[#1D1D1F] outline-none transition focus:border-[#0071E3] focus:ring-4 focus:ring-[#0071E3]/10';
@@ -489,8 +511,12 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60">
-              {loading ? <><Loader2 className="h-4 w-4 animate-spin text-white" /><span>Saving...</span></> : <><span>Save Profile</span><ArrowRight className="h-4 w-4 text-white" /></>}
+            <button
+              type="submit"
+              disabled={loading || !detailsForm.fullName.trim() || institutionStatus !== 'valid' || !verifiedInstitution}
+              className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? <><Loader2 className="h-4 w-4 animate-spin text-white" /><span>Entering...</span></> : <><span>Enter Dashboard</span><ArrowRight className="h-4 w-4 text-white" /></>}
             </button>
 
             <button type="button" onClick={() => setStep('role')} className="w-full text-xs font-semibold text-[#515154] hover:text-[#1D1D1F]">

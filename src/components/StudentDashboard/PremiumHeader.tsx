@@ -26,6 +26,7 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
   institutionCode,
   institutionCity,
   institutionCampus,
+  liveRole,
   avatarUrl,
   userName,
   unreadNotif,
@@ -33,9 +34,9 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
   onOpenLxAI,
   onGoProfile,
 }) => {
-  const name = userName ? userName.split(' ')[0] : 'Student';
+  const name = userName?.trim() || 'Student';
   const initials = userName
-    ? userName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    ? userName.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase()
     : 'S';
 
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -48,9 +49,10 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
       setCurrentTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       setCurrentDate(now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }));
       const hour = now.getHours();
-      if (hour < 12) setGreeting('Good Morning');
-      else if (hour < 17) setGreeting('Good Afternoon');
-      else setGreeting('Good Evening');
+      if (hour >= 5 && hour < 12) setGreeting('Good morning');
+      else if (hour >= 12 && hour < 17) setGreeting('Good afternoon');
+      else if (hour >= 17 && hour < 21) setGreeting('Good evening');
+      else setGreeting('Good night');
     };
     updateTime();
     const interval = setInterval(updateTime, 1000);
@@ -91,6 +93,11 @@ export const PremiumHeader: React.FC<PremiumHeaderProps> = ({
               <h1 className="text-lg sm:text-2xl font-semibold tracking-tight text-[#1D1D1F] whitespace-nowrap">
                 {greeting}, {name} <Hand className="inline-block w-5 h-5 text-[#0071E3] align-[-2px]" />
               </h1>
+              {liveRole && (
+                <span className="inline-flex items-center rounded-xl bg-[#1D1D1F] px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
+                  {liveRole === 'faculty' ? 'Faculty' : liveRole === 'guest' ? 'Guest' : 'Student'}
+                </span>
+              )}
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold glass-card text-blue-700 whitespace-nowrap">
                 <Building2 className="w-3 h-3 text-[#0071E3] shrink-0" />
                 {institutionName || institutionCode || 'Campus Portal'}

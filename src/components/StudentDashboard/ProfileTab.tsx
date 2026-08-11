@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Building2, MapPin, LogOut, User, Mail, Phone, Shield,
   ChevronRight, FileText, Clock, Calendar,
-  GraduationCap, Hash, CreditCard
+  GraduationCap, CreditCard
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Profile, InstitutionData, Canteen } from '../../types';
@@ -76,7 +76,6 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
     ...(hasValue(profile?.programme) ? [{ label: 'Programme', value: profile!.programme!, icon: <GraduationCap className="w-4 h-4" /> }] : []),
     ...(hasValue(profile?.semester) ? [{ label: 'Semester', value: profile!.semester!, icon: <Calendar className="w-4 h-4" /> }] : []),
     ...(hasValue(profile?.campus_block) ? [{ label: 'Campus', value: profile!.campus_block!, icon: <MapPin className="w-4 h-4" /> }] : []),
-    ...(hasValue(profile?.designation) ? [{ label: 'Registration No.', value: profile!.designation!, icon: <Hash className="w-4 h-4" /> }] : []),
     ...(!isVisitor && hasValue(profile?.user_id) ? [{ label: 'Student ID', value: profile!.user_id.slice(-6).toUpperCase(), icon: <Shield className="w-4 h-4" /> }] : []),
     ...(!isVisitor && hasValue(accountCreated) ? [{ label: 'Account Created', value: formatDate(accountCreated), icon: <Clock className="w-4 h-4" /> }] : []),
   ];
@@ -95,9 +94,9 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
           {/* ── PROFILE HEADER ── */}
           <div className="glass-card dark:glass-card-dark rounded-[24px] p-6 text-center">
             <div className="flex flex-col items-center gap-4">
-              {profile?.avatar_url ? (
+              {profile?.profile_image ? (
                 <img
-                  src={profile.avatar_url}
+                  src={profile.profile_image}
                   alt={displayName}
                   referrerPolicy="no-referrer"
                   className="w-20 h-20 rounded-full object-cover ring-4 ring-slate-200 dark:ring-slate-600 shadow-lg"

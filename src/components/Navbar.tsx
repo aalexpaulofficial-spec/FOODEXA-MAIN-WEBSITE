@@ -52,8 +52,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           {(user && profile) || directSession ? (
             <button onClick={() => window.location.reload()} className="flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 transition-colors shadow-sm text-sm font-medium text-black">
               <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 overflow-hidden shrink-0">
-                {user && profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                {user && profile?.profile_image ? (
+                  <img src={profile.profile_image} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-[10px] text-white font-bold bg-blue-600">
                     {(user && profile?.full_name?.charAt(0).toUpperCase()) || directSession?.name?.charAt(0).toUpperCase() || 'U'}

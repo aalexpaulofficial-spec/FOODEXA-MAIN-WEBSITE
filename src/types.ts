@@ -49,6 +49,7 @@ export interface InstitutionRequestInsert {
 
 export interface Profile {
   user_id: string;
+  id?: string;
   email: string;
   full_name: string | null;
   phone: string | null;
@@ -60,9 +61,10 @@ export interface Profile {
   semester: string | null;
   programme: string | null;
   campus_block: string | null;
+  profile_image?: string | null;
   designation?: string | null;
-  avatar_url: string | null;
-  diet_preference: 'all' | 'veg' | 'non-veg' | null;
+  avatar_url?: string | null;
+  diet_preference?: 'all' | 'veg' | 'non-veg' | null;
   wallet_balance?: number;
   total_orders?: number;
   favorite_counters?: string[];

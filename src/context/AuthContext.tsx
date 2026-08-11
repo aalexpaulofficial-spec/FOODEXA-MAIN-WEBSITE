@@ -123,7 +123,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
     const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference'];
+        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'profile_image'];
        const safePayload: Record<string, any> = {};
        for (const key of KNOWN_PROFILE_COLUMNS) {
          if (key in payload) {
@@ -148,7 +148,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        return { error: null as Error | null };
      }, []);
 
-   const PROFILE_COLUMNS = 'user_id, email, full_name, phone, role, institution_id, department, semester, programme, campus_block, designation, avatar_url, diet_preference, created_at, updated_at';
+   const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, profile_image, role, created_at, updated_at, campus_block, programme, department, semester';
 
     const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
       try {
@@ -169,56 +169,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return fetchedProfile;
         }
 
-        const { data: userData } = await supabase.auth.getUser();
-        const authUser = userData?.user;
-        if (!authUser) return null;
-
-        console.info('[Auth] Profile missing for user, auto-creating:', userId);
-
-        const role = normalizeRole(authUser.user_metadata?.role);
-        const fullName = authUser.user_metadata?.full_name || null;
-        const phone = authUser.user_metadata?.phone || null;
-
-        const { error: upsertError } = await upsertProfileSafely({
-          user_id: userId,
-          email: authUser.email || '',
-          full_name: fullName,
-          phone,
-          role,
-          institution_id: authUser.user_metadata?.institution_id || null,
-          department: authUser.user_metadata?.department || null,
-          semester: authUser.user_metadata?.semester || null,
-          programme: authUser.user_metadata?.programme || null,
-          campus_block: authUser.user_metadata?.campus_block || null,
-
-        });
-
-        if (upsertError) {
-          console.error('[Auth] Auto-create profile failed:', upsertError.message);
-          return null;
-        }
-
-        const { data: newProfile, error: fetchError } = await supabase
-          .from('profiles')
-          .select(PROFILE_COLUMNS)
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (fetchError || !newProfile) {
-          console.error('[Auth] Re-fetch after auto-create failed:', fetchError?.message);
-          return null;
-        }
-
-        const createdProfile = { ...newProfile } as Profile;
-        setProfile(createdProfile);
-        await loadInstitutionForProfile(createdProfile);
-        return createdProfile;
+        setProfile(null);
+        setInstitutionData(null);
+        return null;
       } catch (err: any) {
         console.error('[Auth] Profile fetch threw an exception:', err?.message || err);
       }
 
       return null;
-    }, [loadInstitutionForProfile, upsertProfileSafely]);
+    }, [loadInstitutionForProfile]);
 
   const refreshProfile = useCallback(async () => {
     if (user) {
@@ -541,8 +500,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        };
      }
 
-     const fullName = pendingProfile?.fullName || userData.full_name || null;
+     const fullName = String(pendingProfile?.fullName || userData.full_name || '').trim();
      const phone = pendingProfile?.phone || userData.phone || null;
+
+     if (!fullName) {
+       console.error('[Auth] No full name available for verified account | userId:', userId);
+       return {
+         error: new Error('Please enter your full name before opening the dashboard.'),
+         profile: null,
+         institution: null,
+       };
+     }
 
      // PRODUCTION FIX: Multi-source institution_id resolution with last-resort API lookup
      let institutionId: string | null =
@@ -605,29 +573,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         fetchedProfile = await fetchProfile(userId);
       }
 
-      if (!fetchedProfile) {
-        console.warn('[Auth] Profile still missing after retry, auto-creating minimal profile...');
-        const { data: currentUser } = await supabase.auth.getUser();
-        const currentUserId = currentUser?.user?.id;
-        if (currentUserId) {
-          const { error: recreateError } = await upsertProfileSafely({
-            user_id: currentUserId,
-            email: currentUser.user?.email || normalizedEmail,
-            full_name: fullName,
-            phone,
-            role,
-            institution_id: institutionId,
-            department: userData.department || null,
-            semester: userData.semester || null,
-            programme: userData.programme || null,
-            campus_block: userData.campus_block || null,
-          });
-          if (!recreateError) {
-            fetchedProfile = await fetchProfile(currentUserId);
-          }
-        }
-      }
-
       setPendingRegistrationProfile(null);
 
       let fetchedInstitution: InstitutionData | null = null;
@@ -660,28 +605,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    };
 
    const ensureProfileExists = async (userId: string): Promise<Profile | null> => {
-     const existing = await fetchProfile(userId);
-     if (existing) return existing;
-
-     const { data: currentUser } = await supabase.auth.getUser();
-     const currentUserId = currentUser?.user?.id;
-     if (!currentUserId) return null;
-
-     console.info('[Auth] ensureProfileExists: auto-creating minimal profile for:', currentUserId);
-     const { error: recreateError } = await upsertProfileSafely({
-       user_id: currentUserId,
-       email: currentUser.user?.email || '',
-       full_name: currentUser.user?.user_metadata?.full_name || null,
-       phone: currentUser.user?.user_metadata?.phone || null,
-       role: normalizeRole(currentUser.user?.user_metadata?.role),
-       institution_id: null,
-       department: null,
-       semester: null,
-       programme: null,
-       campus_block: null,
-     });
-     if (recreateError) return null;
-     return await fetchProfile(currentUserId);
+     return await fetchProfile(userId);
    };
 
   const clearAllSessionData = () => {
@@ -758,9 +682,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         semester: null,
         programme: null,
         campus_block: null,
-        designation: null,
-        avatar_url: null,
-        diet_preference: null,
         created_at: '',
         updated_at: '',
       };
@@ -839,9 +760,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         semester: null,
         programme: null,
         campus_block: null,
-        designation: null,
-        avatar_url: null,
-        diet_preference: null,
         created_at: '',
         updated_at: '',
       };

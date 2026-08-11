@@ -124,8 +124,8 @@ export default function App() {
 
   const getDashboardRoute = (role: UserRole | null): string | null => {
     if (role === 'student') return '/student-dashboard';
-    if (role === 'faculty') return '/student-dashboard';
-    if (role === 'guest') return '/student-dashboard';
+    if (role === 'faculty') return '/faculty-dashboard';
+    if (role === 'guest') return '/guest-dashboard';
     if (role === 'institution_admin') return '/institution-dashboard';
     if (role === 'kitchen_staff' || role === 'canteen_manager') return '/kitchen-dashboard';
     if (role === 'super_admin') return '/super-admin-portal';
@@ -134,6 +134,7 @@ export default function App() {
 
   const isDashboardPath = (path: string) =>
     path === '/student-dashboard' || path === '/student/dashboard' ||
+    path === '/faculty-dashboard' || path === '/guest-dashboard' ||
     path === '/institution/dashboard' || path === '/kitchen/dashboard' || path === '/admin/dashboard';
 
   // ── Route-based initialization: open the correct modal based on the URL ──

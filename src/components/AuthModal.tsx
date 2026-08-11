@@ -90,7 +90,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     universityEmail: '',
     phone: '',
     department: '',
-    designation: '',
     facultyId: '',
     institutionCode: '',
     password: '',
@@ -507,7 +506,6 @@ if (validateError || !validatedInst) {
       semester: (currentForm as any).semester,
       programme: (currentForm as any).programme,
       campusBlock: (currentForm as any).campusBlock,
-      designation: (currentForm as any).designation,
       facultyId: (currentForm as any).facultyId,
     });
 
@@ -579,24 +577,9 @@ if (validateError || !validatedInst) {
        }
 
        if (!liveProfile) {
-         console.warn('[Auth] verifyOtp returned null profile, attempting to ensure profile exists...');
-         const { data: currentUser } = await supabase.auth.getUser();
-         if (currentUser?.user) {
-           const { error: ensureError } = await supabase.from('profiles').upsert({
-             user_id: currentUser.user.id,
-             email: currentUser.user.email || normalizedEmail,
-             full_name: currentUser.user.user_metadata?.full_name || null,
-             role: currentUser.user.user_metadata?.role || 'student',
-           }, { onConflict: 'user_id' });
-           if (ensureError) {
-             console.error('[Auth] Failed to ensure profile exists:', ensureError.message);
-           }
-         }
-         setOtpError('');
+         console.warn('[Auth] verifyOtp returned null profile; profile setup is required before dashboard entry.');
+         setOtpError('Your email is verified. Please complete your profile setup before opening the dashboard.');
          setRegistrationPhase('idle');
-         if (onLoginSuccess) {
-           onLoginSuccess({ profile: liveProfile || ({ user_id: '', email: normalizedEmail, full_name: null, role: 'student', institution_id: null, department: null, semester: null, programme: null, campus_block: null, designation: null, avatar_url: null, diet_preference: null, created_at: '', updated_at: '' } as Profile), institution: institution || null });
-         }
          return;
        }
 
@@ -983,29 +966,16 @@ onChange={(e) => {
 
                   {selectedAccountRole === 'faculty' && (
                     <>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-xs font-semibold text-[#86868B] mb-1 block">Department</label>
-                          <input
-                            type="text"
-                            required
-                            value={facultyForm.department}
-                            onChange={(e) => setFacultyForm({ ...facultyForm, department: e.target.value })}
-                            placeholder="e.g. Computer Science"
-                            className="w-full apple-input w-full"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-[#86868B] mb-1 block">Designation</label>
-                          <input
-                            type="text"
-                            required
-                            value={facultyForm.designation}
-                            onChange={(e) => setFacultyForm({ ...facultyForm, designation: e.target.value })}
-                            placeholder="e.g. Assistant Professor"
-                            className="w-full apple-input w-full"
-                          />
-                        </div>
+                      <div>
+                        <label className="text-xs font-semibold text-[#86868B] mb-1 block">Department</label>
+                        <input
+                          type="text"
+                          required
+                          value={facultyForm.department}
+                          onChange={(e) => setFacultyForm({ ...facultyForm, department: e.target.value })}
+                          placeholder="e.g. Computer Science"
+                          className="w-full apple-input w-full"
+                        />
                       </div>
 
                       <div>

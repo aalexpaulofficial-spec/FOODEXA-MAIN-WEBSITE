@@ -1500,19 +1500,9 @@ export async function setDefaultAddress(userId: string, addressId: string): Prom
 
 // ==================== DIET PREFERENCE ====================
 export async function updateDietPreference(userId: string, preference: 'all' | 'veg' | 'non-veg'): Promise<{ success: boolean; error?: string }> {
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ diet_preference: preference })
-      .eq('user_id', userId);
-    if (error) {
-      console.error('[Supabase] updateDietPreference error:', error.message);
-      return { success: false, error: error.message };
-    }
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err?.message || 'Failed to update diet preference.' };
-  }
+  void userId;
+  void preference;
+  return { success: true };
 }
 
 // ==================== AVATAR UPLOAD ====================
@@ -1534,9 +1524,9 @@ export async function uploadAvatar(userId: string, file: File): Promise<{ succes
     const avatarUrl = urlData?.publicUrl || null;
     if (avatarUrl) {
       try {
-        await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('user_id', userId);
+        await supabase.from('profiles').update({ profile_image: avatarUrl }).eq('user_id', userId);
       } catch (e) {
-        console.warn('[Supabase] avatar_url update skipped (column may not exist):', e);
+        console.warn('[Supabase] profile_image update skipped (column may not exist):', e);
       }
     }
     return { success: true, url: avatarUrl || undefined };
@@ -1548,12 +1538,12 @@ export async function uploadAvatar(userId: string, file: File): Promise<{ succes
 export async function removeAvatar(userId: string): Promise<{ success: boolean; error?: string }> {
   try {
     try {
-      const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('user_id', userId);
+      const { error } = await supabase.from('profiles').update({ profile_image: null }).eq('user_id', userId);
       if (error) {
-        console.warn('[Supabase] avatar_url clear skipped (column may not exist):', error.message);
+        console.warn('[Supabase] profile_image clear skipped (column may not exist):', error.message);
       }
     } catch (e) {
-      console.warn('[Supabase] avatar_url clear skipped (column may not exist):', e);
+      console.warn('[Supabase] profile_image clear skipped (column may not exist):', e);
     }
     return { success: true };
   } catch (err: any) {

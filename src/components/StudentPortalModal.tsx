@@ -333,9 +333,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     semester: null,
     programme: null,
     campus_block: null,
-    designation: null,
-    avatar_url: null,
-    diet_preference: null,
     created_at: '',
     updated_at: '',
   } : null);
@@ -1173,7 +1170,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             institutionCity={institutionCity}
             institutionCampus={institutionCampus}
             liveRole={liveRole}
-            avatarUrl={profile?.avatar_url || user?.user_metadata?.avatar_url}
+            avatarUrl={profile?.profile_image || user?.user_metadata?.avatar_url}
             userName={profile?.full_name || user?.email}
             walletBalance={profile?.wallet_balance}
             unreadNotif={unreadNotif}

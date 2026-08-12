@@ -22,6 +22,7 @@ interface AuthModalProps {
   onLoginSuccess?: (data: { profile: Profile; institution: InstitutionData | null }) => void;
   onBack?: () => void;
   onDirectLogin?: () => void;
+  onOpenCreateAccount?: () => void;
 }
 
 type AccountRole = 'student' | 'faculty' | 'guest';
@@ -57,6 +58,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onLoginSuccess,
   onBack,
   onDirectLogin,
+  onOpenCreateAccount,
 }) => {
   const { signUpWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
   const [mode, setMode] = useState<'login' | 'create' | 'quick'>(initialMode);
@@ -402,16 +404,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       setIsLoginSubmitting(true);
 
-      const exists = await checkEmailExists(normalizedLoginEmail);
-      if (!exists) {
-        setLoginError('No FOODEXA account was found with this email.');
-        setLoginNotice('Please create an account first.');
-        setIsLoginSubmitting(false);
-        return;
-      }
-
-      setRegistrationPhase('sending');
-      console.info('[Auth] Login OTP → signInWithOtp(shouldCreateUser: false) | email:', normalizedLoginEmail);
+      // ── LIVE Supabase account existence check ────────────────────────────
+      // We use signInWithOtp(shouldCreateUser: false) as the authoritative live
+      // check. Supabase returns an error for non-existent users WITHOUT sending
+      // an OTP. This never inspects auth.users directly and is case-insensitive
+      // (auth lowercases emails), fixing the false "account not found" bug.
+      console.info('[Auth] Login existence check → signInWithOtp(shouldCreateUser: false) | email:', normalizedLoginEmail);
       const { error } = await supabase.auth.signInWithOtp({
         email: normalizedLoginEmail,
         options: { shouldCreateUser: false },
@@ -420,13 +418,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (error) {
         console.error('FOODEXA AUTH ERROR:', error);
         const msg = error.message.toLowerCase();
-        if (msg.includes('rate limit') || msg.includes('too many')) {
-          setLoginError('Too many OTP requests. Please wait a moment before trying again.');
-        } else if (msg.includes('network') || msg.includes('fetch')) {
+        if (msg.includes('rate limit') || msg.includes('too many') || msg.includes('network') || msg.includes('fetch') || msg.includes('timeout')) {
           setLoginError('Unable to connect to FOODEXA right now. Please try again.');
-        } else {
-          setLoginError(error.message || 'Unable to send OTP. Please try again.');
+          setRegistrationPhase('idle');
+          setIsLoginSubmitting(false);
+          return;
         }
+        // Any other failure (incl. "user not found") means no FOODEXA account.
+        setLoginError('No FOODEXA account was found with this email.');
+        setLoginNotice('Please create an account first.');
         setRegistrationPhase('idle');
         setIsLoginSubmitting(false);
         return;
@@ -679,9 +679,10 @@ const handleCreateSubmit = async (e: React.FormEvent) => {
                       <button
                         type="button"
                         onClick={() => {
-                          setMode('create');
                           setLoginError(null);
                           setLoginNotice(null);
+                          onClose();
+                          onOpenCreateAccount?.();
                         }}
                         className="mt-2 w-full text-center text-xs font-bold text-[#0071E3] hover:underline"
                       >

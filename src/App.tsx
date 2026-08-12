@@ -152,8 +152,8 @@ export default function App() {
       if (isAccountRole(roleToUse)) {
         setIsRoleSelectionOpen(false);
         setSelectedRole(roleToUse);
-        setAuthInitialMode('create');
-        setIsAuthOpen(true);
+        setIsAuthOpen(false);
+        setIsStartFoodexaOpen(true);
       } else {
         setIsRoleSelectionOpen(true);
         setIsAuthOpen(false);
@@ -169,18 +169,18 @@ export default function App() {
     } else if (path === '/student/register') {
       setIsRoleSelectionOpen(false);
       setSelectedRole('student');
-      setAuthInitialMode('create');
-      setIsAuthOpen(true);
+      setIsAuthOpen(false);
+      setIsStartFoodexaOpen(true);
     } else if (path === '/faculty/register') {
       setIsRoleSelectionOpen(false);
       setSelectedRole('faculty');
-      setAuthInitialMode('create');
-      setIsAuthOpen(true);
+      setIsAuthOpen(false);
+      setIsStartFoodexaOpen(true);
     } else if (path === '/guest/register') {
       setIsRoleSelectionOpen(false);
       setSelectedRole('guest');
-      setAuthInitialMode('create');
-      setIsAuthOpen(true);
+      setIsAuthOpen(false);
+      setIsStartFoodexaOpen(true);
     } else if (isDashboardPath(path)) {
       // On a dashboard path — the session restore effect below handles opening
       // the correct dashboard. We close auth & role modals.
@@ -259,9 +259,9 @@ export default function App() {
   const handleOpenCreateAccount = (role: AccountRole) => {
     sessionStorage.setItem('foodexa_role', role);
     setSelectedRole(role);
-    setAuthInitialMode('create');
-    setIsAuthOpen(true);
+    setIsAuthOpen(false);
     setIsPortalAccessOpen(false);
+    setIsStartFoodexaOpen(true);
     const registerRoute = `/create-account?role=${role}`;
     if (location.pathname + location.search !== registerRoute) {
       navigate(registerRoute, { replace: false });
@@ -279,8 +279,8 @@ export default function App() {
   const handleRoleSelected = (role: AccountRole) => {
     sessionStorage.setItem('foodexa_role', role);
     setIsRoleSelectionOpen(false);
-    setAuthInitialMode('create');
-    setIsAuthOpen(true);
+    setIsAuthOpen(false);
+    setIsStartFoodexaOpen(true);
     setSelectedRole(role);
     const registerRoute = `/create-account?role=${role}`;
     if (location.pathname + location.search !== registerRoute) {
@@ -481,6 +481,10 @@ export default function App() {
         onDirectLogin={() => {
           setIsAuthOpen(false);
           setIsJoinInstitutionOpen(true);
+        }}
+        onOpenCreateAccount={() => {
+          setIsAuthOpen(false);
+          setIsStartFoodexaOpen(true);
         }}
         initialMode={authInitialMode}
         selectedRole={selectedRole}

@@ -162,7 +162,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
     const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference', 'registration_id', 'student_id', 'foodexa_plan', 'account_created_at'];
+        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference', 'registration_id', 'student_id', 'plan', 'foodexa_plan', 'account_created_at'];
        const safePayload: Record<string, any> = {};
        for (const key of KNOWN_PROFILE_COLUMNS) {
          if (key in payload) {
@@ -184,19 +184,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           .upsert(safePayload, { onConflict: 'user_id' });
 
         if (error) {
-          // If the new identifier/plan columns have not been migrated yet, retry
-          // without them so account creation/profile updates never hard-fail.
-          const msg = String(error.message || '').toLowerCase();
-          const missingColumn = (msg.includes('column') && (msg.includes('registration_id') || msg.includes('student_id') || msg.includes('plan'))) || msg.includes('could not find the column');
-          if (missingColumn) {
-            const { registration_id, student_id, foodexa_plan, ...legacyPayload } = safePayload;
-            const { error: legacyError } = await supabase
-              .from('profiles')
-              .upsert(legacyPayload, { onConflict: 'user_id' });
-            if (!legacyError) return { error: null as Error | null };
-            console.error('[Auth] Profile upsert (legacy) DB error:', legacyError?.message);
-            return { error: new Error(legacyError?.message || 'Profile update failed.') };
-          }
           console.error('[Auth] Profile upsert DB error:', error.message);
           const friendlyMessage = error.message.includes('duplicate key')
             ? 'Your profile already exists. Please try logging in.'
@@ -209,7 +196,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { error: null as Error | null };
      }, []);
 
-    const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, campus_block, programme, department, semester, designation, avatar_url, diet_preference, registration_id, student_id, foodexa_plan, account_created_at';
+    const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, campus_block, programme, department, semester, designation, avatar_url, diet_preference, registration_id, student_id, plan, foodexa_plan, account_created_at';
 
     // Ensure a profile carries permanent identifiers. If they are missing (e.g. a
     // profile created before this feature), generate them ONCE and persist them so

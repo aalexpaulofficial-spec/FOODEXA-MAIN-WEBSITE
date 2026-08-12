@@ -277,7 +277,7 @@ function createOrderItemsPayload(orderId: string, items: { id: string; name?: st
 
 export async function fetchOrders(params: { user_id?: string; institution_id?: string; status?: OrderStatus }): Promise<Order[]> {
   let query = supabase.from('orders').select(SELECT_ORDER_WITH_ITEMS);
-  if (params.user_id) query = query.eq('student_id', params.user_id);
+  if (params.user_id) query = query.eq('user_id', params.user_id);
   if (params.institution_id) query = query.eq('institution_id', params.institution_id);
   if (params.status) query = query.eq('status', params.status);
   query = query.order('created_at', { ascending: false });
@@ -309,8 +309,8 @@ function resolveOrderItems(row: any): OrderItem[] {
 export function mapOrder(row: any): Order {
   return {
     id: String(row.id),
-    student_id: String(row.student_id || row.user_id || ''),
-    user_id: String(row.student_id || row.user_id || ''),
+    student_id: String(row.user_id || ''),
+    user_id: String(row.user_id || ''),
     email: String(row.email || ''),
     customer_name: row.customer_name || null,
     phone: row.phone || null,
@@ -514,7 +514,7 @@ export async function createOrderAfterPayment(params: {
   }
 
   const orderPayload: Record<string, any> = {
-    student_id: params.user_id || null,
+    user_id: params.user_id || null,
     email: params.email,
     customer_name: customerName,
     phone,
@@ -657,7 +657,7 @@ export async function placeOrder(params: {
   }
 
   const payload: Record<string, any> = {
-    student_id: params.user_id || null,
+    user_id: params.user_id || null,
     email: params.email,
     customer_name: customerName,
     phone: phone,
@@ -1113,7 +1113,7 @@ export function subscribeOrders(
   callback: RealtimeCallback<any>,
   filter?: { user_id?: string; institution_id?: string }
 ) {
-  const realtimeFilter = filter?.user_id ? `student_id=eq.${filter.user_id}` : filter?.institution_id ? `institution_id=eq.${filter.institution_id}` : undefined;
+  const realtimeFilter = filter?.user_id ? `user_id=eq.${filter.user_id}` : filter?.institution_id ? `institution_id=eq.${filter.institution_id}` : undefined;
   const key = `orders-realtime:${realtimeFilter || 'all'}`;
   return subscribeToRealtime(key, [{ table: 'orders', filter: realtimeFilter, callback }]);
 }

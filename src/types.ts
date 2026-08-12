@@ -68,12 +68,12 @@ export interface Profile {
   wallet_balance?: number;
   total_orders?: number;
   favorite_counters?: string[];
-  // Permanent FOODEXA identifiers (generated exactly once at account creation)
+  
+  // Permanent Identifiers added back
   registration_id?: string | null;
   student_id?: string | null;
-  // FOODEXA plan loaded from the database (column: foodexa_plan)
+  plan?: string | null;
   foodexa_plan?: string | null;
-  // Account creation timestamp (set once at profile creation)
   account_created_at?: string | null;
 }
 

@@ -150,8 +150,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
                   <CreditCard className="w-5 h-5 text-[#30D158]" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-[#1D1D1F] dark:text-white">{profile?.foodexa_plan ? String(profile.foodexa_plan).charAt(0).toUpperCase() + String(profile.foodexa_plan).slice(1) : 'Free'}</p>
-                  <p className="text-xs text-[#86868B] dark:text-[#86868B]">{profile?.foodexa_plan && profile.foodexa_plan.toLowerCase() !== 'free' ? 'View benefits in app' : '₹0 · 1 Month'}</p>
+                  <p className="text-sm font-bold text-[#1D1D1F] dark:text-white">{(profile?.plan || profile?.foodexa_plan) ? String(profile.plan || profile.foodexa_plan).charAt(0).toUpperCase() + String(profile.plan || profile.foodexa_plan).slice(1) : 'Free'}</p>
+                  <p className="text-xs text-[#86868B] dark:text-[#86868B]">{(profile?.plan || profile?.foodexa_plan) && String(profile.plan || profile.foodexa_plan).toLowerCase() !== 'free' ? 'View benefits in app' : '₹0 · 1 Month'}</p>
                 </div>
               </div>
               <span className="px-3 py-1 bg-[#30D158]/10 text-[#30D158] text-[10px] font-bold rounded-full uppercase tracking-wider">

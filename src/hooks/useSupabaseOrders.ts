@@ -17,7 +17,7 @@ interface UseSupabaseOrdersReturn {
   refresh: () => Promise<void>;
 }
 
-function normalizeStatus(status: any): OrderStatus {
+function normalizeOrderStatus(status: any): OrderStatus {
   const s = String(status || 'pending').toLowerCase();
   if (['pending', 'order received'].includes(s)) return 'pending';
   if (['accepted', 'confirmed'].includes(s)) return 'confirmed';
@@ -26,6 +26,12 @@ function normalizeStatus(status: any): OrderStatus {
   if (['completed', 'collected', 'delivered'].includes(s)) return 'completed';
   if (['cancelled', 'canceled'].includes(s)) return 'cancelled';
   return 'pending';
+}
+
+function normalizePaymentStatus(status: any): string {
+  const s = String(status || 'pending').toLowerCase();
+  const validStatuses = ['pending', 'authorized', 'captured', 'paid', 'success', 'failed', 'cancelled', 'refunded'];
+  return validStatuses.includes(s) ? s : 'pending';
 }
 
 function mapJoinedItems(orderRow: any): OrderItem[] {
@@ -61,10 +67,13 @@ function mapJoinedItems(orderRow: any): OrderItem[] {
 }
 
 function mapOrderRow(r: any): Order {
+  // Use counter_code from database, fallback to counter_name, then counter
+  const counterCode = r.counter_code || r.counter_name || r.counter || 'Campus Counter';
+  
   return {
     id: String(r.id),
-    student_id: String(r.student_id || r.user_id || ''),
-    user_id: String(r.student_id || r.user_id || ''),
+    student_id: String(r.user_id || ''),
+    user_id: String(r.user_id || ''),
     email: String(r.email || ''),
     customer_name: r.customer_name || null,
     phone: r.phone || null,
@@ -76,13 +85,13 @@ function mapOrderRow(r: any): Order {
     category_id: r.category_id || null,
     order_id: r.order_number ? `#FX-${String(r.order_number).padStart(4, '0')}` : `#FX-${String(r.id).slice(-4).toUpperCase()}`,
     order_number: r.order_number || undefined,
-    counter: r.counter_name || r.counter || 'Campus Counter',
+    counter: counterCode,
     items: mapJoinedItems(r),
     total_amount: Number(r.total_amount || 0),
     transaction_amount: Number(r.transaction_amount || r.total_amount || 0),
-    status: normalizeStatus(r.status),
-    order_status: r.order_status || r.status || 'pending',
-    payment_status: r.payment_status || 'pending',
+    status: normalizeOrderStatus(r.status),
+    order_status: normalizeOrderStatus(r.order_status || r.status || 'pending'),
+    payment_status: normalizePaymentStatus(r.payment_status),
     kitchen_status: r.kitchen_status || undefined,
     counter_status: r.counter_status || undefined,
     pickup_code: r.pickup_code || null,
@@ -110,7 +119,8 @@ function mapOrderRow(r: any): Order {
   };
 }
 
-const ORDER_COLUMNS = 'id, user_id, email, role, institution_id, institution_code, counter, items, total_amount, status, order_id, pickup_code, qr_code, qr_code_data, locker_number, category_id, counter_id, payment_status, created_at, accepted_at, preparing_at, ready_at, completed_at, updated_at';
+// Include counter_code, payment_status, order_status, paid_at, cancelled_at
+const ORDER_COLUMNS = 'id, user_id, email, role, institution_id, institution_code, counter, counter_code, counter_name, items, total_amount, status, order_status, order_id, pickup_code, qr_code, qr_code_data, locker_number, category_id, counter_id, payment_status, created_at, accepted_at, preparing_at, ready_at, completed_at, updated_at, paid_at, cancelled_at, payment_method, razorpay_order_id, razorpay_payment_id, razorpay_signature';
 const ORDER_ITEM_COLUMNS = 'id, order_id, menu_item_id, name, variant, quantity, price, created_at';
 
 export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersOptions): UseSupabaseOrdersReturn {

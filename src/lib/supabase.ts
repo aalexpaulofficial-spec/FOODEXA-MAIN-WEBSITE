@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Trim any accidental newlines/whitespace that may be injected from env vars
 const rawUrl = (import.meta.env.VITE_SUPABASE_URL as string || '').trim();
@@ -15,11 +15,23 @@ if (envMissing) {
   );
 }
 
-export const supabase = createClient(rawUrl, rawKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storageKey: 'foodexa-main-auth',
-  },
-});
+// Singleton pattern: prevent multiple GoTrueClient instances in browser context
+// (causes "Multiple GoTrueClient instances detected" console warning)
+const SUPABASE_CLIENT_KEY = '__foodexa_supabase_client__';
+
+const g = globalThis as Record<string, unknown>;
+let supabaseClient = g[SUPABASE_CLIENT_KEY] as SupabaseClient | undefined;
+
+if (!supabaseClient) {
+  supabaseClient = createClient(rawUrl, rawKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storageKey: 'foodexa-main-auth',
+    },
+  });
+  g[SUPABASE_CLIENT_KEY] = supabaseClient;
+}
+
+export const supabase = supabaseClient;

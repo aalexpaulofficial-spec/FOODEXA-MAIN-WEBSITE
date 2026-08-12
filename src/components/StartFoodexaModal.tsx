@@ -13,7 +13,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, OTP_LENGTH } from '../context/AuthContext';
 import type { InstitutionData, Profile } from '../types';
 
 interface StartFoodexaModalProps {
@@ -36,7 +36,7 @@ const roles = [
 ];
 
 const PENDING_VERIFICATION_EMAIL_KEY = 'foodexa_pending_verification_email';
-const RESEND_COOLDOWN_SECONDS = 30;
+const RESEND_COOLDOWN_SECONDS = 60;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const initialAccountForm = {
@@ -76,11 +76,14 @@ const getPasswordStrength = (password: string) => {
 const mapOtpErrorMessage = (message: string) => {
   const lower = message.toLowerCase();
 
-  if (lower.includes('expired') || lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
-    return 'Invalid or expired verification code. Please check the latest code in your email and try again.';
+  if (lower.includes('expired')) {
+    return 'This verification code has expired. Please request a new code.';
+  }
+  if (lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
+    return 'Invalid verification code. Please check the 8-digit code and try again.';
   }
   if (lower.includes('network') || lower.includes('fetch') || lower.includes('server') || lower.includes('rate limit') || lower.includes('too many')) {
-    return 'Verification service is temporarily unavailable. Please try again.';
+    return 'Unable to send a new code. Please try again shortly.';
   }
 
   return 'Unable to verify right now. Please try again.';
@@ -104,7 +107,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   const [selectedRole, setSelectedRole] = useState<AccountRole | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [otpDigits, setOtpDigits] = useState<string[]>(Array(6).fill(''));
+  const [otpDigits, setOtpDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [pendingSignupEmail, setPendingSignupEmail] = useState('');
   const [institutionCode, setInstitutionCode] = useState('');
   const [verifiedInstitution, setVerifiedInstitution] = useState<InstitutionData | null>(null);
@@ -139,7 +142,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setSelectedRole(null);
     setShowPassword(false);
     setShowConfirmPassword(false);
-    setOtpDigits(Array(6).fill(''));
+    setOtpDigits(Array(OTP_LENGTH).fill(''));
     setPendingSignupEmail('');
     setInstitutionCode('');
     setVerifiedInstitution(null);
@@ -226,7 +229,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
     sessionStorage.setItem(PENDING_VERIFICATION_EMAIL_KEY, normalizedEmail);
     setPendingSignupEmail(normalizedEmail);
-    setOtpDigits(Array(6).fill(''));
+    setOtpDigits(Array(OTP_LENGTH).fill(''));
     setResendCountdown(RESEND_COOLDOWN_SECONDS);
     setLoading(false);
     setStep('otp');
@@ -242,35 +245,41 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
     setOtpDigits((prev) => {
       const next = [...prev];
-      digits.slice(0, 6 - index).split('').forEach((digit, offset) => {
+      digits.slice(0, OTP_LENGTH - index).split('').forEach((digit, offset) => {
         next[index + offset] = digit;
       });
       return next;
     });
 
-    const nextIndex = Math.min(index + digits.length, 5);
+    const nextIndex = Math.min(index + digits.length, OTP_LENGTH - 1);
     window.setTimeout(() => otpRefs.current[nextIndex]?.focus(), 0);
     setError(null);
   };
 
   const handleOtpKeyDown = (index: number, event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      setOtpDigits((prev) => prev.map((digit, digitIndex) => (digitIndex === index - 1 ? '' : digit)));
       otpRefs.current[index - 1]?.focus();
     }
   };
 
   const handleOtpPaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
-    const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
     if (!pasted) return;
     event.preventDefault();
-    setOtpDigits(Array.from({ length: 6 }, (_, index) => pasted[index] || ''));
-    window.setTimeout(() => otpRefs.current[Math.min(pasted.length, 6) - 1]?.focus(), 0);
+    setOtpDigits(Array.from({ length: OTP_LENGTH }, (_, index) => pasted[index] || ''));
+    window.setTimeout(() => otpRefs.current[Math.min(pasted.length, OTP_LENGTH) - 1]?.focus(), 0);
     setError(null);
   };
 
   const handleVerifyOtp = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (isBusy || otpCode.length !== 6) return;
+    if (isBusy || otpCode.length !== OTP_LENGTH) {
+      if (otpCode.length !== OTP_LENGTH) {
+        setError('Please enter the complete 8-digit verification code.');
+      }
+      return;
+    }
 
     const signupEmail = (getPendingVerificationEmail() || pendingSignupEmail).trim().toLowerCase();
     if (!signupEmail) {
@@ -286,6 +295,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setLoading(false);
 
     if (verifyError) {
+      console.error('Supabase Auth Error:', verifyError);
       console.error('[FOODEXA AUTH] OTP verification error:', verifyError);
       setError(mapOtpErrorMessage(verifyError.message));
       return;
@@ -321,12 +331,15 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setResending(false);
 
     if (otpError) {
+      console.error('Supabase Auth Error:', otpError);
       console.error('[FOODEXA AUTH] Resend error:', otpError);
       setError(mapOtpErrorMessage(otpError.message));
       return;
     }
 
+    setOtpDigits(Array(OTP_LENGTH).fill(''));
     setResendCountdown(RESEND_COOLDOWN_SECONDS);
+    window.setTimeout(() => otpRefs.current[0]?.focus(), 0);
   };
 
   const handleVerifyInstitution = async (event: React.FormEvent) => {
@@ -613,7 +626,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
         {step === 'otp' && (
           <form onSubmit={handleVerifyOtp} className="space-y-5">
-            {renderHeader('CHECK YOUR EMAIL', 'Enter the 6-digit verification code sent to:')}
+            {renderHeader('CHECK YOUR EMAIL', 'Enter the 8-digit verification code sent to:')}
 
             <p className="rounded-2xl bg-[#F5F5F7] px-4 py-3 text-center text-sm font-bold text-[#1D1D1F]">
               {getPendingVerificationEmail() || pendingSignupEmail}
@@ -628,7 +641,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
             <div>
               <label className="mb-2 block text-xs font-semibold text-[#515154]">Verification Code *</label>
-              <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
+              <div className="flex justify-center gap-1.5 sm:gap-2">
                 {otpDigits.map((digit, index) => (
                   <input
                     key={index}
@@ -643,7 +656,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
                     onChange={(event) => handleOtpChange(index, event.target.value)}
                     onKeyDown={(event) => handleOtpKeyDown(index, event)}
                     onPaste={handleOtpPaste}
-                    className="aspect-square w-full rounded-xl border border-[#D2D2D7] bg-white text-center font-mono text-lg font-bold text-[#1D1D1F] outline-none transition focus:border-[#0071E3] focus:ring-4 focus:ring-[#0071E3]/10"
+                    className="w-10 h-12 sm:w-12 sm:h-14 rounded-xl border border-[#D2D2D7] bg-white text-center font-mono text-base sm:text-lg font-bold text-[#1D1D1F] outline-none transition focus:border-[#0071E3] focus:ring-4 focus:ring-[#0071E3]/10"
                     aria-label={`OTP digit ${index + 1}`}
                   />
                 ))}
@@ -652,7 +665,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
             <button
               type="submit"
-              disabled={isBusy || otpCode.length !== 6}
+              disabled={isBusy || otpCode.length !== OTP_LENGTH}
               className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (

@@ -51,16 +51,21 @@ const normalizeRole = (value: unknown): UserRole | null => {
 const DIRECT_SESSION_KEY = 'foodexa-direct-session';
 const PENDING_VERIFICATION_EMAIL_KEY = 'foodexa_pending_verification_email';
 
+export const OTP_LENGTH = 8;
+
 const mapOtpErrorMessage = (message: string) => {
   const lower = message.toLowerCase();
-  if (lower.includes('expired') || lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
-    return 'Invalid or expired verification code. Please check the latest code in your email and try again.';
+  if (lower.includes('expired')) {
+    return 'This verification code has expired. Please request a new code.';
+  }
+  if (lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
+    return 'Invalid verification code. Please check the 8-digit code and try again.';
   }
   if (lower.includes('rate limit') || lower.includes('too many')) {
-    return 'Verification service is temporarily unavailable. Please try again.';
+    return 'Too many attempts. Please wait and request a new code.';
   }
   if (lower.includes('network') || lower.includes('fetch')) {
-    return 'Verification service is temporarily unavailable. Please try again.';
+    return 'Unable to send a new code. Please try again shortly.';
   }
   return message;
 };
@@ -498,8 +503,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        if (!safeToken) {
          return { error: new Error('Please enter the OTP code sent to your email.'), profile: null, institution: null };
        }
-        if (safeToken.length !== 6) {
-          return { error: new Error('Please enter the 6-digit verification code sent to your email.'), profile: null, institution: null };
+if (safeToken.length !== OTP_LENGTH) {
+          return { error: new Error('Please enter the complete 8-digit verification code.'), profile: null, institution: null };
         }
 
         console.info('[Auth] Attempting OTP verification with type "email"...');
@@ -510,6 +515,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
 
         if (error) {
+          console.error('Supabase Auth Error:', error);
           console.error('[FOODEXA AUTH] OTP verification error:', error);
          return {
            error: new Error(mapOtpErrorMessage(error.message)),

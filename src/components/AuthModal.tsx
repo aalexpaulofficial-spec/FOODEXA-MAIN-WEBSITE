@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { X, Lock, User, ArrowRight, ArrowLeft, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2, RefreshCw, Eye, EyeOff } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, OTP_LENGTH } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { UserRole, Profile } from '../types';
 
@@ -27,21 +27,24 @@ interface AuthModalProps {
 type AccountRole = 'student' | 'faculty' | 'guest';
 const ACCOUNT_ROLES: AccountRole[] = ['student', 'faculty', 'guest'];
 const PENDING_VERIFICATION_EMAIL_KEY = 'foodexa_pending_verification_email';
-const RESEND_COOLDOWN_SECONDS = 30;
+const RESEND_COOLDOWN_SECONDS = 60;
 
 const getPendingVerificationEmail = () =>
   (sessionStorage.getItem(PENDING_VERIFICATION_EMAIL_KEY) || '').trim().toLowerCase();
 
 const mapOtpErrorMessage = (message: string) => {
   const lower = message.toLowerCase();
-  if (lower.includes('expired') || lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
-    return 'Invalid or expired verification code. Please check the latest code in your email and try again.';
+  if (lower.includes('expired')) {
+    return 'This verification code has expired. Please request a new code.';
+  }
+  if (lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
+    return 'Invalid verification code. Please check the 8-digit code and try again.';
   }
   if (lower.includes('rate limit') || lower.includes('too many')) {
-    return 'Verification service is temporarily unavailable. Please try again.';
+    return 'Too many attempts. Please wait and request a new code.';
   }
   if (lower.includes('network') || lower.includes('fetch')) {
-    return 'Verification service is temporarily unavailable. Please try again.';
+    return 'Unable to send a new code. Please try again shortly.';
   }
   return message;
 };
@@ -572,17 +575,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         email: normalizedEmail,
       });
       if (error) {
+        console.error('Supabase Auth Error:', error);
         console.error('[FOODEXA AUTH] Resend error:', error);
         setOtpError(mapOtpErrorMessage(error.message || 'Failed to resend OTP. Please try again.'));
         setRegistrationPhase('sent');
         return;
       }
       console.info('[Auth] OTP email resent successfully for:', normalizedEmail);
+      setOtpCode('');
       setResendCountdown(RESEND_COOLDOWN_SECONDS);
       setRegistrationPhase('sent');
+      window.setTimeout(() => document.getElementById('otp-box-0')?.focus(), 0);
     } catch (err) {
       console.error('[Auth] OTP resend threw:', err);
-      setOtpError('Verification service is temporarily unavailable. Please try again.');
+      setOtpError('Unable to send a new code. Please try again shortly.');
       setRegistrationPhase('sent');
     }
   };
@@ -594,14 +600,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const normalizedToken = otpCode.replace(/\D/g, '').trim();
       console.info('[Auth] OTP submit | email:', normalizedEmail, '| token length:', normalizedToken.length);
 
-      if (normalizedToken.length !== 6) {
-        setOtpError('Please enter the 6-digit verification code sent to your email.');
+      if (normalizedToken.length !== OTP_LENGTH) {
+        setOtpError('Please enter the complete 8-digit verification code.');
         return;
       }
 
        const { error, profile: liveProfile, institution } = await verifyOtp(normalizedEmail, normalizedToken);
 
        if (error) {
+         console.error('Supabase Auth Error:', error);
          console.error('[FOODEXA AUTH] OTP verification error:', error);
          setOtpError(error.message || 'OTP verification failed. Please check the code and try again.');
          return;
@@ -1040,7 +1047,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
               <h3 className="text-xl font-bold text-black">Check Your Email</h3>
                <p className="text-xs text-[#86868B] leading-relaxed">
-                 Enter the 6-digit verification code sent to:
+                 Enter the 8-digit verification code sent to:
                  <br />
                  <strong className="text-black">{getPendingVerificationEmail() || currentEmail || ''}</strong>
                </p>
@@ -1057,8 +1064,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                  <label className="text-xs font-semibold text-[#86868B] mb-2 block text-center">
                    Verification Code
                  </label>
-                  <div className="flex justify-center gap-1.5">
-                    {Array.from({ length: 6 }).map((_, i) => (
+                  <div className="flex justify-center gap-1.5 sm:gap-2">
+                    {Array.from({ length: OTP_LENGTH }).map((_, i) => (
                       <input
                         key={i}
                         id={`otp-box-${i}`}
@@ -1072,9 +1079,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           if (!val && !e.target.value) return;
                           const newCode = otpCode.split('');
                           newCode[i] = val.slice(-1);
-                          const joined = newCode.join('').slice(0, 6);
+                          const joined = newCode.join('').slice(0, OTP_LENGTH);
                           setOtpCode(joined);
-                          if (val && i < 5) {
+                          if (val && i < OTP_LENGTH - 1) {
                             document.getElementById(`otp-box-${i + 1}`)?.focus();
                           }
                         }}
@@ -1088,14 +1095,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         }}
                         onPaste={(e) => {
                           e.preventDefault();
-                          const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+                          const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
                           if (pasted) {
                             setOtpCode(pasted);
-                            const focusIdx = Math.min(pasted.length, 5);
+                            const focusIdx = Math.min(pasted.length, OTP_LENGTH - 1);
                             document.getElementById(`otp-box-${focusIdx}`)?.focus();
                           }
                         }}
-                        className="w-10 h-12 text-center text-lg font-mono font-bold border border-gray-200 rounded-xl focus:border-black focus:outline-none bg-white transition-colors"
+                        className="w-10 h-12 sm:w-12 sm:h-14 text-center text-base sm:text-lg font-mono font-bold border border-gray-200 rounded-xl focus:border-black focus:outline-none bg-white transition-colors"
                       />
                     ))}
                   </div>
@@ -1103,7 +1110,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <button
                 type="submit"
-                disabled={otpCode.replace(/\D/g, '').length !== 6 || isCreatingAccount}
+                disabled={otpCode.replace(/\D/g, '').length !== OTP_LENGTH || isCreatingAccount}
                 className="w-full btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <ShieldCheck className="w-4 h-4 text-white" />

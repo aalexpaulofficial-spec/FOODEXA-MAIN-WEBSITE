@@ -257,8 +257,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         console.info('[Auth] Profile missing for user, auto-creating:', userId);
 
-        const role = normalizeRole(authUser.user_metadata?.role);
-        const fullName = authUser.user_metadata?.full_name || null;
+        const role = normalizeRole(authUser.user_metadata?.role || pendingOtpProfileRef.current?.role) || 'student';
+        const fullName = authUser.user_metadata?.full_name || pendingOtpProfileRef.current?.fullName || authUser.email?.split('@')[0] || 'User';
+        const institutionId = authUser.user_metadata?.institution_id || pendingOtpProfileRef.current?.institutionId || null;
+        const phone = authUser.user_metadata?.phone || pendingOtpProfileRef.current?.phone || null;
 
         // RULE 2.7: If the authenticated user exists in auth.users but has no
         // profile row, ALWAYS create one (keyed by the authenticated user id) so we
@@ -270,10 +272,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           user_id: userId,
           email: authUser.email || '',
           full_name: fullName,
-          phone: authUser.user_metadata?.phone || null,
+          phone,
           role,
           designation: role,
-          institution_id: authUser.user_metadata?.institution_id || null,
+          institution_id: institutionId,
           department: authUser.user_metadata?.department || null,
           semester: authUser.user_metadata?.semester || null,
           programme: authUser.user_metadata?.programme || null,

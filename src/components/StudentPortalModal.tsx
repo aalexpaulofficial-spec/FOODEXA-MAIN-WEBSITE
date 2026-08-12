@@ -363,6 +363,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [loading, setLoading] = useState(true);
   const [reloadNonce, setReloadNonce] = useState(0);
   const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [paymentInitStatus, setPaymentInitStatus] = useState<'idle' | 'creating_order' | 'loading_gateway' | 'opening_checkout'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [paidPendingConfirmation, setPaidPendingConfirmation] = useState<{
     razorpay_order_id: string;
@@ -877,6 +878,29 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     setApplyingCoupon(false);
   };
 
+  const loadRazorpayScript = (): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      if (window.Razorpay) {
+        console.log('[FOODEXA PAYMENT] Razorpay already loaded');
+        resolve();
+        return;
+      }
+      console.log('[FOODEXA PAYMENT] Loading Razorpay Checkout script');
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => {
+        console.log('[FOODEXA PAYMENT] Razorpay Checkout script loaded');
+        resolve();
+      };
+      script.onerror = () => {
+        console.error('[FOODEXA PAYMENT] Failed to load Razorpay Checkout script');
+        reject(new Error('Payment gateway could not be loaded. Please try again.'));
+      };
+      document.head.appendChild(script);
+    });
+  };
+
   // ── PRODUCTION PAYMENT FLOW ────────────────────────────────────────────
   // Order is ONLY created in Supabase AFTER payment succeeds.
   // Institution never sees unpaid orders.
@@ -904,6 +928,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     if (!cart.length) return;
 
     setSubmittingOrder(true); setError(null);
+    setPaymentInitStatus('creating_order');
+    console.log('[FOODEXA PAYMENT] Button clicked');
 
     // Get institution_id — from profile (auth) or direct session
     let liveInstitutionId: string | null = null;
@@ -983,12 +1009,16 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
          subtotal: (e.item.offer_price || e.item.price) * e.quantity,
          image_url: e.item.image_url,
          is_veg: e.item.is_veg,
-       }));
+        }));
 
       // ── STEP 1: Create Razorpay order (NO Supabase write yet) ──────────
       const customerEmail = effectiveProfile?.email || `${directSession?.name || 'guest'}@foodexa.direct`;
       const customerName = effectiveProfile?.full_name || (effectiveRole ? effectiveRole.charAt(0).toUpperCase() + effectiveRole.slice(1) : 'Guest');
       const customerPhone = effectiveProfile?.phone || '0000000000';
+      console.log('[FOODEXA PAYMENT] User authenticated:', !!user || !!directSession);
+      console.log('[FOODEXA PAYMENT] Cart validated:', cart.length, 'items');
+      console.log('[FOODEXA PAYMENT] Amount calculated:', cartGrandTotal);
+      console.log('[FOODEXA PAYMENT] Creating Razorpay order');
       const razorpayResult = await createRazorpayOrder({
         amount: cartGrandTotal,
         currency: 'INR',
@@ -1007,14 +1037,37 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         setError('We couldn\'t start the payment. Please try again.');
         setActiveTab('payment_failed');
         setSubmittingOrder(false);
+        setPaymentInitStatus('idle');
         if (triggerToast) triggerToast('Payment Unavailable', 'We couldn\'t start the payment. Please try again.', 'warning');
         return;
       }
 
+      console.log('[FOODEXA PAYMENT] Razorpay order created:', razorpayResult.order_id);
       const razorpayKeyId = razorpayResult.razorpay_key_id;
-      if (!razorpayKeyId) { setError('Payment configuration error.'); setSubmittingOrder(false); return; }
+      if (!razorpayKeyId) {
+        setError('Payment configuration error.');
+        setSubmittingOrder(false);
+        setPaymentInitStatus('idle');
+        return;
+      }
 
-      // ── STEP 2: Open Razorpay checkout (NO Supabase order yet) ─────────
+      // ── STEP 2: Load Razorpay Checkout script and open ─────────────────
+      setPaymentInitStatus('loading_gateway');
+      console.log('[FOODEXA PAYMENT] Loading Razorpay Checkout');
+      try {
+        await loadRazorpayScript();
+      } catch (scriptErr: any) {
+        console.error('[FOODEXA PAYMENT] Razorpay script load failed:', scriptErr);
+        setError('Payment gateway could not be loaded. Please try again.');
+        setActiveTab('payment_failed');
+        setSubmittingOrder(false);
+        setPaymentInitStatus('idle');
+        if (triggerToast) triggerToast('Payment Gateway Error', 'Payment gateway could not be loaded. Please try again.', 'warning');
+        return;
+      }
+
+      setPaymentInitStatus('opening_checkout');
+      console.log('[FOODEXA PAYMENT] Opening Razorpay Checkout');
       const options: any = {
         key: razorpayKeyId,
         amount: razorpayResult.amount,
@@ -1025,8 +1078,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         order_id: razorpayResult.order_id,
         handler: async function (response: any) {
           const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = response;
+          console.log('[FOODEXA PAYMENT] Payment response received');
           try {
             // ── STEP 3: Server-side verification ────────────────────────
+            console.log('[FOODEXA PAYMENT] Verifying payment with server');
             const verifyResult = await verifyRazorpayPayment({
               razorpay_order_id,
               razorpay_payment_id,
@@ -1041,10 +1096,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               setError(paymentMessage('We could not verify your payment. Any amount debited will be reconciled automatically.'));
               setActiveTab('payment_failed');
               setSubmittingOrder(false);
+              setPaymentInitStatus('idle');
               if (triggerToast) triggerToast('Payment Verification Failed', verifyResult.error || 'Contact support.', 'warning');
               return;
             }
 
+            console.log('[FOODEXA PAYMENT] Payment verified');
             // ── STEP 4: Create order + order_items in Supabase ──────────
             // Only now does the institution see the order
             const createResult = await createOrderAfterPayment({
@@ -1075,10 +1132,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               setError(pendingMessage);
               setActiveTab('payment_success');
               setSubmittingOrder(false);
+              setPaymentInitStatus('idle');
               if (triggerToast) triggerToast('Payment Received', pendingMessage, 'warning');
               return;
             }
 
+            console.log('[FOODEXA PAYMENT] FOODEXA order created:', createResult.data.id);
             // ── STEP 5: Success — refresh and show confirmation ──────────
             await refreshOrders();
             setCart([]);
@@ -1088,6 +1147,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             setCouponCode('');
             setActiveTab('payment_success');
             setSubmittingOrder(false);
+            setPaymentInitStatus('idle');
             setError(null);
             if (triggerToast) triggerToast('Order Placed!', 'Your order is being prepared.', 'success');
 
@@ -1101,6 +1161,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             setError('Payment received. We are confirming your order.');
             setActiveTab('payment_success');
             setSubmittingOrder(false);
+            setPaymentInitStatus('idle');
             if (triggerToast) triggerToast('Payment Received', 'Payment completed but order confirmation needs review.', 'warning');
           }
         },
@@ -1114,7 +1175,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           receipt: tempReceiptId,
         },
         theme: { color: '#10b981' },
-        modal: { ondismiss: function () { setSubmittingOrder(false); } },
+        modal: {
+          ondismiss: function () {
+            console.log('[FOODEXA PAYMENT] Checkout dismissed by user');
+            setSubmittingOrder(false);
+            setPaymentInitStatus('idle');
+          }
+        },
       };
 
       const razorpay = new window.Razorpay(options);
@@ -1124,8 +1191,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         setError(paymentMessage());
         setActiveTab('payment_failed');
         setSubmittingOrder(false);
+        setPaymentInitStatus('idle');
         if (triggerToast) triggerToast('Payment Failed', response?.error?.description || 'Please try again.', 'warning');
       });
+      console.log('[FOODEXA PAYMENT] Checkout opened');
       razorpay.open();
 
     } catch (err: any) {
@@ -1528,8 +1597,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                           disabled={submittingOrder}
                           className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#0071E3] py-4 text-base font-black text-white shadow-lg shadow-blue-500/25 disabled:opacity-50 hover:bg-[#0066CC] transition-all active:scale-[0.98]"
                         >
-                          {submittingOrder ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
-                          {submittingOrder ? 'Processing...' : `Pay ${formatINR(cartGrandTotal)}`}
+                          {submittingOrder && paymentInitStatus === 'loading_gateway' ? <Loader2 className="w-5 h-5 animate-spin" /> : submittingOrder ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
+                          {paymentInitStatus === 'creating_order' ? 'Opening secure payment...' : paymentInitStatus === 'loading_gateway' ? 'Connecting to Razorpay...' : submittingOrder ? 'Processing...' : `Pay ${formatINR(cartGrandTotal)}`}
                         </button>
                         <p className="text-center text-[10px] text-gray-400 font-semibold flex items-center justify-center gap-1">
                           <Lock className="w-3 h-3" /> Secure Payment via Razorpay
@@ -1937,7 +2006,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#0071E3] py-4 text-sm font-black text-white shadow-md shadow-blue-500/20 hover:bg-[#0066CC] transition-all disabled:opacity-50 mt-2 active:scale-[0.98]"
               >
                 {submittingOrder ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                {submittingOrder ? 'Processing...' : `Pay ${formatINR(cartGrandTotal)} & Place Order`}
+                {paymentInitStatus === 'creating_order' ? 'Opening secure payment...' : paymentInitStatus === 'loading_gateway' ? 'Connecting to Razorpay...' : submittingOrder ? 'Processing...' : `Pay ${formatINR(cartGrandTotal)} & Place Order`}
               </button>
             </div>
           )}

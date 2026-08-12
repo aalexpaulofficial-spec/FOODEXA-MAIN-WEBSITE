@@ -269,6 +269,8 @@ function createOrderItemsPayload(orderId: string, items: { id: string; name?: st
   return items.map((item) => ({
     order_id: orderId,
     menu_item_id: item.id,
+    name: item.name || 'Item',
+    variant: item.variant || null,
     quantity: item.quantity,
     price: item.price,
     subtotal: item.subtotal ?? (item.price * item.quantity),
@@ -498,18 +500,54 @@ export async function assignPickupCounter(institutionId: string | null | undefin
   }
 }
 
-// Insert an order, tolerating the case where the new `counter` / `confirmed_at`
-// columns have not been added to the orders table yet (migration pending). This
+// Insert an order, tolerating the case where the new columns
+// have not been added to the orders table yet (migration pending). This
 // prevents a hard regression if the DB migration is applied after deploy.
 async function insertOrderSafely(payload: Record<string, any>): Promise<{ data: any; error: any }> {
   const res = await supabase.from('orders').insert([payload]).select('*').single();
   if (!res.error && res.data) return { data: res.data, error: null };
   const msg = String(res.error?.message || '').toLowerCase();
   const missingColumn =
-    (msg.includes('column') && (msg.includes('counter') || msg.includes('confirmed_at') || msg.includes('user_id') || msg.includes('role') || msg.includes('items'))) ||
+    (msg.includes('column') && (
+      msg.includes('counter') ||
+      msg.includes('confirmed_at') ||
+      msg.includes('user_id') ||
+      msg.includes('role') ||
+      msg.includes('items') ||
+      msg.includes('student_id') ||
+      msg.includes('registration_id') ||
+      msg.includes('customer_name') ||
+      msg.includes('canteen_id') ||
+      msg.includes('counter_code') ||
+      msg.includes('transaction_amount') ||
+      msg.includes('order_status') ||
+      msg.includes('order_number') ||
+      msg.includes('pickup_token') ||
+      msg.includes('token_number') ||
+      msg.includes('notes') ||
+      msg.includes('kitchen_status') ||
+      msg.includes('counter_status') ||
+      msg.includes('estimated_ready_at') ||
+      msg.includes('paid_at') ||
+      msg.includes('payment_method') ||
+      msg.includes('razorpay_order_id') ||
+      msg.includes('razorpay_payment_id') ||
+      msg.includes('razorpay_signature') ||
+      msg.includes('payment_id') ||
+      msg.includes('transaction_id') ||
+      msg.includes('transaction_reference')
+    )) ||
     msg.includes('could not find the column');
   if (missingColumn) {
-    const { counter, counter_name, counter_id, confirmed_at, user_id, role, items, ...rest } = payload;
+    const {
+      counter, counter_name, counter_id, confirmed_at, user_id, role, items,
+      student_id, registration_id, customer_name, phone, canteen_id, counter_code,
+      transaction_amount, order_status, order_number, pickup_token, token_number,
+      notes, kitchen_status, counter_status, estimated_ready_at, paid_at,
+      payment_method, razorpay_order_id, razorpay_payment_id, razorpay_signature,
+      payment_id, transaction_id, transaction_reference,
+      ...rest
+    } = payload;
     const fallback = await supabase.from('orders').insert([rest]).select('*').single();
     if (!fallback.error && fallback.data) return { data: fallback.data, error: null };
     return fallback;
@@ -822,9 +860,6 @@ export async function updateOrderAfterPayment(params: {
       razorpay_order_id: params.razorpay_order_id,
       razorpay_payment_id: params.razorpay_payment_id,
       razorpay_signature: params.razorpay_signature,
-      payment_id: params.razorpay_payment_id,
-      transaction_id: params.razorpay_order_id,
-      transaction_reference: params.razorpay_payment_id,
       paid_at: now,
       accepted_at: now,
       updated_at: now,

@@ -35,8 +35,9 @@ import { ToastContainer, ToastMessage } from './components/Toast';
 import { ScrollProgress } from './components/ScrollProgress';
 import { Footer } from './components/Footer';
 import { ResetPassword } from './components/ResetPassword';
-import { Sparkles, Mic } from 'lucide-react';
+import { Sparkles, Mic, Loader2 } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
+import { supabase } from './lib/supabase';
 import type { Profile, UserRole } from './types';
 
 type AccountRole = 'student' | 'faculty' | 'guest';
@@ -316,6 +317,18 @@ export default function App() {
         <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
         <ResetPassword />
       </>
+    );
+  }
+
+  if (location.pathname === '/auth/callback') {
+    return (
+      <div className="min-h-screen bg-[#fcfcfc] text-black font-sans flex items-center justify-center px-6">
+        <div className="text-center space-y-3">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#0071E3]" />
+          <p className="text-sm font-semibold text-[#1D1D1F]">Verifying your email...</p>
+          <p className="text-xs text-[#86868B]">Please wait while we confirm your account.</p>
+        </div>
+      </div>
     );
   }
 

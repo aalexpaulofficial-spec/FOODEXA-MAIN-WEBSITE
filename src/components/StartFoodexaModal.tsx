@@ -104,7 +104,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   const [selectedRole, setSelectedRole] = useState<AccountRole | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [otpDigits, setOtpDigits] = useState<string[]>(Array(8).fill(''));
+  const [otpDigits, setOtpDigits] = useState<string[]>(Array(6).fill(''));
   const [pendingSignupEmail, setPendingSignupEmail] = useState('');
   const [institutionCode, setInstitutionCode] = useState('');
   const [verifiedInstitution, setVerifiedInstitution] = useState<InstitutionData | null>(null);
@@ -139,7 +139,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setSelectedRole(null);
     setShowPassword(false);
     setShowConfirmPassword(false);
-    setOtpDigits(Array(8).fill(''));
+    setOtpDigits(Array(6).fill(''));
     setPendingSignupEmail('');
     setInstitutionCode('');
     setVerifiedInstitution(null);
@@ -213,7 +213,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     );
 
     if (signUpError) {
-      console.error('[FOODEXA SIGNUP ERROR]', signUpError);
+      console.error('[FOODEXA AUTH] Signup error:', signUpError);
       setLoading(false);
       if (isExistingEmailError(signUpError.message)) {
         setDuplicateEmail(true);
@@ -242,13 +242,13 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
     setOtpDigits((prev) => {
       const next = [...prev];
-      digits.slice(0, 8 - index).split('').forEach((digit, offset) => {
+      digits.slice(0, 6 - index).split('').forEach((digit, offset) => {
         next[index + offset] = digit;
       });
       return next;
     });
 
-    const nextIndex = Math.min(index + digits.length, 7);
+    const nextIndex = Math.min(index + digits.length, 5);
     window.setTimeout(() => otpRefs.current[nextIndex]?.focus(), 0);
     setError(null);
   };
@@ -260,17 +260,17 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   };
 
   const handleOtpPaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
-    const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 8);
+    const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
     if (!pasted) return;
     event.preventDefault();
-    setOtpDigits(Array.from({ length: 8 }, (_, index) => pasted[index] || ''));
-    window.setTimeout(() => otpRefs.current[Math.min(pasted.length, 8) - 1]?.focus(), 0);
+    setOtpDigits(Array.from({ length: 6 }, (_, index) => pasted[index] || ''));
+    window.setTimeout(() => otpRefs.current[Math.min(pasted.length, 6) - 1]?.focus(), 0);
     setError(null);
   };
 
   const handleVerifyOtp = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (isBusy || otpCode.length !== 8) return;
+    if (isBusy || otpCode.length !== 6) return;
 
     const signupEmail = (getPendingVerificationEmail() || pendingSignupEmail).trim().toLowerCase();
     if (!signupEmail) {
@@ -286,7 +286,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setLoading(false);
 
     if (verifyError) {
-      console.error('[FOODEXA OTP ERROR]', verifyError);
+      console.error('[FOODEXA AUTH] OTP verification error:', verifyError);
       setError(mapOtpErrorMessage(verifyError.message));
       return;
     }
@@ -321,7 +321,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setResending(false);
 
     if (otpError) {
-      console.error('[FOODEXA RESEND ERROR]', otpError);
+      console.error('[FOODEXA AUTH] Resend error:', otpError);
       setError(mapOtpErrorMessage(otpError.message));
       return;
     }
@@ -378,9 +378,11 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       semester: null,
       programme: null,
       campus_block: null,
+      avatar_url: null,
+      diet_preference: 'all',
     };
 
-    const profileColumns = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, department, semester, programme, campus_block, designation';
+    const profileColumns = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, department, semester, programme, campus_block, designation, avatar_url, diet_preference';
 
     const { data: savedProfile, error: profileError } = await supabase
       .from('profiles')
@@ -611,7 +613,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
         {step === 'otp' && (
           <form onSubmit={handleVerifyOtp} className="space-y-5">
-            {renderHeader('CHECK YOUR EMAIL', 'Enter the 8-digit verification code sent to:')}
+            {renderHeader('CHECK YOUR EMAIL', 'Enter the 6-digit verification code sent to:')}
 
             <p className="rounded-2xl bg-[#F5F5F7] px-4 py-3 text-center text-sm font-bold text-[#1D1D1F]">
               {getPendingVerificationEmail() || pendingSignupEmail}
@@ -626,7 +628,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
             <div>
               <label className="mb-2 block text-xs font-semibold text-[#515154]">Verification Code *</label>
-              <div className="grid grid-cols-8 gap-1.5 sm:gap-2">
+              <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
                 {otpDigits.map((digit, index) => (
                   <input
                     key={index}
@@ -650,7 +652,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
             <button
               type="submit"
-              disabled={isBusy || otpCode.length !== 8}
+              disabled={isBusy || otpCode.length !== 6}
               className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (

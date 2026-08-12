@@ -538,9 +538,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     console.info('[Auth] Calling signUpWithPassword | email:', normalizedEmail);
     const { error } = await signUpWithPassword(normalizedEmail, currentForm.password, currentForm.fullName, selectedAccountRole);
 
-    if (error) {
-      console.error('[FOODEXA SIGNUP ERROR]', error);
-      if (error.message.toLowerCase().includes('already registered')) {
+      if (error) {
+        console.error('[FOODEXA AUTH] Signup error:', error);
+        if (error.message.toLowerCase().includes('already registered')) {
         setMode('login');
         setLoginEmail(normalizedEmail);
         setLoginPassword('');
@@ -572,7 +572,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         email: normalizedEmail,
       });
       if (error) {
-        console.error('[FOODEXA RESEND ERROR]', error);
+        console.error('[FOODEXA AUTH] Resend error:', error);
         setOtpError(mapOtpErrorMessage(error.message || 'Failed to resend OTP. Please try again.'));
         setRegistrationPhase('sent');
         return;
@@ -594,15 +594,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const normalizedToken = otpCode.replace(/\D/g, '').trim();
       console.info('[Auth] OTP submit | email:', normalizedEmail, '| token length:', normalizedToken.length);
 
-      if (normalizedToken.length !== 8) {
-        setOtpError('Please enter the 8-digit verification code sent to your email.');
+      if (normalizedToken.length !== 6) {
+        setOtpError('Please enter the 6-digit verification code sent to your email.');
         return;
       }
 
        const { error, profile: liveProfile, institution } = await verifyOtp(normalizedEmail, normalizedToken);
 
        if (error) {
-         console.error('[FOODEXA OTP ERROR]', error);
+         console.error('[FOODEXA AUTH] OTP verification error:', error);
          setOtpError(error.message || 'OTP verification failed. Please check the code and try again.');
          return;
        }
@@ -1040,7 +1040,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
               <h3 className="text-xl font-bold text-black">Check Your Email</h3>
                <p className="text-xs text-[#86868B] leading-relaxed">
-                 Enter the 8-digit verification code sent to:
+                 Enter the 6-digit verification code sent to:
                  <br />
                  <strong className="text-black">{getPendingVerificationEmail() || currentEmail || ''}</strong>
                </p>
@@ -1057,53 +1057,53 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                  <label className="text-xs font-semibold text-[#86868B] mb-2 block text-center">
                    Verification Code
                  </label>
-                 <div className="flex justify-center gap-1.5">
-                   {Array.from({ length: 8 }).map((_, i) => (
-                     <input
-                       key={i}
-                       id={`otp-box-${i}`}
-                       type="text"
-                       inputMode="numeric"
-                       autoComplete={i === 0 ? 'one-time-code' : 'off'}
-                       maxLength={1}
-                       value={otpCode[i] || ''}
-                       onChange={(e) => {
-                         const val = e.target.value.replace(/\D/g, '');
-                         if (!val && !e.target.value) return;
-                         const newCode = otpCode.split('');
-                         newCode[i] = val.slice(-1);
-                         const joined = newCode.join('').slice(0, 8);
-                         setOtpCode(joined);
-                         if (val && i < 7) {
-                           document.getElementById(`otp-box-${i + 1}`)?.focus();
-                         }
-                       }}
-                       onKeyDown={(e) => {
-                         if (e.key === 'Backspace' && !otpCode[i] && i > 0) {
-                           const newCode = otpCode.split('');
-                           newCode[i - 1] = '';
-                           setOtpCode(newCode.join(''));
-                           document.getElementById(`otp-box-${i - 1}`)?.focus();
-                         }
-                       }}
-                       onPaste={(e) => {
-                         e.preventDefault();
-                         const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 8);
-                         if (pasted) {
-                           setOtpCode(pasted);
-                           const focusIdx = Math.min(pasted.length, 7);
-                           document.getElementById(`otp-box-${focusIdx}`)?.focus();
-                         }
-                       }}
-                       className="w-10 h-12 text-center text-lg font-mono font-bold border border-gray-200 rounded-xl focus:border-black focus:outline-none bg-white transition-colors"
-                     />
-                   ))}
-                 </div>
+                  <div className="flex justify-center gap-1.5">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <input
+                        key={i}
+                        id={`otp-box-${i}`}
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete={i === 0 ? 'one-time-code' : 'off'}
+                        maxLength={1}
+                        value={otpCode[i] || ''}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          if (!val && !e.target.value) return;
+                          const newCode = otpCode.split('');
+                          newCode[i] = val.slice(-1);
+                          const joined = newCode.join('').slice(0, 6);
+                          setOtpCode(joined);
+                          if (val && i < 5) {
+                            document.getElementById(`otp-box-${i + 1}`)?.focus();
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Backspace' && !otpCode[i] && i > 0) {
+                            const newCode = otpCode.split('');
+                            newCode[i - 1] = '';
+                            setOtpCode(newCode.join(''));
+                            document.getElementById(`otp-box-${i - 1}`)?.focus();
+                          }
+                        }}
+                        onPaste={(e) => {
+                          e.preventDefault();
+                          const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+                          if (pasted) {
+                            setOtpCode(pasted);
+                            const focusIdx = Math.min(pasted.length, 5);
+                            document.getElementById(`otp-box-${focusIdx}`)?.focus();
+                          }
+                        }}
+                        className="w-10 h-12 text-center text-lg font-mono font-bold border border-gray-200 rounded-xl focus:border-black focus:outline-none bg-white transition-colors"
+                      />
+                    ))}
+                  </div>
                </div>
 
               <button
                 type="submit"
-                disabled={otpCode.replace(/\D/g, '').length !== 8 || isCreatingAccount}
+                disabled={otpCode.replace(/\D/g, '').length !== 6 || isCreatingAccount}
                 className="w-full btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <ShieldCheck className="w-4 h-4 text-white" />

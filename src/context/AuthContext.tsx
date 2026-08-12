@@ -389,9 +389,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       },
     });
 
-     if (error) {
-       console.error('[FOODEXA SIGNUP ERROR]', error);
-       signUpInProgressRef.current = false;
+      if (error) {
+        console.error('[FOODEXA AUTH] Signup error:', error);
+        signUpInProgressRef.current = false;
        setIsPendingOtpVerification(false);
        sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
        return { error: new Error(error.message) };
@@ -411,7 +411,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // If a session was returned (autoconfirm ON), the user is already
     // email-confirmed and signed in. Sign out to enforce the OTP gate.
     // Supabase Auth's signUp() automatically sends the "Confirm signup"
-    // email (containing the 8-digit OTP) when email confirmation is enabled.
+    // email (containing the OTP) when email confirmation is enabled.
     if (data?.session) {
       console.info('[Auth] Signup returned an immediate session (autoconfirm ON). Signing out to enforce the OTP gate.');
       await supabase.auth.signOut();
@@ -421,7 +421,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     if (!authUser) {
-      console.error('[FOODEXA SIGNUP ERROR] Registration succeeded but no user was returned.');
+      console.error('[FOODEXA AUTH] Signup error: Registration succeeded but no user was returned.');
       signUpInProgressRef.current = false;
       setIsPendingOtpVerification(false);
       sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
@@ -498,19 +498,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        if (!safeToken) {
          return { error: new Error('Please enter the OTP code sent to your email.'), profile: null, institution: null };
        }
-       if (safeToken.length !== 8) {
-         return { error: new Error('Please enter the 8-digit verification code sent to your email.'), profile: null, institution: null };
-       }
+        if (safeToken.length !== 6) {
+          return { error: new Error('Please enter the 6-digit verification code sent to your email.'), profile: null, institution: null };
+        }
 
-       console.info('[Auth] Attempting OTP verification with type "signup"...');
-       const { data: authData, error } = await supabase.auth.verifyOtp({
-         email: normalizedEmail,
-         token: safeToken,
-         type: 'signup',
-       });
+        console.info('[Auth] Attempting OTP verification with type "signup"...');
+        const { data: authData, error } = await supabase.auth.verifyOtp({
+          email: normalizedEmail,
+          token: safeToken,
+          type: 'signup',
+        });
 
-       if (error) {
-         console.error('[FOODEXA OTP ERROR]', error);
+        if (error) {
+          console.error('[FOODEXA AUTH] OTP verification error:', error);
          return {
            error: new Error(mapOtpErrorMessage(error.message)),
            profile: null,
@@ -519,7 +519,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        }
 
        if (!authData?.session || !authData?.user) {
-         console.error('[FOODEXA OTP ERROR] Verification returned no authenticated session.');
+          console.error('[FOODEXA AUTH] OTP verification error: Verification returned no authenticated session.');
          return {
            error: new Error('Verification succeeded, but no authenticated session was returned. Please try again.'),
            profile: null,

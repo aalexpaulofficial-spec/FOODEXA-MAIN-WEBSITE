@@ -97,7 +97,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   onAccountSetupSuccess,
   onOpenLogin,
 }) => {
-  const { validateInstitutionCode, setInstitutionData, refreshProfile } = useAuth();
+  const { validateInstitutionCode, setInstitutionData, refreshProfile, signUpWithPassword, verifyOtp } = useAuth();
 
   const [step, setStep] = useState<Step>('account');
   const [accountForm, setAccountForm] = useState(initialAccountForm);
@@ -205,17 +205,12 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
     setLoading(true);
 
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email: normalizedEmail,
-      password: accountForm.password,
-      options: {
-        data: {
-          full_name: fullName,
-          role: selectedRole,
-        },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    const { error: signUpError } = await signUpWithPassword(
+      normalizedEmail,
+      accountForm.password,
+      fullName,
+      selectedRole
+    );
 
     if (signUpError) {
       console.error('[FOODEXA SIGNUP ERROR]', signUpError);
@@ -226,13 +221,6 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       } else {
         setError(signUpError.message.toLowerCase().includes('password') ? 'Please create a stronger password.' : 'Unable to create your account right now. Please try again.');
       }
-      return;
-    }
-
-    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-      setLoading(false);
-      setDuplicateEmail(true);
-      setError('This email is already registered.');
       return;
     }
 
@@ -293,11 +281,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setLoading(true);
     setError(null);
 
-    const { data, error: verifyError } = await supabase.auth.verifyOtp({
-      email: signupEmail,
-      token: otpCode,
-      type: 'signup',
-    });
+    const { error: verifyError, profile: liveProfile, institution } = await verifyOtp(signupEmail, otpCode);
 
     setLoading(false);
 
@@ -307,13 +291,15 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       return;
     }
 
-    if (!data?.session || !data?.user) {
-      console.error('[StartFoodexa] OTP verification returned no session/user.');
-      setError('Unable to verify right now. Please try again.');
+    sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
+
+    if (liveProfile && liveProfile.institution_id && institution) {
+      setInstitutionData(institution);
+      setLoading(false);
+      onAccountSetupSuccess({ profile: liveProfile, institution });
       return;
     }
 
-    sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
     setInstitutionCode('');
     setInstitutionStatus('idle');
     setVerifiedInstitution(null);

@@ -142,7 +142,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
     const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference', 'wallet_balance', 'total_orders'];
+        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference'];
        const safePayload: Record<string, any> = {};
        for (const key of KNOWN_PROFILE_COLUMNS) {
          if (key in payload) {
@@ -167,7 +167,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        return { error: null as Error | null };
      }, []);
 
-   const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, campus_block, programme, department, semester, designation, avatar_url, diet_preference, wallet_balance, total_orders';
+   const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, campus_block, programme, department, semester, designation, avatar_url, diet_preference';
 
     const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
       try {
@@ -196,10 +196,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const role = normalizeRole(authUser.user_metadata?.role);
         const fullName = authUser.user_metadata?.full_name || null;
-        const phone = authUser.user_metadata?.phone || null;
 
-        if (!role || !fullName || !authUser.user_metadata?.institution_id) {
-          console.warn('[Auth] Required profile metadata missing. Returning null to trigger profile completion screen.');
+        if (!role || !fullName) {
+          console.warn('[Auth] Required profile metadata (role, full_name) missing. Returning null to trigger profile completion screen.');
           return null;
         }
 
@@ -207,7 +206,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           user_id: userId,
           email: authUser.email || '',
           full_name: fullName,
-          phone,
+          phone: authUser.user_metadata?.phone || null,
           role,
           designation: role,
           institution_id: authUser.user_metadata?.institution_id || null,

@@ -359,10 +359,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
      }
 
      const { data: counterRows, error: counterError } = await supabase
-       .from('menu_items')
-       .select('counter')
+       .from('counters')
+       .select('code, name, institution_id')
        .eq('institution_id', profile.institution_id)
-       .ilike('counter', code);
+       .ilike('code', code);
 
     if (counterError || !counterRows || counterRows.length === 0) {
       setCounterError('Invalid Counter Code');

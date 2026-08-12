@@ -77,7 +77,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   onAccountSetupSuccess,
   onOpenLogin,
 }) => {
-  const { validateInstitutionCode, setInstitutionData, refreshProfile, signUpWithOtp, verifyOtp, ensureProfileForUser } = useAuth();
+  const { validateInstitutionCode, setInstitutionData, refreshProfile, signUpWithOtp, verifyOtp, loadCurrentStudentProfile, updateStudentInstitution } = useAuth();
 
   const [step, setStep] = useState<Step>('account');
   const [accountForm, setAccountForm] = useState(initialAccountForm);
@@ -348,21 +348,29 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
     if (userError || !authUser) {
       console.error('[StartFoodexa] Unable to load authenticated user:', userError?.message);
-      setError('Unable to load your FOODEXA profile.');
+      setError('Authentication session could not be loaded. Please sign in again.');
       setLoading(false);
       return;
     }
 
-    const { error: profileError, profile: savedProfile } = await ensureProfileForUser({
+    const { error: profileError, profile: savedProfile } = await loadCurrentStudentProfile({
       fullName,
       role: selectedRole,
-      institutionId: institution.institution_id,
       email: authUser?.email || normalizedEmail,
     });
 
     if (profileError || !savedProfile) {
       console.error('[StartFoodexa] Profile create failed:', profileError?.message);
-      setError('Unable to load your FOODEXA profile.');
+      setError(profileError?.message || 'Unable to load your FOODEXA profile.');
+      setLoading(false);
+      return;
+    }
+
+    const { error: updateError, profile: updatedProfile } = await updateStudentInstitution(institution.institution_id);
+
+    if (updateError || !updatedProfile) {
+      console.error('[StartFoodexa] Institution update failed:', updateError?.message);
+      setError(updateError?.message || 'Failed to join institution. Please try again.');
       setLoading(false);
       return;
     }
@@ -371,7 +379,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     await refreshProfile();
     setLoading(false);
     onAccountSetupSuccess({
-      profile: savedProfile as Profile,
+      profile: updatedProfile as Profile,
       institution,
     });
   };

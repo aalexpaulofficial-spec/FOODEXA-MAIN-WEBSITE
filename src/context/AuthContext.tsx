@@ -32,7 +32,8 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   clearAllSessionData: () => void;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
-  ensureProfileForUser: (params: { fullName?: string | null; role?: UserRole | null; institutionId?: string | null; email?: string | null; phone?: string | null }) => Promise<{ error: Error | null; profile: Profile | null }>;
+  loadCurrentStudentProfile: (fallbackData?: { fullName?: string | null; role?: UserRole | null; institutionId?: string | null; email?: string | null; phone?: string | null }) => Promise<{ error: Error | null; profile: Profile | null }>;
+  updateStudentInstitution: (institutionId: string) => Promise<{ error: Error | null; profile: Profile | null }>;
   refreshProfile: () => Promise<void>;
   leaveInstitution: () => Promise<{ error: Error | null }>;
   switchInstitution: (institutionCode: string) => Promise<{ error: string | null }>;
@@ -165,7 +166,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Only include columns that are CONFIRMED to exist in the production profiles table.
         // Do NOT add speculative columns (registration_id, student_id, plan, foodexa_plan, account_created_at)
         // unless they have been verified via a real database schema inspection.
-        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference'];
+        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference', 'account_created_at', 'foodexa_plan', 'plan'];
        const safePayload: Record<string, any> = {};
        for (const key of KNOWN_PROFILE_COLUMNS) {
          if (key in payload) {
@@ -220,9 +221,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           if (error) {
             console.error('[Auth] Profile fetch error:', error.message);
-            // A schema/column error (e.g. "column profiles.plan does not exist")
-            // is NOT the same as "profile missing". Never auto-create a profile in
-            // response to a bad column name — fix the query instead and bail out.
             return null;
           }
 
@@ -232,121 +230,69 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           await loadInstitutionForProfile(fetchedProfile);
           return fetchedProfile;
         }
-
-        // Reaching here means the query succeeded with NO row → the profile is
-        // genuinely missing (not a column error). Auto-create ONLY in this case.
-        const { data: userData } = await supabase.auth.getUser();
-        const authUser = userData?.user;
-        if (!authUser) return null;
-
-        console.info('[Auth] Profile missing for user, auto-creating:', userId);
-
-        const role = normalizeRole(authUser.user_metadata?.role || pendingOtpProfileRef.current?.role) || 'student';
-        const safeEmail = authUser.email || '';
-        const fullName = authUser.user_metadata?.full_name?.trim() || authUser.user_metadata?.name?.trim() || pendingOtpProfileRef.current?.fullName?.trim() || safeEmail.split('@')[0]?.trim() || 'FOODEXA Student';
-        const institutionId = authUser.user_metadata?.institution_id || pendingOtpProfileRef.current?.institutionId || null;
-        const phone = authUser.user_metadata?.phone || pendingOtpProfileRef.current?.phone || null;
-
-        // RULE 2.7: If the authenticated user exists in auth.users but has no
-        // profile row, ALWAYS create one (keyed by the authenticated user id) so we
-        // never leave an account without a profile or attempt a null user_id insert.
-        // Missing role/full_name is repaired later by the institution/role step.
-
-        const { error: upsertError } = await upsertProfileSafely({
-          user_id: userId,
-          email: safeEmail,
-          full_name: fullName,
-          phone,
-          role,
-          designation: role,
-          institution_id: institutionId,
-          department: authUser.user_metadata?.department || null,
-          semester: authUser.user_metadata?.semester || null,
-          programme: authUser.user_metadata?.programme || null,
-          campus_block: authUser.user_metadata?.campus_block || null,
-        });
-
-        if (upsertError) {
-          console.error('[Auth] Auto-create profile failed:', upsertError.message);
-          return null;
-        }
-
-        const { data: newProfile, error: fetchError } = await supabase
-          .from('profiles')
-          .select(PROFILE_COLUMNS)
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (fetchError || !newProfile) {
-          console.error('[Auth] Re-fetch after auto-create failed:', fetchError?.message);
-          return null;
-        }
-
-        const createdProfile = { ...newProfile } as Profile;
-        setProfile(createdProfile);
-        await loadInstitutionForProfile(createdProfile);
-        return createdProfile;
       } catch (err: any) {
         console.error('[Auth] Profile fetch threw an exception:', err?.message || err);
       }
-
       return null;
     }, [loadInstitutionForProfile]);
 
-    // ── Canonical profile writer ───────────────────────────────────────────
-    // Always keys the profile by the authenticated Supabase user id (RULE 1).
-    // Repairs missing fields on existing profiles and creates a profile for an
-    // authenticated user that has none (RULE 2.7). Never results in a null
-    // user_id insert because upsertProfileSafely guards against it.
-    const ensureProfileForUser = useCallback(async (params: {
+    const loadCurrentStudentProfile = useCallback(async (fallbackData?: {
       fullName?: string | null;
       role?: UserRole | null;
       institutionId?: string | null;
       email?: string | null;
       phone?: string | null;
     }): Promise<{ error: Error | null; profile: Profile | null }> => {
-      const { data: userData } = await supabase.auth.getUser();
-      const authUser = userData?.user;
-      if (!authUser) {
-        return { error: new Error('Unable to load your authenticated account. Please sign in again.'), profile: null };
-      }
-      const userId = authUser.id;
-
-      let existing = await fetchProfile(userId);
-
-      if (existing) {
-        const repairs: Record<string, any> = {};
-        if (params.fullName && !existing.full_name) repairs.full_name = params.fullName;
-        if (params.role && !existing.role) repairs.role = params.role;
-        if (params.institutionId && !existing.institution_id) repairs.institution_id = params.institutionId;
-        if (params.phone && !existing.phone) repairs.phone = params.phone;
-        if (Object.keys(repairs).length) {
-          const { error } = await upsertProfileSafely({ user_id: userId, ...repairs });
-          if (error) return { error, profile: null };
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          return { error: new Error('Authentication session could not be loaded. Please sign in again.'), profile: null };
         }
-        const refreshed = await fetchProfile(userId);
-        return { error: null, profile: refreshed };
+        
+        const existing = await fetchProfile(user.id);
+        if (existing) {
+          return { error: null, profile: existing };
+        }
+
+        const safeEmail = fallbackData?.email || user.email || '';
+        const safeFullName = fallbackData?.fullName?.trim() || user.user_metadata?.full_name?.trim() || user.user_metadata?.name?.trim() || pendingOtpProfileRef.current?.fullName?.trim() || safeEmail.split('@')[0]?.trim() || 'FOODEXA Student';
+        const safeRole = fallbackData?.role || normalizeRole(user.user_metadata?.role) || pendingOtpProfileRef.current?.role || 'student';
+
+        const { error: upsertError } = await upsertProfileSafely({
+          user_id: user.id,
+          email: safeEmail,
+          full_name: safeFullName,
+          phone: fallbackData?.phone || user.user_metadata?.phone || pendingOtpProfileRef.current?.phone || null,
+          role: safeRole,
+          designation: safeRole,
+          institution_id: fallbackData?.institutionId || null,
+          diet_preference: 'all',
+          account_created_at: new Date().toISOString(),
+          foodexa_plan: 'Free',
+          plan: 'Free',
+        });
+
+        if (upsertError) return { error: upsertError, profile: null };
+        const created = await fetchProfile(user.id);
+        return { error: null, profile: created };
+      } catch (err: any) {
+        return { error: err, profile: null };
       }
-
-      // No profile yet → create it, keyed by the authenticated user id.
-      const safeEmail = params.email || authUser.email || '';
-      const safeFullName = params.fullName?.trim() || authUser.user_metadata?.full_name?.trim() || authUser.user_metadata?.name?.trim() || pendingOtpProfileRef.current?.fullName?.trim() || safeEmail.split('@')[0]?.trim() || 'FOODEXA Student';
-      const safeRole = params.role || normalizeRole(authUser.user_metadata?.role) || pendingOtpProfileRef.current?.role || 'student';
-
-      const { error } = await upsertProfileSafely({
-        user_id: userId,
-        email: safeEmail,
-        full_name: safeFullName,
-        phone: params.phone || authUser.user_metadata?.phone || pendingOtpProfileRef.current?.phone || null,
-        role: safeRole,
-        designation: safeRole,
-        institution_id: params.institutionId || null,
-        diet_preference: 'all',
-      });
-      if (error) return { error, profile: null };
-      const created = await fetchProfile(userId);
-      return { error: null, profile: created };
     }, [fetchProfile, upsertProfileSafely]);
+
+    const updateStudentInstitution = useCallback(async (institutionId: string): Promise<{ error: Error | null; profile: Profile | null }> => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { error: new Error('Authentication session could not be loaded. Please sign in again.'), profile: null };
+      
+      const { error } = await supabase.from('profiles').update({ institution_id: institutionId, updated_at: new Date().toISOString() }).eq('user_id', user.id);
+      if (error) {
+        console.error('[Auth] Failed to update institution_id in profiles:', error);
+        return { error: new Error(error.message), profile: null };
+      }
+      
+      const profile = await fetchProfile(user.id);
+      return { error: null, profile };
+    }, [fetchProfile]);
 
   const refreshProfile = useCallback(async () => {
     if (user) {
@@ -1021,7 +967,8 @@ if (safeToken.length !== OTP_LENGTH) {
       signOut,
       clearAllSessionData,
       updateProfile,
-      ensureProfileForUser,
+      loadCurrentStudentProfile,
+      updateStudentInstitution,
       refreshProfile,
       leaveInstitution,
       switchInstitution,

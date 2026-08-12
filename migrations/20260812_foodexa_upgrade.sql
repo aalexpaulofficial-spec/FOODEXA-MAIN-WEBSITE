@@ -4,24 +4,31 @@
 -- order status history support. Idempotent (safe to re-run).
 -- ============================================================
 
--- Profiles: permanent, never-changing identifiers + plan
+-- Profiles: permanent, never-changing identifiers + plan + created timestamp
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS registration_id text,
   ADD COLUMN IF NOT EXISTS student_id text,
-  ADD COLUMN IF NOT EXISTS plan text DEFAULT 'free';
+  ADD COLUMN IF NOT EXISTS plan text DEFAULT 'free',
+  ADD COLUMN IF NOT EXISTS account_created_at timestamptz;
 
--- Unique indexes for searchable, stable identifiers
+-- Normalise empty plan to 'Free' (canonical default)
+UPDATE public.profiles SET plan = 'Free' WHERE plan IS NULL OR plan = '';
+
+-- Unique indexes for searchable, stable identifiers (ignore existing NULLs so the
+-- index can be created even before every row has an id)
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_indexes WHERE indexname = 'profiles_registration_id_key'
   ) THEN
-    CREATE UNIQUE INDEX profiles_registration_id_key ON public.profiles (registration_id);
+    CREATE UNIQUE INDEX profiles_registration_id_key
+      ON public.profiles (registration_id) WHERE registration_id IS NOT NULL;
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM pg_indexes WHERE indexname = 'profiles_student_id_key'
   ) THEN
-    CREATE UNIQUE INDEX profiles_student_id_key ON public.profiles (student_id);
+    CREATE UNIQUE INDEX profiles_student_id_key
+      ON public.profiles (student_id) WHERE student_id IS NOT NULL;
   END IF;
 END $$;
 

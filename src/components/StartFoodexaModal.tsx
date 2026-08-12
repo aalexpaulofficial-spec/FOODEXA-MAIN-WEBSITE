@@ -77,7 +77,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   onAccountSetupSuccess,
   onOpenLogin,
 }) => {
-  const { validateInstitutionCode, setInstitutionData, refreshProfile, signUpWithOtp, verifyOtp } = useAuth();
+  const { validateInstitutionCode, setInstitutionData, refreshProfile, signUpWithOtp, verifyOtp, ensureProfileForUser } = useAuth();
 
   const [step, setStep] = useState<Step>('account');
   const [accountForm, setAccountForm] = useState(initialAccountForm);
@@ -353,31 +353,15 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       return;
     }
 
-    const profilePayload = {
-      user_id: authUser.id,
-      email: authUser.email || normalizedEmail,
-      full_name: fullName,
+    const { error: profileError, profile: savedProfile } = await ensureProfileForUser({
+      fullName,
       role: selectedRole,
-      designation: selectedRole,
-      institution_id: institution.institution_id,
-      department: null,
-      semester: null,
-      programme: null,
-      campus_block: null,
-      avatar_url: null,
-      diet_preference: 'all',
-    };
-
-    const profileColumns = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, department, semester, programme, campus_block, designation, avatar_url, diet_preference';
-
-    const { data: savedProfile, error: profileError } = await supabase
-      .from('profiles')
-      .upsert(profilePayload, { onConflict: 'user_id' })
-      .select(profileColumns)
-      .maybeSingle();
+      institutionId: institution.institution_id,
+      email: authUser?.email || normalizedEmail,
+    });
 
     if (profileError || !savedProfile) {
-      console.error('[StartFoodexa] Profile upsert failed:', profileError?.message);
+      console.error('[StartFoodexa] Profile create failed:', profileError?.message);
       setError('Unable to load your FOODEXA profile.');
       setLoading(false);
       return;

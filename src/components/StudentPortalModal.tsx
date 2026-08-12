@@ -875,7 +875,26 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   // Order is ONLY created in Supabase AFTER payment succeeds.
   // Institution never sees unpaid orders.
   const handlePlaceOrder = async () => {
-    if (!effectiveRole) { setError('Role missing.'); return; }
+    // RULE 6/12: never block purely on a stale/missing role if the profile in
+    // Supabase already has one. Re-fetch the profile first, then only fail with a
+    // helpful message if the role is genuinely absent.
+    let resolvedRole: UserRole | null = effectiveRole;
+    if (!resolvedRole && user?.id) {
+      const { data: liveRow } = await supabase
+        .from('profiles')
+        .select('role, institution_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (liveRow?.role) {
+        resolvedRole = liveRow.role as UserRole;
+        await refreshProfile();
+      }
+    }
+    if (!resolvedRole) {
+      setError('Your profile is missing a role. Please complete your profile, or contact support if this persists.');
+      setSubmittingOrder(false);
+      return;
+    }
     if (!cart.length) return;
 
     setSubmittingOrder(true); setError(null);
@@ -999,7 +1018,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             const createResult = await createOrderAfterPayment({
               user_id: user?.id || '',
               email: customerEmail,
-              role: effectiveRole,
+              role: resolvedRole,
               customer_name: customerName,
               phone: customerPhone,
               institution_id: liveInstitutionId,

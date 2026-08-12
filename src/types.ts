@@ -73,6 +73,8 @@ export interface Profile {
   student_id?: string | null;
   // FOODEXA plan loaded from the database
   plan?: string | null;
+  // Account creation timestamp (set once at profile creation)
+  account_created_at?: string | null;
 }
 
 export interface Canteen {

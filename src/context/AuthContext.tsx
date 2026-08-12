@@ -32,6 +32,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   clearAllSessionData: () => void;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
+  ensureProfileForUser: (params: { fullName?: string | null; role?: UserRole | null; institutionId?: string | null; email?: string | null; phone?: string | null }) => Promise<{ error: Error | null; profile: Profile | null }>;
   refreshProfile: () => Promise<void>;
   leaveInstitution: () => Promise<{ error: Error | null }>;
   switchInstitution: (institutionCode: string) => Promise<{ error: string | null }>;
@@ -51,15 +52,14 @@ const normalizeRole = (value: unknown): UserRole | null => {
 // Generated exactly ONCE at account creation and stored permanently in Supabase.
 // Format examples: FX26-A2A1EF (Registration ID) and ST-A2A1EF (Student ID)
 export function generateStudentIdentifiers(): { registration_id: string; student_id: string } {
-  const yy = String(new Date().getFullYear()).slice(-2);
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
-  let suffix = '';
-  for (let i = 0; i < 6; i++) {
-    suffix += chars[Math.floor(Math.random() * chars.length)];
+  let base = '';
+  for (let i = 0; i < 10; i++) {
+    base += chars[Math.floor(Math.random() * chars.length)];
   }
   return {
-    registration_id: `FX${yy}-${suffix}`,
-    student_id: `ST-${suffix}`,
+    registration_id: `REG-${base}`,
+    student_id: `STU-${base.slice(0, 8)}`,
   };
 }
 
@@ -162,13 +162,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
     const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference', 'registration_id', 'student_id', 'plan'];
+        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference', 'registration_id', 'student_id', 'plan', 'account_created_at'];
        const safePayload: Record<string, any> = {};
        for (const key of KNOWN_PROFILE_COLUMNS) {
          if (key in payload) {
            safePayload[key] = payload[key];
          }
        }
+
+        // RULE 1: A profile MUST always be keyed by the authenticated Supabase
+        // user id. Never insert a row with a null/empty user_id — that violates
+        // the NOT NULL constraint and corrupts the account. Bail out early with a
+        // clear error instead of letting Postgres reject it.
+        if (!safePayload.user_id || typeof safePayload.user_id !== 'string' || safePayload.user_id.trim().length === 0) {
+          console.error('[Auth] Refusing to upsert profile without a valid authenticated user_id. Payload keys:', Object.keys(safePayload));
+          return { error: new Error('Cannot save profile: missing authenticated user ID. Please sign in again.') };
+        }
 
         const { error } = await supabase
           .from('profiles')
@@ -200,7 +209,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { error: null as Error | null };
      }, []);
 
-    const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, campus_block, programme, department, semester, designation, avatar_url, diet_preference, registration_id, student_id, plan';
+    const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, campus_block, programme, department, semester, designation, avatar_url, diet_preference, registration_id, student_id, plan, account_created_at';
 
     // Ensure a profile carries permanent identifiers. If they are missing (e.g. a
     // profile created before this feature), generate them ONCE and persist them so
@@ -258,10 +267,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const role = normalizeRole(authUser.user_metadata?.role);
         const fullName = authUser.user_metadata?.full_name || null;
 
-        if (!role || !fullName) {
-          console.warn('[Auth] Required profile metadata (role, full_name) missing. Returning null to trigger profile completion screen.');
-          return null;
-        }
+        // RULE 2.7: If the authenticated user exists in auth.users but has no
+        // profile row, ALWAYS create one (keyed by the authenticated user id) so we
+        // never leave an account without a profile or attempt a null user_id insert.
+        // Missing role/full_name is repaired later by the institution/role step.
 
         const ids = generateStudentIdentifiers();
         const { error: upsertError } = await upsertProfileSafely({
@@ -278,6 +287,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           campus_block: authUser.user_metadata?.campus_block || null,
           registration_id: ids.registration_id,
           student_id: ids.student_id,
+          plan: 'Free',
+          account_created_at: new Date().toISOString(),
         });
 
         if (upsertError) {
@@ -306,6 +317,68 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       return null;
     }, [loadInstitutionForProfile]);
+
+    // ── Canonical profile writer ───────────────────────────────────────────
+    // Always keys the profile by the authenticated Supabase user id (RULE 1).
+    // Repairs missing fields on existing profiles and creates a profile for an
+    // authenticated user that has none (RULE 2.7). Never results in a null
+    // user_id insert because upsertProfileSafely guards against it.
+    const ensureProfileForUser = useCallback(async (params: {
+      fullName?: string | null;
+      role?: UserRole | null;
+      institutionId?: string | null;
+      email?: string | null;
+      phone?: string | null;
+    }): Promise<{ error: Error | null; profile: Profile | null }> => {
+      const { data: userData } = await supabase.auth.getUser();
+      const authUser = userData?.user;
+      if (!authUser) {
+        return { error: new Error('Unable to load your authenticated account. Please sign in again.'), profile: null };
+      }
+      const userId = authUser.id;
+
+      let existing = await fetchProfile(userId);
+
+      if (existing) {
+        const repairs: Record<string, any> = {};
+        if (params.fullName && !existing.full_name) repairs.full_name = params.fullName;
+        if (params.role && !existing.role) repairs.role = params.role;
+        if (params.institutionId && !existing.institution_id) repairs.institution_id = params.institutionId;
+        if (params.phone && !existing.phone) repairs.phone = params.phone;
+        if (Object.keys(repairs).length) {
+          const { error } = await upsertProfileSafely({ user_id: userId, ...repairs });
+          if (error) return { error, profile: null };
+        }
+        // Guarantee the permanent identifiers and plan exist.
+        await ensureStudentIdentifiers(existing);
+        if (!existing.plan) {
+          const { error } = await upsertProfileSafely({ user_id: userId, plan: 'Free' });
+          if (error) return { error, profile: null };
+        }
+        const refreshed = await fetchProfile(userId);
+        return { error: null, profile: refreshed };
+      }
+
+      // No profile yet → create it, keyed by the authenticated user id.
+      const ids = generateStudentIdentifiers();
+      const { error } = await upsertProfileSafely({
+        user_id: userId,
+        email: params.email || authUser.email || '',
+        full_name: params.fullName || authUser.user_metadata?.full_name || null,
+        phone: params.phone || authUser.user_metadata?.phone || null,
+        role: params.role || normalizeRole(authUser.user_metadata?.role) || null,
+        designation: params.role || normalizeRole(authUser.user_metadata?.role) || null,
+        institution_id: params.institutionId || null,
+        diet_preference: 'all',
+        registration_id: ids.registration_id,
+        student_id: ids.student_id,
+        plan: 'Free',
+        account_created_at: new Date().toISOString(),
+      });
+      if (error) return { error, profile: null };
+      const created = await fetchProfile(userId);
+      return { error: null, profile: created };
+    }, [fetchProfile, upsertProfileSafely, ensureStudentIdentifiers]);
 
   const refreshProfile = useCallback(async () => {
     if (user) {
@@ -413,6 +486,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         email: trimmedEmail,
         options: {
           shouldCreateUser: true,
+          data: {
+            full_name: fullName.trim(),
+            role,
+            phone: metadata?.phone?.trim() || null,
+            institution_id: resolvedInstitutionId,
+          },
         },
       });
 
@@ -974,6 +1053,7 @@ if (safeToken.length !== OTP_LENGTH) {
       signOut,
       clearAllSessionData,
       updateProfile,
+      ensureProfileForUser,
       refreshProfile,
       leaveInstitution,
       switchInstitution,

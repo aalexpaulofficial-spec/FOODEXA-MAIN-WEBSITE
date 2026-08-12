@@ -127,16 +127,19 @@ export default function App() {
     if (role === 'student') return '/student-dashboard';
     if (role === 'faculty') return '/faculty-dashboard';
     if (role === 'guest') return '/guest-dashboard';
-    if (role === 'institution_admin') return '/institution-dashboard';
-    if (role === 'kitchen_staff' || role === 'canteen_manager') return '/kitchen-dashboard';
-    if (role === 'super_admin') return '/super-admin-portal';
+    if (role === 'institution_admin') return '/institution-admin';
+    if (role === 'canteen_manager') return '/canteen-dashboard';
+    if (role === 'kitchen_staff') return '/kitchen-dashboard';
+    if (role === 'super_admin') return '/super-admin';
     return null;
   };
 
   const isDashboardPath = (path: string) =>
     path === '/student-dashboard' || path === '/student/dashboard' ||
     path === '/faculty-dashboard' || path === '/guest-dashboard' ||
-    path === '/institution/dashboard' || path === '/kitchen/dashboard' || path === '/admin/dashboard';
+    path === '/institution-admin' || path === '/institution-dashboard' || path === '/institution/dashboard' ||
+    path === '/canteen-dashboard' || path === '/kitchen-dashboard' || path === '/kitchen/dashboard' ||
+    path === '/super-admin' || path === '/super-admin-portal' || path === '/admin/dashboard';
 
   // ── Route-based initialization: open the correct modal based on the URL ──
   // NOTE: We never redirect to '/' during registration or OTP flow.

@@ -387,9 +387,9 @@ notes: {
         console.warn("[Razorpay] Could not fetch payment details:", fetchErr);
       }
 
-      // Update payment record in Supabase as captured/verified
+      // Update payment record in Supabase as paid/verified
       const paymentUpdate: any = {
-        payment_status: 'captured',
+        payment_status: 'paid',
         razorpay_status: paymentDetails?.status || 'captured',
         razorpay_payment_id: razorpay_payment_id,
         razorpay_signature: razorpay_signature,
@@ -460,7 +460,7 @@ notes: {
 
         // Update payment record
         await supabaseQuery('payments', 'PATCH', {
-          payment_status: 'captured',
+          payment_status: 'paid',
           razorpay_status: status,
           payment_method: method || null,
           webhook_verified: true,
@@ -469,7 +469,7 @@ notes: {
 
         // Update order as paid (idempotent - already done by verify endpoint)
         await supabaseQuery('orders', 'PATCH', {
-          payment_status: 'captured',
+          payment_status: 'paid',
           status: 'confirmed',
           order_status: 'confirmed',
           razorpay_payment_id: razorpay_payment_id,
@@ -493,14 +493,14 @@ notes: {
         const orderEntity = payload?.payload?.order?.entity;
         if (orderEntity) {
         await supabaseQuery('orders', 'PATCH', {
-          payment_status: 'captured',
+          payment_status: 'paid',
           status: 'confirmed',
           order_status: 'confirmed',
           updated_at: new Date().toISOString(),
         }, { id: orderEntity.id || '' });
 
           await supabaseQuery('payments', 'PATCH', {
-            payment_status: 'captured',
+            payment_status: 'paid',
             webhook_verified: true,
             updated_at: new Date().toISOString(),
           }, { razorpay_order_id: orderEntity.id || '' });

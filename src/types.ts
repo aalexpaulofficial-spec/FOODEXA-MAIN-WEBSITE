@@ -304,6 +304,7 @@ export interface Order {
   order_status: string;
   payment_status: string;
   payment_method?: string | null;
+  registration_id?: string | null;
   kitchen_status: string | undefined;
   counter_status: string | undefined;
   pickup_code: string | null;

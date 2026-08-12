@@ -21,6 +21,7 @@ import {
   fetchUserFavorites, toggleFavorite, fetchAIRecommendations, getOrderProgress, getEstimatedTimeRemaining, generateReceipt,
   fetchUserCart, saveUserCart,
   fetchCanteens, subscribeCanteens,
+  findActiveCanteen,
   fetchUserAddresses, subscribeUserAddresses,
   uploadAvatar as uploadAvatarService, removeAvatar as removeAvatarService,
   addUserAddress, updateUserAddress, deleteUserAddress, setDefaultAddress,
@@ -363,6 +364,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [reloadNonce, setReloadNonce] = useState(0);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paidPendingConfirmation, setPaidPendingConfirmation] = useState<{
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    message: string;
+  } | null>(null);
   const [qrOrder, setQrOrder] = useState<Order | null>(null);
   const [showCart, setShowCart] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
@@ -930,6 +936,32 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       return;
     }
 
+    const cartCanteenIds = Array.from(new Set(cart.map((entry) => entry.item.canteen_id || entry.item.counter_id).filter(Boolean)));
+    if (cartCanteenIds.length === 0) {
+      const msg = 'The selected menu items are not assigned to a canteen yet. Please refresh the menu and try again.';
+      setError(msg);
+      setSubmittingOrder(false);
+      if (triggerToast) triggerToast('Canteen Missing', msg, 'warning');
+      return;
+    }
+    if (cartCanteenIds.length > 1) {
+      const msg = 'Please checkout items from one canteen at a time.';
+      setError(msg);
+      setSubmittingOrder(false);
+      if (triggerToast) triggerToast('One Canteen Per Order', msg, 'warning');
+      return;
+    }
+
+    const selectedCanteenId = String(cartCanteenIds[0]);
+    const availableCanteen = await findActiveCanteen(liveInstitutionId, selectedCanteenId);
+    if (!availableCanteen) {
+      const msg = 'The selected canteen is not active for your institution right now. Please choose another available item.';
+      setError(msg);
+      setSubmittingOrder(false);
+      if (triggerToast) triggerToast('Canteen Unavailable', msg, 'warning');
+      return;
+    }
+
     try {
       const now = new Date();
       const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
@@ -1022,7 +1054,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               customer_name: customerName,
               phone: customerPhone,
               institution_id: liveInstitutionId,
-              canteen_id: cart[0]?.item.canteen_id || cart[0]?.item.counter_id || null,
+              canteen_id: selectedCanteenId,
               items: itemsForBackend,
               itemsFull,
               total_amount: cartGrandTotal,
@@ -1036,16 +1068,21 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
             if (createResult.error || !createResult.data) {
               console.error('[Payment] Order creation failed after verification:', createResult.error);
-              setError(paymentMessage('Payment was verified, but we could not confirm your FOODEXA order. Please contact support before retrying.'));
-              setActiveTab('payment_failed');
+              const pendingMessage = createResult.error?.toLowerCase().includes('canteen')
+                ? 'Payment received. Your order is awaiting canteen confirmation.'
+                : 'Payment received. We are confirming your order.';
+              setPaidPendingConfirmation({ razorpay_order_id, razorpay_payment_id, message: pendingMessage });
+              setError(pendingMessage);
+              setActiveTab('payment_success');
               setSubmittingOrder(false);
-              if (triggerToast) triggerToast('Order Creation Failed', createResult.error || 'Contact support.', 'warning');
+              if (triggerToast) triggerToast('Payment Received', pendingMessage, 'warning');
               return;
             }
 
             // ── STEP 5: Success — refresh and show confirmation ──────────
             await refreshOrders();
             setCart([]);
+            setPaidPendingConfirmation(null);
             setShowCart(false);
             setCouponDiscount(0);
             setCouponCode('');
@@ -1056,10 +1093,15 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
           } catch (verifyErr: any) {
             console.error('[Payment] Verification/order confirmation exception:', verifyErr);
-            setError(paymentMessage('Payment completed, but order confirmation needs support review.'));
-            setActiveTab('payment_failed');
+            setPaidPendingConfirmation({
+              razorpay_order_id,
+              razorpay_payment_id,
+              message: 'Payment received. We are confirming your order.',
+            });
+            setError('Payment received. We are confirming your order.');
+            setActiveTab('payment_success');
             setSubmittingOrder(false);
-            if (triggerToast) triggerToast('Verification Error', 'Payment completed but order confirmation failed.', 'warning');
+            if (triggerToast) triggerToast('Payment Received', 'Payment completed but order confirmation needs review.', 'warning');
           }
         },
         prefill: {
@@ -1505,6 +1547,37 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                    const label = o ? getTimelineLabel(o.status) : 'Order Confirmed';
                    const completed = isOrderCompleted(o?.status);
                    const cancelled = isOrderCancelled(o?.status);
+
+                    if (!o && paidPendingConfirmation) {
+                      return (
+                        <div className="max-w-md mx-auto space-y-5 py-10 text-center">
+                          <div className="w-24 h-24 mx-auto bg-emerald-50 border border-emerald-200 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/10">
+                            <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-xs font-black uppercase tracking-widest text-emerald-600">Payment Successful</p>
+                            <h2 className="text-2xl font-black text-slate-900">Order Confirmation Pending</h2>
+                            <p className="text-sm text-slate-600 font-semibold">{paidPendingConfirmation.message}</p>
+                          </div>
+                          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-left space-y-3">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase text-slate-400">Payment ID</p>
+                              <p className="text-xs font-mono font-bold text-slate-900 break-all">{paidPendingConfirmation.razorpay_payment_id}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold uppercase text-slate-400">Razorpay Order</p>
+                              <p className="text-xs font-mono font-bold text-slate-900 break-all">{paidPendingConfirmation.razorpay_order_id}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={async () => { await refreshOrders(); }}
+                            className="w-full rounded-2xl bg-[#0071E3] py-4 text-sm font-black text-white shadow-lg shadow-blue-500/25 hover:bg-[#0066CC] transition-all"
+                          >
+                            Check Order Status
+                          </button>
+                        </div>
+                      );
+                    }
 
                     // Show premium completion screen when order is collected
                     if (completed && o) {

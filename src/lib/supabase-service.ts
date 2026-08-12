@@ -277,7 +277,7 @@ function createOrderItemsPayload(orderId: string, items: { id: string; name?: st
 
 export async function fetchOrders(params: { user_id?: string; institution_id?: string; status?: OrderStatus }): Promise<Order[]> {
   let query = supabase.from('orders').select(SELECT_ORDER_WITH_ITEMS);
-  if (params.user_id) query = query.eq('user_id', params.user_id);
+  if (params.user_id) query = query.eq('student_id', params.user_id);
   if (params.institution_id) query = query.eq('institution_id', params.institution_id);
   if (params.status) query = query.eq('status', params.status);
   query = query.order('created_at', { ascending: false });
@@ -307,10 +307,11 @@ function resolveOrderItems(row: any): OrderItem[] {
 }
 
 export function mapOrder(row: any): Order {
+  const authUserId = String(row.student_id || row.user_id || '');
   return {
     id: String(row.id),
-    student_id: String(row.user_id || ''),
-    user_id: String(row.user_id || ''),
+    student_id: authUserId,
+    user_id: authUserId,
     email: String(row.email || ''),
     customer_name: row.customer_name || null,
     phone: row.phone || null,
@@ -321,7 +322,7 @@ export function mapOrder(row: any): Order {
     category_id: row.category_id || null,
     order_id: row.order_number ? `#FX-${String(row.order_number).padStart(4, '0')}` : `#FX-${String(row.id).slice(-4).toUpperCase()}`,
     order_number: row.order_number || undefined,
-    counter: row.counter_name || row.counter || 'Campus Counter',
+    counter: row.counter_code || row.counter_name || row.counter || 'Counter assignment pending',
     items: resolveOrderItems(row),
     total_amount: Number(row.total_amount || 0),
     transaction_amount: Number(row.transaction_amount || row.total_amount || 0),
@@ -329,6 +330,7 @@ export function mapOrder(row: any): Order {
     order_status: row.order_status || row.status || 'pending',
     payment_status: row.payment_status || 'pending',
     payment_method: row.payment_method || undefined,
+    registration_id: row.registration_id || null,
     kitchen_status: row.kitchen_status || undefined,
     counter_status: row.counter_status || undefined,
     pickup_code: row.pickup_code || null,
@@ -388,21 +390,91 @@ function normalizeOrderItems(items: any): OrderItem[] {
 // The canteens table uses a `status` column. An active canteen is one whose
 // status, after LOWER(TRIM(...)), equals 'active'. We fetch the institution's
 // canteens and filter in JS so we never miss rows stored as 'Active'/' active '.
-export async function findActiveCanteen(institutionId: string | null | undefined): Promise<string | null> {
+export interface ActiveCanteenAssignment {
+  id: string;
+  counter_code: string;
+  name: string;
+}
+
+function isActiveCanteenStatus(status: any): boolean {
+  return !['inactive', 'disabled', 'archived', 'closed'].includes(String(status || 'active').trim().toLowerCase());
+}
+
+export async function findActiveCanteen(
+  institutionId: string | null | undefined,
+  canteenId?: string | null
+): Promise<ActiveCanteenAssignment | null> {
   if (!institutionId) return null;
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('canteens')
-      .select('id, status')
+      .select('id, name, status, counter_code, counter_name')
       .eq('institution_id', institutionId);
+    if (canteenId) query = query.eq('id', canteenId);
+    const { data, error } = await query;
     if (error || !data || data.length === 0) return null;
     const active = data.find(
-      (c: any) => String(c.status ?? '').trim().toLowerCase() === 'active'
+      (c: any) => isActiveCanteenStatus(c.status)
     );
-    return active?.id ?? null;
+    if (!active?.id) return null;
+    return {
+      id: active.id,
+      counter_code: active.counter_code || active.counter_name || active.name || 'Counter assignment pending',
+      name: active.name || active.counter_name || active.counter_code || 'Canteen',
+    };
   } catch {
     return null;
   }
+}
+
+async function resolveOrderCanteenFromMenuItems(params: {
+  institutionId: string;
+  items: { id: string }[];
+  requestedCanteenId?: string | null;
+}): Promise<{ data: ActiveCanteenAssignment | null; error: string | null }> {
+  const menuItemIds = Array.from(new Set(params.items.map((item) => item.id).filter(Boolean)));
+  if (menuItemIds.length === 0) {
+    return { data: null, error: 'Your cart is empty. Please add menu items before checkout.' };
+  }
+
+  const { data: menuRows, error: menuError } = await supabase
+    .from('menu_items')
+    .select('id, institution_id, canteen_id')
+    .in('id', menuItemIds);
+
+  if (menuError) {
+    return { data: null, error: `Unable to validate cart menu items: ${menuError.message}` };
+  }
+
+  const rows = menuRows || [];
+  if (rows.length !== menuItemIds.length) {
+    return { data: null, error: 'One or more cart items are no longer available. Please refresh your cart.' };
+  }
+
+  const invalidInstitution = rows.find((row: any) => row.institution_id && row.institution_id !== params.institutionId);
+  if (invalidInstitution) {
+    return { data: null, error: 'Your cart contains an item from another institution. Please refresh your menu.' };
+  }
+
+  const canteenIds = Array.from(new Set(rows.map((row: any) => row.canteen_id).filter(Boolean)));
+  if (canteenIds.length === 0) {
+    return { data: null, error: 'The selected menu items are not assigned to a canteen yet.' };
+  }
+  if (canteenIds.length > 1) {
+    return { data: null, error: 'Please checkout items from one canteen at a time.' };
+  }
+
+  const selectedCanteenId = String(canteenIds[0]);
+  if (params.requestedCanteenId && params.requestedCanteenId !== selectedCanteenId) {
+    return { data: null, error: 'Your cart canteen changed. Please refresh the menu and try again.' };
+  }
+
+  const activeCanteen = await findActiveCanteen(params.institutionId, selectedCanteenId);
+  if (!activeCanteen) {
+    return { data: null, error: 'The selected canteen is not active for your institution right now.' };
+  }
+
+  return { data: activeCanteen, error: null };
 }
 
 // Pickup counter A–G, assigned deterministically by the institution's order
@@ -434,10 +506,10 @@ async function insertOrderSafely(payload: Record<string, any>): Promise<{ data: 
   if (!res.error && res.data) return { data: res.data, error: null };
   const msg = String(res.error?.message || '').toLowerCase();
   const missingColumn =
-    (msg.includes('column') && (msg.includes('counter') || msg.includes('confirmed_at'))) ||
+    (msg.includes('column') && (msg.includes('counter') || msg.includes('confirmed_at') || msg.includes('user_id') || msg.includes('role') || msg.includes('items'))) ||
     msg.includes('could not find the column');
   if (missingColumn) {
-    const { counter, confirmed_at, ...rest } = payload;
+    const { counter, counter_name, counter_id, confirmed_at, user_id, role, items, ...rest } = payload;
     const fallback = await supabase.from('orders').insert([rest]).select('*').single();
     if (!fallback.error && fallback.data) return { data: fallback.data, error: null };
     return fallback;
@@ -485,21 +557,25 @@ export async function createOrderAfterPayment(params: {
     return { data: null, error: 'You must join an institution before placing an order.' };
   }
 
-  // Determine the active canteen dynamically from the student's institution.
-  // We IGNORE any hardcoded/incorrect canteen passed in and always resolve the
-  // single active canteen for the institution (status = 'active', case/space
-  // insensitive). This is the root-cause fix for the "No active canteen found"
-  // false failure after a successful Razorpay payment.
-  const actualCanteenId = await findActiveCanteen(actualInstitutionId);
+  const canteenResult = await resolveOrderCanteenFromMenuItems({
+    institutionId: actualInstitutionId,
+    items: params.itemsFull,
+    requestedCanteenId: params.canteen_id || null,
+  });
 
-  if (!actualCanteenId) {
+  if (canteenResult.error || !canteenResult.data) {
     return {
       data: null,
-      error: 'No active canteen is currently available for your institution. Please try again or contact support.',
+      error: canteenResult.error || 'Unable to validate the selected canteen for this order.',
     };
   }
+  const activeCanteen = canteenResult.data;
 
-  const pickupCounter = await assignPickupCounter(actualInstitutionId);
+  const { data: profileRow } = await supabase
+    .from('profiles')
+    .select('registration_id')
+    .eq('user_id', params.user_id)
+    .maybeSingle();
 
   // Idempotency: never create two orders for the same successful Razorpay payment
   // (prevents double-charge from refresh / callback / retry / webhook duplication).
@@ -514,18 +590,19 @@ export async function createOrderAfterPayment(params: {
   }
 
   const orderPayload: Record<string, any> = {
-    user_id: params.user_id || null,
+    student_id: params.user_id || null,
+    registration_id: profileRow?.registration_id || null,
     email: params.email,
     customer_name: customerName,
     phone,
     institution_id: actualInstitutionId,
-    canteen_id: actualCanteenId,
-    counter: pickupCounter,
+    canteen_id: activeCanteen.id,
+    counter_code: activeCanteen.counter_code,
     total_amount: params.total_amount,
     transaction_amount: params.total_amount,
     status: 'confirmed',
     order_status: 'confirmed',
-    payment_status: 'captured',
+    payment_status: 'paid',
     payment_method: params.payment_method === 'cash' ? 'cash' : 'razorpay',
     order_number: Date.now(),
     pickup_token: tokenNumber,
@@ -539,7 +616,6 @@ export async function createOrderAfterPayment(params: {
     created_at: nowISO,
     updated_at: nowISO,
     paid_at: nowISO,
-    confirmed_at: nowISO,
     razorpay_order_id: params.razorpay_order_id,
     razorpay_payment_id: params.razorpay_payment_id,
     razorpay_signature: params.razorpay_signature,
@@ -558,8 +634,7 @@ export async function createOrderAfterPayment(params: {
     console.error('[Supabase] Failed to create order_items:', itemsError);
   }
 
-  // Insert payments record (best-effort) — payment_status 'captured' mirrors the
-  // verified Razorpay state so orders and payments stay consistent.
+  // Insert payments record (best-effort). Keep successful Razorpay status as paid.
   try {
     await supabase.from('payments').insert([{
       order_id: orderData.id,
@@ -568,7 +643,7 @@ export async function createOrderAfterPayment(params: {
       razorpay_signature: params.razorpay_signature,
       amount: params.total_amount,
       currency: 'INR',
-      payment_status: 'captured',
+      payment_status: 'paid',
       payment_method: 'razorpay',
       created_at: nowISO,
       updated_at: nowISO,
@@ -583,8 +658,8 @@ export async function createOrderAfterPayment(params: {
       institution_id: actualInstitutionId,
       from_status: null,
       to_status: 'confirmed',
-      payment_status: 'captured',
-      note: 'Payment captured and order confirmed.',
+      payment_status: 'paid',
+      note: 'Payment paid and order confirmed.',
       created_at: nowISO,
     }]);
   } catch (_) { /* best-effort */ }
@@ -649,32 +724,43 @@ export async function placeOrder(params: {
     return { data: null, error: 'You must join an institution before placing an order.' };
   }
 
-  // Always resolve the active canteen dynamically from the institution.
-  const actualCanteenId = await findActiveCanteen(actualInstitutionId);
+  const canteenResult = await resolveOrderCanteenFromMenuItems({
+    institutionId: actualInstitutionId,
+    items: params.itemsFull,
+    requestedCanteenId: params.canteen_id || null,
+  });
 
-  if (!actualCanteenId) {
-    return { data: null, error: 'No active canteen found for your institution. Please contact support.' };
+  if (canteenResult.error || !canteenResult.data) {
+    return { data: null, error: canteenResult.error || 'Unable to validate the selected canteen for this order.' };
   }
+  const activeCanteen = canteenResult.data;
+
+  const { data: profileRow } = await supabase
+    .from('profiles')
+    .select('registration_id')
+    .eq('user_id', params.user_id)
+    .maybeSingle();
 
   const payload: Record<string, any> = {
-    user_id: params.user_id || null,
+    student_id: params.user_id || null,
+    registration_id: profileRow?.registration_id || null,
     email: params.email,
     customer_name: customerName,
     phone: phone,
     institution_id: actualInstitutionId,
-    canteen_id: actualCanteenId,
+    canteen_id: activeCanteen.id,
     total_amount: params.total_amount,
     transaction_amount: params.total_amount,
     status: isPaid ? 'confirmed' : 'pending',
     order_status: isPaid ? 'confirmed' : 'pending',
-    payment_status: isPaid ? 'captured' : 'pending',
+    payment_status: isPaid ? 'paid' : 'pending',
     payment_method: isPaid ? (params.payment_method === 'cash' ? 'cash' : 'razorpay') : 'razorpay',
     order_number: nextSeq,
     pickup_token: tokenNumber,
     pickup_code: pickupCode,
     qr_pickup_code: qrPickupCode,
     token_number: tokenNumber,
-    counter: await assignPickupCounter(actualInstitutionId),
+    counter_code: activeCanteen.counter_code,
     notes: params.notes || null,
     kitchen_status: 'Pending',
     counter_status: 'Incoming',
@@ -685,7 +771,6 @@ export async function placeOrder(params: {
 
   if (isPaid) {
     payload.paid_at = nowISO;
-    payload.confirmed_at = nowISO;
   }
 
   if (params.razorpay_order_id) payload.razorpay_order_id = params.razorpay_order_id;
@@ -1113,7 +1198,7 @@ export function subscribeOrders(
   callback: RealtimeCallback<any>,
   filter?: { user_id?: string; institution_id?: string }
 ) {
-  const realtimeFilter = filter?.user_id ? `user_id=eq.${filter.user_id}` : filter?.institution_id ? `institution_id=eq.${filter.institution_id}` : undefined;
+  const realtimeFilter = filter?.user_id ? `student_id=eq.${filter.user_id}` : filter?.institution_id ? `institution_id=eq.${filter.institution_id}` : undefined;
   const key = `orders-realtime:${realtimeFilter || 'all'}`;
   return subscribeToRealtime(key, [{ table: 'orders', filter: realtimeFilter, callback }]);
 }

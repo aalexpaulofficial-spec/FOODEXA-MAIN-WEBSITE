@@ -67,13 +67,13 @@ function mapJoinedItems(orderRow: any): OrderItem[] {
 }
 
 function mapOrderRow(r: any): Order {
-  // Use counter_code from database, fallback to counter_name, then counter
-  const counterCode = r.counter_code || r.counter_name || r.counter || 'Campus Counter';
+  const authUserId = String(r.student_id || r.user_id || '');
+  const counterCode = r.counter_code || r.counter_name || r.counter || 'Counter assignment pending';
   
   return {
     id: String(r.id),
-    student_id: String(r.user_id || ''),
-    user_id: String(r.user_id || ''),
+    student_id: authUserId,
+    user_id: authUserId,
     email: String(r.email || ''),
     customer_name: r.customer_name || null,
     phone: r.phone || null,
@@ -92,6 +92,7 @@ function mapOrderRow(r: any): Order {
     status: normalizeOrderStatus(r.status),
     order_status: normalizeOrderStatus(r.order_status || r.status || 'pending'),
     payment_status: normalizePaymentStatus(r.payment_status),
+    registration_id: r.registration_id || null,
     kitchen_status: r.kitchen_status || undefined,
     counter_status: r.counter_status || undefined,
     pickup_code: r.pickup_code || null,
@@ -120,8 +121,8 @@ function mapOrderRow(r: any): Order {
 }
 
 // Include counter_code, payment_status, order_status, paid_at, cancelled_at
-const ORDER_COLUMNS = 'id, user_id, email, role, institution_id, institution_code, counter, counter_code, counter_name, items, total_amount, status, order_status, order_id, pickup_code, qr_code, qr_code_data, locker_number, category_id, counter_id, payment_status, created_at, accepted_at, preparing_at, ready_at, completed_at, updated_at, paid_at, cancelled_at, payment_method, razorpay_order_id, razorpay_payment_id, razorpay_signature';
-const ORDER_ITEM_COLUMNS = 'id, order_id, menu_item_id, name, variant, quantity, price, created_at';
+const ORDER_COLUMNS = 'id, student_id, registration_id, email, customer_name, phone, institution_id, canteen_id, counter_code, total_amount, transaction_amount, status, order_status, order_number, pickup_code, qr_code, qr_pickup_code, token_number, pickup_token, notes, kitchen_status, counter_status, estimated_ready_at, payment_status, created_at, accepted_at, preparing_at, ready_at, completed_at, updated_at, paid_at, cancelled_at, cancelled_by, payment_method, razorpay_order_id, razorpay_payment_id, razorpay_signature';
+const ORDER_ITEM_COLUMNS = 'id, order_id, menu_item_id, quantity, price, subtotal, created_at, menu_items(id, food_name, food_type, category_name, image_url, is_veg, price)';
 
 export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersOptions): UseSupabaseOrdersReturn {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -146,7 +147,7 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
       const { data: orderRows, error: fetchError } = await supabase
         .from('orders')
         .select(ORDER_COLUMNS)
-        .eq('user_id', userId)
+        .eq('student_id', userId)
         .order('created_at', { ascending: false });
 
       if (fetchError) {
@@ -282,7 +283,7 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
 
       const channel = supabase
         .channel(channelName)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleOrderChange)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `student_id=eq.${userId}` }, handleOrderChange)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, handleOrderItemChange)
         .subscribe((status) => {
           if (!mountedRef.current) return;

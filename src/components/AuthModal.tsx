@@ -58,7 +58,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onBack,
   onDirectLogin,
 }) => {
-  const { signUpWithPassword, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
+  const { signUpWithPassword, signUpWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
   const [mode, setMode] = useState<'login' | 'create' | 'quick'>(initialMode);
   const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success' | 'profile_completion' | 'forgot_password'>('form');
   const [loginUserId, setLoginUserId] = useState<string | null>(null);
@@ -505,7 +505,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoginNotice('Password reset link sent. Please check your email.');
   };
 
-  const handleCreateSubmit = async (e: React.FormEvent) => {
+const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isCreatingAccount) return;
 
@@ -526,24 +526,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    if (currentForm.password.length < 8) {
-      setInstitutionError('Password must be at least 8 characters.');
-      return;
-    }
-
-    if (currentForm.password !== currentForm.confirmPassword) {
-      setInstitutionError('Passwords do not match.');
-      return;
-    }
-
     setRegistrationPhase('sending');
 
-    console.info('[Auth] Calling signUpWithPassword | email:', normalizedEmail);
-    const { error } = await signUpWithPassword(normalizedEmail, currentForm.password, currentForm.fullName, selectedAccountRole);
+    console.info('[Auth] Calling signUpWithOtp (passwordless) | email:', normalizedEmail);
+    const { error } = await signUpWithOtp(normalizedEmail, currentForm.fullName, selectedAccountRole);
 
-      if (error) {
-        console.error('[FOODEXA AUTH] Signup error:', error);
-        if (error.message.toLowerCase().includes('already registered')) {
+    if (error) {
+      console.error('FOODEXA AUTH ERROR:', error);
+      if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already exists')) {
         setMode('login');
         setLoginEmail(normalizedEmail);
         setLoginPassword('');
@@ -557,7 +547,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    console.info('[Auth] signUpWithPassword succeeded; OTP email dispatched to:', normalizedEmail);
+    console.info('[Auth] signUpWithOtp succeeded; OTP email dispatched to:', normalizedEmail);
     setRegistrationPhase('sent');
     setResendCountdown(RESEND_COOLDOWN_SECONDS);
     setOtpError(null);
@@ -568,26 +558,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const normalizedEmail = (getPendingVerificationEmail() || currentEmail).trim().toLowerCase();
     setOtpError(null);
     setRegistrationPhase('sending');
-    console.info('[Auth] Resending OTP email for:', normalizedEmail);
+    console.info('[Auth] Resending OTP email via signInWithOtp(shouldCreateUser: true) for:', normalizedEmail);
     try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
+      const { error } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
+        options: {
+          shouldCreateUser: true,
+        },
       });
       if (error) {
-        console.error('Supabase Auth Error:', error);
-        console.error('[FOODEXA AUTH] Resend error:', error);
+        console.error('FOODEXA AUTH ERROR:', error);
         setOtpError(mapOtpErrorMessage(error.message || 'Failed to resend OTP. Please try again.'));
         setRegistrationPhase('sent');
         return;
       }
-      console.info('[Auth] OTP email resent successfully for:', normalizedEmail);
+      console.info('[Auth] OTP email resent successfully via signInWithOtp for:', normalizedEmail);
       setOtpCode('');
       setResendCountdown(RESEND_COOLDOWN_SECONDS);
       setRegistrationPhase('sent');
       window.setTimeout(() => document.getElementById('otp-box-0')?.focus(), 0);
     } catch (err) {
-      console.error('[Auth] OTP resend threw:', err);
+      console.error('FOODEXA AUTH ERROR:', err);
       setOtpError('Unable to send a new code. Please try again shortly.');
       setRegistrationPhase('sent');
     }
@@ -877,41 +868,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs font-semibold text-[#86868B] mb-1 block">Password</label>
-                      <input
-                        type="password"
-                        required
-                        minLength={8}
-                        value={getCurrentForm().password}
-                        onChange={(e) => {
-                          if (selectedAccountRole === 'student') setStudentForm({ ...studentForm, password: e.target.value });
-                          else if (selectedAccountRole === 'faculty') setFacultyForm({ ...facultyForm, password: e.target.value });
-                          else setGuestForm({ ...guestForm, password: e.target.value });
-                        }}
-                        placeholder="Minimum 8 characters"
-                        className="w-full apple-input w-full"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-[#86868B] mb-1 block">Confirm Password</label>
-                      <input
-                        type="password"
-                        required
-                        minLength={8}
-                        value={getCurrentForm().confirmPassword}
-                        onChange={(e) => {
-                          if (selectedAccountRole === 'student') setStudentForm({ ...studentForm, confirmPassword: e.target.value });
-                          else if (selectedAccountRole === 'faculty') setFacultyForm({ ...facultyForm, confirmPassword: e.target.value });
-                          else setGuestForm({ ...guestForm, confirmPassword: e.target.value });
-                        }}
-                        placeholder="Repeat password"
-                        className="w-full apple-input w-full"
-                      />
-                    </div>
-                  </div>
-
                   {selectedAccountRole === 'student' && (
                     <>
                       <div className="grid grid-cols-2 gap-2">
@@ -1046,11 +1002,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <KeyRound className="w-6 h-6" />
               </div>
               <h3 className="text-xl font-bold text-black">Check Your Email</h3>
-               <p className="text-xs text-[#86868B] leading-relaxed">
-                 Enter the 8-digit verification code sent to:
-                 <br />
-                 <strong className="text-black">{getPendingVerificationEmail() || currentEmail || ''}</strong>
-               </p>
+<p className="text-xs text-[#86868B] leading-relaxed">
+                  Enter the 8-digit verification code sent to your email.
+                  <br />
+                  <strong className="text-black">{getPendingVerificationEmail() || currentEmail || ''}</strong>
+                </p>
             </div>
 
             {otpError && (

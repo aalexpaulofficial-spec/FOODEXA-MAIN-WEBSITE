@@ -9,8 +9,6 @@ import {
   User,
   CheckCircle2,
   RefreshCw,
-  Eye,
-  EyeOff,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth, OTP_LENGTH } from '../context/AuthContext';
@@ -42,8 +40,6 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const initialAccountForm = {
   fullName: '',
   email: '',
-  password: '',
-  confirmPassword: '',
 };
 
 const getPendingVerificationEmail = () =>
@@ -53,25 +49,6 @@ const getInstitutionLocation = (institution: InstitutionData | null) =>
   [institution?.campus, institution?.city, institution?.state || institution?.country]
     .filter(Boolean)
     .join(' • ');
-
-const getPasswordChecks = (password: string) => ({
-  length: password.length >= 8,
-  upper: /[A-Z]/.test(password),
-  lower: /[a-z]/.test(password),
-  number: /\d/.test(password),
-  special: /[^A-Za-z0-9]/.test(password),
-});
-
-const getPasswordStrength = (password: string) => {
-  const checks = getPasswordChecks(password);
-  const score = Object.values(checks).filter(Boolean).length;
-
-  if (!password) return { label: 'Weak', score: 0 };
-  if (score <= 2) return { label: 'Weak', score };
-  if (score === 3) return { label: 'Fair', score };
-  if (score === 4) return { label: 'Strong', score };
-  return { label: 'Very Strong', score };
-};
 
 const mapOtpErrorMessage = (message: string) => {
   const lower = message.toLowerCase();
@@ -100,13 +77,11 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
   onAccountSetupSuccess,
   onOpenLogin,
 }) => {
-  const { validateInstitutionCode, setInstitutionData, refreshProfile, signUpWithPassword, verifyOtp } = useAuth();
+  const { validateInstitutionCode, setInstitutionData, refreshProfile, signUpWithOtp, verifyOtp } = useAuth();
 
   const [step, setStep] = useState<Step>('account');
   const [accountForm, setAccountForm] = useState(initialAccountForm);
   const [selectedRole, setSelectedRole] = useState<AccountRole | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [otpDigits, setOtpDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [pendingSignupEmail, setPendingSignupEmail] = useState('');
   const [institutionCode, setInstitutionCode] = useState('');
@@ -121,17 +96,12 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
   const fullName = accountForm.fullName.trim();
   const normalizedEmail = accountForm.email.trim().toLowerCase();
-  const passwordStrength = useMemo(() => getPasswordStrength(accountForm.password), [accountForm.password]);
-  const passwordChecks = useMemo(() => getPasswordChecks(accountForm.password), [accountForm.password]);
   const otpCode = otpDigits.join('');
   const isBusy = loading || resending;
-  const passwordsMatch = accountForm.confirmPassword.length === 0 || accountForm.password === accountForm.confirmPassword;
   const canCreateAccount =
     !!fullName &&
     emailPattern.test(normalizedEmail) &&
-    !!selectedRole &&
-    passwordStrength.score === 5 &&
-    accountForm.confirmPassword === accountForm.password;
+    !!selectedRole;
 
   const fieldClass =
     'w-full rounded-2xl border border-[#D2D2D7] bg-white px-4 py-3 text-sm font-medium text-[#1D1D1F] outline-none transition focus:border-[#0071E3] focus:ring-4 focus:ring-[#0071E3]/10';
@@ -140,8 +110,6 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setStep('account');
     setAccountForm(initialAccountForm);
     setSelectedRole(null);
-    setShowPassword(false);
-    setShowConfirmPassword(false);
     setOtpDigits(Array(OTP_LENGTH).fill(''));
     setPendingSignupEmail('');
     setInstitutionCode('');
@@ -197,32 +165,23 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setDuplicateEmail(false);
 
     if (!fullName || !emailPattern.test(normalizedEmail) || !selectedRole) return;
-    if (passwordStrength.score < 5) {
-      setError('Please create a stronger password.');
-      return;
-    }
-    if (accountForm.password !== accountForm.confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
 
     setLoading(true);
 
-    const { error: signUpError } = await signUpWithPassword(
+    const { error: signUpError } = await signUpWithOtp(
       normalizedEmail,
-      accountForm.password,
       fullName,
       selectedRole
     );
 
     if (signUpError) {
-      console.error('[FOODEXA AUTH] Signup error:', signUpError);
+      console.error('FOODEXA AUTH ERROR:', signUpError);
       setLoading(false);
       if (isExistingEmailError(signUpError.message)) {
         setDuplicateEmail(true);
         setError('This email is already registered.');
       } else {
-        setError(signUpError.message.toLowerCase().includes('password') ? 'Please create a stronger password.' : 'Unable to create your account right now. Please try again.');
+        setError(signUpError.message || 'Unable to create your account right now. Please try again.');
       }
       return;
     }
@@ -323,16 +282,17 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     setResending(true);
     setError(null);
 
-    const { error: otpError } = await supabase.auth.resend({
-      type: 'signup',
+    const { error: otpError } = await supabase.auth.signInWithOtp({
       email: signupEmail,
+      options: {
+        shouldCreateUser: true,
+      },
     });
 
     setResending(false);
 
     if (otpError) {
-      console.error('Supabase Auth Error:', otpError);
-      console.error('[FOODEXA AUTH] Resend error:', otpError);
+      console.error('FOODEXA AUTH ERROR:', otpError);
       setError(mapOtpErrorMessage(otpError.message));
       return;
     }
@@ -426,42 +386,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
     </div>
   );
 
-  const renderPasswordField = (
-    label: string,
-    value: string,
-    onChange: (value: string) => void,
-    isVisible: boolean,
-    onToggle: () => void,
-    placeholder: string
-  ) => (
-    <div>
-      <label className="mb-1 block text-xs font-semibold text-[#515154]">{label}</label>
-      <div className="relative">
-        <input
-          type={isVisible ? 'text' : 'password'}
-          required
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className={`${fieldClass} pr-12`}
-          placeholder={placeholder}
-        />
-        <button
-          type="button"
-          onClick={onToggle}
-          className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[#515154] transition hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
-          aria-label={isVisible ? 'Hide Password' : 'Show Password'}
-          title={isVisible ? 'Hide Password' : 'Show Password'}
-        >
-          {isVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
-      </div>
-    </div>
-  );
 
-  const strengthBarColor =
-    passwordStrength.score <= 2 ? 'bg-[#FF3B30]' :
-      passwordStrength.score === 3 ? 'bg-[#FF9500]' :
-        passwordStrength.score === 4 ? 'bg-[#34C759]' : 'bg-[#0A7A37]';
 
   return (
     <div
@@ -556,52 +481,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
                 </div>
               </div>
 
-              {renderPasswordField(
-                'Password *',
-                accountForm.password,
-                (value) => updateAccountField('password', value),
-                showPassword,
-                () => setShowPassword((value) => !value),
-                'Create a strong password'
-              )}
 
-              <div className="rounded-2xl border border-[#E8E8ED] bg-[#F5F5F7] p-3">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-xs font-bold text-[#1D1D1F]">{passwordStrength.label}</p>
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white">
-                    <div
-                      className={`h-full rounded-full transition-all ${strengthBarColor}`}
-                      style={{ width: `${Math.max(passwordStrength.score, accountForm.password ? 1 : 0) * 20}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-1 text-xs font-semibold text-[#515154] sm:grid-cols-2">
-                  {[
-                    ['At least 8 characters', passwordChecks.length],
-                    ['One uppercase letter', passwordChecks.upper],
-                    ['One lowercase letter', passwordChecks.lower],
-                    ['One number', passwordChecks.number],
-                    ['One special character', passwordChecks.special],
-                  ].map(([label, passed]) => (
-                    <p key={String(label)} className={passed ? 'text-[#0A7A37]' : 'text-[#86868B]'}>
-                      {passed ? '✓' : '○'} {label}
-                    </p>
-                  ))}
-                </div>
-              </div>
-
-              {renderPasswordField(
-                'Re-enter Password *',
-                accountForm.confirmPassword,
-                (value) => updateAccountField('confirmPassword', value),
-                showConfirmPassword,
-                () => setShowConfirmPassword((value) => !value),
-                'Re-enter password'
-              )}
-
-              {!passwordsMatch && (
-                <p className="text-xs font-semibold text-[#FF3B30]">Passwords do not match.</p>
-              )}
             </div>
 
             <button

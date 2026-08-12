@@ -27,6 +27,7 @@ interface AuthContextType {
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
   signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; institutionId?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
+  signUpWithOtp: (email: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; institutionId?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
   joinWithCodeRoleName: (institutionCode: string, role: 'student' | 'faculty' | 'guest', displayName: string) => Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }>;
   joinWithDirectAccess: (institutionCode: string, role: 'student' | 'faculty' | 'guest', displayName: string, email: string) => Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }>;
@@ -327,7 +328,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   };
 
-  // FIX: Accept institutionId as a direct parameter to avoid relying on volatile context state
   const signUpWithPassword = async (
     email: string,
     password: string,
@@ -335,7 +335,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     role: UserRole,
     metadata?: {
       institutionCode?: string;
-      institutionId?: string; // PRODUCTION FIX: pass institution_id directly
+      institutionId?: string;
       phone?: string;
       department?: string;
       semester?: string;
@@ -438,8 +438,82 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Do NOT call signInWithOtp() — that sends a second email via the
     // "Magic Link" template and can cause rate-limit / delivery conflicts.
     console.info('[Auth] signUp() succeeded. Supabase Auth dispatches the confirmation OTP email.');
-    signUpInProgressRef.current = false;
+signUpInProgressRef.current = false;
     return { error: null };
+  };
+
+  // Passwordless OTP signup using signInWithOtp with shouldCreateUser: true
+  const signUpWithOtp = async (
+    email: string,
+    fullName: string,
+    role: UserRole,
+    metadata?: {
+      institutionCode?: string;
+      institutionId?: string;
+      phone?: string;
+      department?: string;
+      semester?: string;
+      programme?: string;
+      campusBlock?: string;
+      facultyId?: string;
+    }
+  ) => {
+    if (signUpInProgressRef.current) {
+      return { error: new Error('Registration is already in progress. Please wait.') };
+    }
+    signUpInProgressRef.current = true;
+
+    const trimmedEmail = email.trim().toLowerCase();
+
+    // Resolve institution_id: prefer direct param, then context state
+    const resolvedInstitutionId = metadata?.institutionId || institutionData?.institution_id || null;
+
+    if (!resolvedInstitutionId) {
+      console.warn('[Auth] signUpWithOtp: institution_id is NULL. Institution code may not have been validated.');
+    }
+
+    // Block any auto-redirect while OTP is pending
+    setIsPendingOtpVerification(true);
+    sessionStorage.setItem(PENDING_VERIFICATION_EMAIL_KEY, trimmedEmail);
+
+    // Store pending profile data for after OTP verification
+    setPendingRegistrationProfile({
+      email: trimmedEmail,
+      fullName: fullName.trim(),
+      role,
+      institutionId: resolvedInstitutionId,
+      institutionCode: metadata?.institutionCode?.trim() || null,
+      phone: metadata?.phone?.trim() || null,
+    });
+
+    console.info('[Auth] Passwordless signup request → signInWithOtp(shouldCreateUser: true) | email:', trimmedEmail, '| role:', role, '| institution_id:', resolvedInstitutionId || 'NULL (NOT VALIDATED)');
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: trimmedEmail,
+        options: {
+          shouldCreateUser: true,
+        },
+      });
+
+      if (error) {
+        console.error('FOODEXA AUTH ERROR:', error);
+        signUpInProgressRef.current = false;
+        setIsPendingOtpVerification(false);
+        sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
+        return { error: new Error(error.message) };
+      }
+
+      console.info('[Auth] signInWithOtp(shouldCreateUser: true) succeeded. OTP email dispatched to:', trimmedEmail);
+      signUpInProgressRef.current = false;
+      return { error: null };
+    } catch (err: any) {
+      console.error('FOODEXA AUTH ERROR:', err);
+      signUpInProgressRef.current = false;
+      setIsPendingOtpVerification(false);
+      sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
+      return { error: new Error(err?.message || 'Failed to send verification code. Please try again.') };
+    }
   };
 
   const validateInstitutionCode = async (code: string) => {
@@ -975,6 +1049,7 @@ if (safeToken.length !== OTP_LENGTH) {
       validateInstitutionCode,
       signIn,
       signUpWithPassword,
+      signUpWithOtp,
       verifyOtp,
       joinWithCodeRoleName,
       joinWithDirectAccess,

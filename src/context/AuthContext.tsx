@@ -170,21 +170,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
          }
        }
 
-       const { error } = await supabase
-         .from('profiles')
-         .upsert(safePayload, { onConflict: 'user_id' });
+        const { error } = await supabase
+          .from('profiles')
+          .upsert(safePayload, { onConflict: 'user_id' });
 
-       if (error) {
-         console.error('[Auth] Profile upsert DB error:', error.message);
-         const friendlyMessage = error.message.includes('duplicate key')
-           ? 'Your profile already exists. Please try logging in.'
-           : error.message.includes('violates row-level security')
-             ? 'Unable to create profile (permission denied). Ensure the `profiles` table allows authenticated inserts, then contact support.'
-             : error.message;
-         return { error: new Error(friendlyMessage) };
-       }
+        if (error) {
+          // If the new identifier/plan columns have not been migrated yet, retry
+          // without them so account creation/profile updates never hard-fail.
+          const msg = String(error.message || '').toLowerCase();
+          const missingColumn = (msg.includes('column') && (msg.includes('registration_id') || msg.includes('student_id') || msg.includes('plan'))) || msg.includes('could not find the column');
+          if (missingColumn) {
+            const { registration_id, student_id, plan, ...legacyPayload } = safePayload;
+            const { error: legacyError } = await supabase
+              .from('profiles')
+              .upsert(legacyPayload, { onConflict: 'user_id' });
+            if (!legacyError) return { error: null as Error | null };
+            console.error('[Auth] Profile upsert (legacy) DB error:', legacyError?.message);
+            return { error: new Error(legacyError?.message || 'Profile update failed.') };
+          }
+          console.error('[Auth] Profile upsert DB error:', error.message);
+          const friendlyMessage = error.message.includes('duplicate key')
+            ? 'Your profile already exists. Please try logging in.'
+            : error.message.includes('violates row-level security')
+              ? 'Unable to create profile (permission denied). Ensure the `profiles` table allows authenticated inserts, then contact support.'
+              : error.message;
+          return { error: new Error(friendlyMessage) };
+        }
 
-       return { error: null as Error | null };
+        return { error: null as Error | null };
      }, []);
 
     const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, campus_block, programme, department, semester, designation, avatar_url, diet_preference, registration_id, student_id, plan';

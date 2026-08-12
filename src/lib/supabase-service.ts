@@ -424,6 +424,25 @@ export async function assignPickupCounter(institutionId: string | null | undefin
   }
 }
 
+// Insert an order, tolerating the case where the new `counter` / `confirmed_at`
+// columns have not been added to the orders table yet (migration pending). This
+// prevents a hard regression if the DB migration is applied after deploy.
+async function insertOrderSafely(payload: Record<string, any>): Promise<{ data: any; error: any }> {
+  const res = await supabase.from('orders').insert([payload]).select('*').single();
+  if (!res.error && res.data) return { data: res.data, error: null };
+  const msg = String(res.error?.message || '').toLowerCase();
+  const missingColumn =
+    (msg.includes('column') && (msg.includes('counter') || msg.includes('confirmed_at'))) ||
+    msg.includes('could not find the column');
+  if (missingColumn) {
+    const { counter, confirmed_at, ...rest } = payload;
+    const fallback = await supabase.from('orders').insert([rest]).select('*').single();
+    if (!fallback.error && fallback.data) return { data: fallback.data, error: null };
+    return fallback;
+  }
+  return res;
+}
+
 export async function createOrderAfterPayment(params: {
   user_id: string;
   email: string;
@@ -524,7 +543,7 @@ export async function createOrderAfterPayment(params: {
     razorpay_signature: params.razorpay_signature,
   };
 
-  const { data: orderData, error: orderError } = await supabase.from('orders').insert([orderPayload]).select('*').single();
+  const { data: orderData, error: orderError } = await insertOrderSafely(orderPayload);
   if (orderError || !orderData) {
     console.error('[Supabase] createOrderAfterPayment order insert failed:', orderError?.message, orderError?.code, orderError?.details);
     return { data: null, error: `Order creation failed: ${orderError?.message || 'Unknown error'}` };
@@ -671,7 +690,7 @@ export async function placeOrder(params: {
   if (params.razorpay_payment_id) payload.razorpay_payment_id = params.razorpay_payment_id;
   if (params.razorpay_signature) payload.razorpay_signature = params.razorpay_signature;
 
-  const { data: orderData, error: orderError } = await supabase.from('orders').insert([payload]).select().single();
+  const { data: orderData, error: orderError } = await insertOrderSafely(payload);
   if (orderError || !orderData) {
     return { data: null, error: orderError?.message || 'Failed to create order.' };
   }

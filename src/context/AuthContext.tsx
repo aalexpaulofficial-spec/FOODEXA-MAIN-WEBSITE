@@ -162,7 +162,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
     const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference', 'registration_id', 'student_id', 'plan', 'foodexa_plan', 'account_created_at'];
+        // Only include columns that are CONFIRMED to exist in the production profiles table.
+        // Do NOT add speculative columns (registration_id, student_id, plan, foodexa_plan, account_created_at)
+        // unless they have been verified via a real database schema inspection.
+        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference'];
        const safePayload: Record<string, any> = {};
        for (const key of KNOWN_PROFILE_COLUMNS) {
          if (key in payload) {
@@ -196,34 +199,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { error: null as Error | null };
      }, []);
 
-    const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, campus_block, programme, department, semester, designation, avatar_url, diet_preference, registration_id, student_id, plan, foodexa_plan, account_created_at';
+    // Use SELECT * so we never fail on a column that doesn't exist.
+    // The TypeScript Profile interface has optional fields for any extra columns.
+    const PROFILE_COLUMNS = '*';
 
     // Ensure a profile carries permanent identifiers. If they are missing (e.g. a
     // profile created before this feature), generate them ONCE and persist them so
     // they never change on subsequent logins.
-    const ensureStudentIdentifiers = useCallback(async (profile: Profile): Promise<Profile> => {
-      if (profile.registration_id && profile.student_id) return profile;
-      const ids = generateStudentIdentifiers();
-      const safePayload: Record<string, any> = {
-        user_id: profile.user_id,
-        registration_id: profile.registration_id || ids.registration_id,
-        student_id: profile.student_id || ids.student_id,
-      };
-      try {
-        const { error } = await supabase
-          .from('profiles')
-          .update(safePayload)
-          .eq('user_id', profile.user_id);
-        if (!error) {
-          return { ...profile, registration_id: safePayload.registration_id, student_id: safePayload.student_id };
-        }
-        console.warn('[Auth] Could not persist student identifiers:', error.message);
-      } catch (err) {
-        console.warn('[Auth] ensureStudentIdentifiers exception:', err);
-      }
-      // Return the in-memory identifiers even if persist failed (best effort)
-      return { ...profile, registration_id: safePayload.registration_id, student_id: safePayload.student_id };
-    }, []);
+    // ensureStudentIdentifiers removed — those columns may not exist in production.
+    // If the database gains student_id / registration_id columns in the future,
+    // re-enable this function after confirming the schema.
 
     const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
       try {
@@ -242,8 +227,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
 
         if (data) {
-          let fetchedProfile = { ...data } as Profile;
-          fetchedProfile = await ensureStudentIdentifiers(fetchedProfile);
+          const fetchedProfile = { ...data } as Profile;
           setProfile(fetchedProfile);
           await loadInstitutionForProfile(fetchedProfile);
           return fetchedProfile;
@@ -259,7 +243,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const role = normalizeRole(authUser.user_metadata?.role || pendingOtpProfileRef.current?.role) || 'student';
         const safeEmail = authUser.email || '';
-        const fullName = authUser.user_metadata?.full_name?.trim() || pendingOtpProfileRef.current?.fullName?.trim() || safeEmail.split('@')[0]?.trim() || 'FOODEXA Student';
+        const fullName = authUser.user_metadata?.full_name?.trim() || authUser.user_metadata?.name?.trim() || pendingOtpProfileRef.current?.fullName?.trim() || safeEmail.split('@')[0]?.trim() || 'FOODEXA Student';
         const institutionId = authUser.user_metadata?.institution_id || pendingOtpProfileRef.current?.institutionId || null;
         const phone = authUser.user_metadata?.phone || pendingOtpProfileRef.current?.phone || null;
 
@@ -268,10 +252,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // never leave an account without a profile or attempt a null user_id insert.
         // Missing role/full_name is repaired later by the institution/role step.
 
-        const ids = generateStudentIdentifiers();
         const { error: upsertError } = await upsertProfileSafely({
           user_id: userId,
-          email: authUser.email || '',
+          email: safeEmail,
           full_name: fullName,
           phone,
           role,
@@ -281,10 +264,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           semester: authUser.user_metadata?.semester || null,
           programme: authUser.user_metadata?.programme || null,
           campus_block: authUser.user_metadata?.campus_block || null,
-          registration_id: ids.registration_id,
-          student_id: ids.student_id,
-          foodexa_plan: 'Free',
-          account_created_at: new Date().toISOString(),
         });
 
         if (upsertError) {
@@ -345,20 +324,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const { error } = await upsertProfileSafely({ user_id: userId, ...repairs });
           if (error) return { error, profile: null };
         }
-        // Guarantee the permanent identifiers and plan exist.
-        await ensureStudentIdentifiers(existing);
-        if (!existing.foodexa_plan) {
-          const { error } = await upsertProfileSafely({ user_id: userId, foodexa_plan: 'Free' });
-          if (error) return { error, profile: null };
-        }
         const refreshed = await fetchProfile(userId);
         return { error: null, profile: refreshed };
       }
 
       // No profile yet → create it, keyed by the authenticated user id.
-      const ids = generateStudentIdentifiers();
       const safeEmail = params.email || authUser.email || '';
-      const safeFullName = params.fullName?.trim() || authUser.user_metadata?.full_name?.trim() || pendingOtpProfileRef.current?.fullName?.trim() || safeEmail.split('@')[0]?.trim() || 'FOODEXA Student';
+      const safeFullName = params.fullName?.trim() || authUser.user_metadata?.full_name?.trim() || authUser.user_metadata?.name?.trim() || pendingOtpProfileRef.current?.fullName?.trim() || safeEmail.split('@')[0]?.trim() || 'FOODEXA Student';
       const safeRole = params.role || normalizeRole(authUser.user_metadata?.role) || pendingOtpProfileRef.current?.role || 'student';
 
       const { error } = await upsertProfileSafely({
@@ -370,15 +342,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         designation: safeRole,
         institution_id: params.institutionId || null,
         diet_preference: 'all',
-        registration_id: ids.registration_id,
-        student_id: ids.student_id,
-        foodexa_plan: 'Free',
-        account_created_at: new Date().toISOString(),
       });
       if (error) return { error, profile: null };
       const created = await fetchProfile(userId);
       return { error: null, profile: created };
-    }, [fetchProfile, upsertProfileSafely, ensureStudentIdentifiers]);
+    }, [fetchProfile, upsertProfileSafely]);
 
   const refreshProfile = useCallback(async () => {
     if (user) {

@@ -25,8 +25,6 @@ interface AuthContextType {
   institutionData: InstitutionData | null;
   setInstitutionData: (data: InstitutionData | null) => void;
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null; session: Session | null; user: User | null; profile: Profile | null }>;
-  signUpWithPassword: (email: string, password: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; institutionId?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
   signUpWithOtp: (email: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; institutionId?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
   joinWithCodeRoleName: (institutionCode: string, role: 'student' | 'faculty' | 'guest', displayName: string) => Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }>;
@@ -288,12 +286,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
      initAuth();
 
-     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-       if (event === 'PASSWORD_RECOVERY') {
-         window.location.href = '/reset-password';
-       }
-       setSession(newSession);
-       setUser(newSession?.user ?? null);
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
        setIsEmailVerified(!!newSession?.user?.email_confirmed_at);
        if (newSession?.user) {
          await fetchProfile(newSession.user.id);
@@ -306,141 +301,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
      return () => subscription.unsubscribe();
    }, [fetchProfile, directSession]);
-
-  const signIn = async (email: string, password: string) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
-    if (error) {
-      return {
-        error: new Error(error.message),
-        session: data.session,
-        user: data.user,
-        profile: null,
-      };
-    }
-
-    const liveProfile = data.user?.id ? await fetchProfile(data.user.id) : null;
-    return {
-      error: null,
-      session: data.session,
-      user: data.user,
-      profile: liveProfile,
-    };
-  };
-
-  const signUpWithPassword = async (
-    email: string,
-    password: string,
-    fullName: string,
-    role: UserRole,
-    metadata?: {
-      institutionCode?: string;
-      institutionId?: string;
-      phone?: string;
-      department?: string;
-      semester?: string;
-      programme?: string;
-      campusBlock?: string;
-      facultyId?: string;
-    }
-  ) => {
-    if (signUpInProgressRef.current) {
-      return { error: new Error('Registration is already in progress. Please wait.') };
-    }
-    signUpInProgressRef.current = true;
-
-    const trimmedEmail = email.trim().toLowerCase();
-
-    // Resolve institution_id: prefer direct param, then context state
-    const resolvedInstitutionId = metadata?.institutionId || institutionData?.institution_id || null;
-
-    if (!resolvedInstitutionId) {
-      console.warn('[Auth] signUpWithPassword: institution_id is NULL. Institution code may not have been validated.');
-    }
-
-    // Block any auto-redirect while OTP is pending
-    setIsPendingOtpVerification(true);
-    sessionStorage.setItem(PENDING_VERIFICATION_EMAIL_KEY, trimmedEmail);
-
-     setPendingRegistrationProfile({
-       email: trimmedEmail,
-       fullName: fullName.trim(),
-       role,
-       institutionId: resolvedInstitutionId,
-       institutionCode: metadata?.institutionCode?.trim() || null,
-       phone: metadata?.phone?.trim() || null,
-     });
-
-     console.info('[Auth] Signup request → signUp() | email:', trimmedEmail, '| role:', role, '| institution_id:', resolvedInstitutionId || 'NULL (NOT VALIDATED)');
-
-     const { data, error } = await supabase.auth.signUp({
-      email: trimmedEmail,
-      password,
-      options: {
-        data: {
-          full_name: fullName.trim(),
-          role,
-          designation: role,
-          institution_id: resolvedInstitutionId,
-          institution_code: metadata?.institutionCode?.trim() || null,
-          phone: metadata?.phone?.trim() || null,
-          department: metadata?.department?.trim() || null,
-          semester: metadata?.semester?.trim() || null,
-          programme: metadata?.programme?.trim() || null,
-          campus_block: metadata?.campusBlock?.trim() || null,
-          faculty_id: metadata?.facultyId?.trim() || null,
-        },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-      if (error) {
-        console.error('[FOODEXA AUTH] Signup error:', error);
-        signUpInProgressRef.current = false;
-       setIsPendingOtpVerification(false);
-       sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
-       return { error: new Error(error.message) };
-     }
-
-    const authUser = data?.user;
-    console.info('[Auth] Signup signUp() succeeded | authUser:', authUser?.id || '<none>', '| session:', !!data?.session, '| email_confirmed_at:', authUser?.email_confirmed_at || 'NULL');
-
-    if (authUser && Array.isArray(authUser.identities) && authUser.identities.length === 0) {
-      console.warn('[Auth] Signup attempted with an existing email address:', trimmedEmail);
-      signUpInProgressRef.current = false;
-      setIsPendingOtpVerification(false);
-      sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
-      return { error: new Error('This email is already registered. Please log in instead.') };
-    }
-
-    // If a session was returned (autoconfirm ON), the user is already
-    // email-confirmed and signed in. Sign out to enforce the OTP gate.
-    // Supabase Auth's signUp() automatically sends the "Confirm signup"
-    // email (containing the OTP) when email confirmation is enabled.
-    if (data?.session) {
-      console.info('[Auth] Signup returned an immediate session (autoconfirm ON). Signing out to enforce the OTP gate.');
-      await supabase.auth.signOut();
-      setSession(null);
-      setUser(null);
-      setIsEmailVerified(false);
-    }
-
-    if (!authUser) {
-      console.error('[FOODEXA AUTH] Signup error: Registration succeeded but no user was returned.');
-      signUpInProgressRef.current = false;
-      setIsPendingOtpVerification(false);
-      sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
-      return { error: new Error('Registration succeeded but no user was returned. Please try again.') };
-    }
-
-    // The confirmation OTP email is sent automatically by Supabase Auth via
-    // signUp() when "Confirm email" is enabled in the Supabase dashboard.
-    // Do NOT call signInWithOtp() — that sends a second email via the
-    // "Magic Link" template and can cause rate-limit / delivery conflicts.
-    console.info('[Auth] signUp() succeeded. Supabase Auth dispatches the confirmation OTP email.');
-signUpInProgressRef.current = false;
-    return { error: null };
-  };
 
   // Passwordless OTP signup using signInWithOtp with shouldCreateUser: true
   const signUpWithOtp = async (
@@ -1047,8 +907,6 @@ if (safeToken.length !== OTP_LENGTH) {
       institutionData,
       setInstitutionData,
       validateInstitutionCode,
-      signIn,
-      signUpWithPassword,
       signUpWithOtp,
       verifyOtp,
       joinWithCodeRoleName,

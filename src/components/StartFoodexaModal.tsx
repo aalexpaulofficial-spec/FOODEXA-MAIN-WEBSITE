@@ -168,6 +168,19 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
     setLoading(true);
 
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (existingProfile) {
+      setLoading(false);
+      setDuplicateEmail(true);
+      setError('An account with this email already exists. Please use Login instead.');
+      return;
+    }
+
     const { error: signUpError } = await signUpWithOtp(
       normalizedEmail,
       fullName,

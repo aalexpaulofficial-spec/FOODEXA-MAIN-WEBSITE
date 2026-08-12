@@ -34,7 +34,6 @@ import { VoiceAssistantModal } from './components/VoiceAssistantModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { ScrollProgress } from './components/ScrollProgress';
 import { Footer } from './components/Footer';
-import { ResetPassword } from './components/ResetPassword';
 import { Sparkles, Mic, Loader2 } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
 import { supabase } from './lib/supabase';
@@ -308,15 +307,6 @@ export default function App() {
           <p className="text-sm font-semibold text-[#1D1D1F]">Loading your FOODEXA campus...</p>
         </div>
       </div>
-    );
-  }
-
-  if (location.pathname === '/reset-password') {
-    return (
-      <>
-        <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
-        <ResetPassword />
-      </>
     );
   }
 

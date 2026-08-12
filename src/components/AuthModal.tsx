@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { X, Lock, User, ArrowRight, ArrowLeft, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { X, Lock, User, ArrowRight, ArrowLeft, CheckCircle2, ExternalLink, ShieldCheck, KeyRound, Building2, Users, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth, OTP_LENGTH } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import type { UserRole, Profile } from '../types';
@@ -58,7 +58,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onBack,
   onDirectLogin,
 }) => {
-  const { signUpWithPassword, signUpWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, signIn, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
+  const { signUpWithOtp, verifyOtp, validateInstitutionCode, setInstitutionData, institutionData, user, refreshProfile, updateProfile, profile: authProfile } = useAuth();
   const [mode, setMode] = useState<'login' | 'create' | 'quick'>(initialMode);
   const [step, setStep] = useState<'form' | 'institution_verify' | 'counter_verify' | 'otp' | 'success' | 'profile_completion' | 'forgot_password'>('form');
   const [loginUserId, setLoginUserId] = useState<string | null>(null);
@@ -66,29 +66,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // Login state
   const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginNotice, setLoginNotice] = useState<string | null>(null);
-  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
 
   // Track the email used for the current OTP flow (login or create)
   const [currentEmail, setCurrentEmail] = useState('');
-  const [showCreatePassword, setShowCreatePassword] = useState(false);
-  const [showCreateConfirmPassword, setShowCreateConfirmPassword] = useState(false);
-
-  // Password strength helper
-  const getPasswordStrength = (pass: string) => {
-    if (!pass) return { label: '', color: '', level: 0 };
-    if (pass.length < 8) return { label: 'Weak', color: 'text-red-500', level: 1 };
-    const hasUpper = /[A-Z]/.test(pass);
-    const hasNumber = /[0-9]/.test(pass);
-    const hasSpecial = /[^A-Za-z0-9]/.test(pass);
-    if (pass.length >= 8 && hasUpper && hasNumber && hasSpecial) return { label: 'Very Strong', color: 'text-green-600', level: 4 };
-    if (pass.length >= 8 && hasUpper && hasNumber) return { label: 'Strong', color: 'text-green-500', level: 3 };
-    if (pass.length >= 8) return { label: 'Fair', color: 'text-yellow-500', level: 2 };
-    return { label: 'Weak', color: 'text-red-500', level: 1 };
-  };
 
   // OTP state
   const [otpCode, setOtpCode] = useState('');
@@ -120,8 +103,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     semester: '',
     campusBlock: '',
     institutionCode: '',
-    password: '',
-    confirmPassword: '',
   });
 
   // Create Faculty Account state
@@ -132,8 +113,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     department: '',
     facultyId: '',
     institutionCode: '',
-    password: '',
-    confirmPassword: '',
   });
 
   // Create Guest Account state
@@ -142,8 +121,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     universityEmail: '',
     phone: '',
     institutionCode: '',
-    password: '',
-    confirmPassword: '',
   });
 
   const getCurrentForm = () => {
@@ -160,6 +137,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const isCreatingAccount = registrationPhase !== 'idle';
+
+  const checkEmailExists = async (email: string): Promise<boolean> => {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('email', email.toLowerCase().trim())
+        .maybeSingle();
+      return !!data;
+    } catch {
+      return false;
+    }
+  };
   const registrationProgress = registrationPhase === 'validating'
     ? 28
     : registrationPhase === 'connecting'
@@ -404,106 +394,52 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setInstitutionError(null);
       setStep('form');
 
-      // 1. Validate required input
       if (!normalizedLoginEmail) {
         setLoginError('Please enter your email address.');
         setIsLoginSubmitting(false);
         return;
       }
-      if (!loginPassword) {
-        setLoginError('Please enter your password.');
-        setIsLoginSubmitting(false);
-        return;
-      }
 
       setIsLoginSubmitting(true);
-      const { error, user: authUser, profile: liveProfile } = await signIn(normalizedLoginEmail, loginPassword);
+
+      const exists = await checkEmailExists(normalizedLoginEmail);
+      if (!exists) {
+        setLoginError('No FOODEXA account was found with this email.');
+        setLoginNotice('Please create an account first.');
+        setIsLoginSubmitting(false);
+        return;
+      }
+
+      setRegistrationPhase('sending');
+      console.info('[Auth] Login OTP → signInWithOtp(shouldCreateUser: false) | email:', normalizedLoginEmail);
+      const { error } = await supabase.auth.signInWithOtp({
+        email: normalizedLoginEmail,
+        options: { shouldCreateUser: false },
+      });
 
       if (error) {
+        console.error('FOODEXA AUTH ERROR:', error);
         const msg = error.message.toLowerCase();
-        console.error('[Auth] Login rejected:', error.message);
-        if (msg.includes('invalid login') || msg.includes('invalid credentials') || msg.includes('invalid email or password')) {
-          setLoginError('Incorrect email or password. Please check your credentials and try again.');
-        } else if (msg.includes('email not confirmed')) {
-          setLoginError('Please verify your email before signing in. Check your inbox for the OTP emailed after registration.');
-        } else if (msg.includes('rate limit')) {
-          setLoginError('Too many login attempts. Please wait a moment and try again.');
+        if (msg.includes('rate limit') || msg.includes('too many')) {
+          setLoginError('Too many OTP requests. Please wait a moment before trying again.');
+        } else if (msg.includes('network') || msg.includes('fetch')) {
+          setLoginError('Unable to connect to FOODEXA right now. Please try again.');
         } else {
-          setLoginError(error.message);
+          setLoginError(error.message || 'Unable to send OTP. Please try again.');
         }
+        setRegistrationPhase('idle');
         setIsLoginSubmitting(false);
         return;
       }
 
-      if (!authUser) {
-        setLoginError('Unable to sign in. Please try again or contact support.');
-        setIsLoginSubmitting(false);
-        return;
-      }
-
-      // 7. Load existing profile — handle missing profile gracefully
-      if (!liveProfile) {
-        console.warn('[Auth] Profile not found for authenticated user:', authUser.id);
-        setLoginUserId(authUser.id);
-        setStep('profile_completion');
-        setIsLoginSubmitting(false);
-        return;
-      }
-
-      // 8. Confirm profile belongs to the selected institution (informational — update if different)
-      setLoginUserId(authUser.id);
-
-      // 10. Navigate to Student Dashboard
-      const role = liveProfile.role;
-
-      if (role === 'institution_admin') {
-        setIsLoginSubmitting(false);
-        setStep('institution_verify');
-        return;
-      } else if (role === 'kitchen_staff' || role === 'canteen_manager') {
-        setIsLoginSubmitting(false);
-        setStep('counter_verify');
-        return;
-      } else if (role === 'student' || role === 'faculty' || role === 'guest') {
-        setIsLoginSubmitting(false);
-        setStep('success');
-        if (onLoginSuccess) {
-          onLoginSuccess({ profile: liveProfile, institution: institutionData });
-        }
-        return;
-      }
-
+      console.info('[Auth] Login OTP sent successfully to:', normalizedLoginEmail);
+      setRegistrationPhase('sent');
+      setResendCountdown(RESEND_COOLDOWN_SECONDS);
+      setOtpCode('');
+      setOtpError(null);
+      setStep('otp');
       setIsLoginSubmitting(false);
-      setStep('success');
-      if (onLoginSuccess) {
-        onLoginSuccess({ profile: liveProfile, institution: institutionData });
-      }
     };
-
-  const handleForgotPassword = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const normalizedLoginEmail = (loginEmail || '').trim().toLowerCase();
-    setLoginError(null);
-    setLoginNotice(null);
-
-    if (!normalizedLoginEmail) {
-      setStep('forgot_password');
-      return;
-    }
-
-    const { error } = await supabase.auth.resetPasswordForEmail(normalizedLoginEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-
-    if (error) {
-      console.error('[Auth] Password reset failed:', error.message);
-      setLoginError('Unable to send password reset right now. Please try again.');
-      return;
-    }
-
-    setStep('forgot_password');
-    setLoginNotice('Password reset link sent. Please check your email.');
-  };
 
 const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -526,6 +462,18 @@ const handleCreateSubmit = async (e: React.FormEvent) => {
       return;
     }
 
+    setRegistrationPhase('validating');
+
+    const exists = await checkEmailExists(normalizedEmail);
+    if (exists) {
+      setMode('login');
+      setLoginEmail(normalizedEmail);
+      setLoginError('An account with this email already exists. Please use Login instead.');
+      setLoginNotice(null);
+      setRegistrationPhase('idle');
+      return;
+    }
+
     setRegistrationPhase('sending');
 
     console.info('[Auth] Calling signUpWithOtp (passwordless) | email:', normalizedEmail);
@@ -536,8 +484,8 @@ const handleCreateSubmit = async (e: React.FormEvent) => {
       if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already exists')) {
         setMode('login');
         setLoginEmail(normalizedEmail);
-        setLoginPassword('');
-        setLoginError(error.message);
+        setLoginError('An account with this email already exists. Please use Login instead.');
+        setLoginNotice(null);
         setInstitutionError(null);
         setRegistrationPhase('idle');
         return;
@@ -558,12 +506,13 @@ const handleCreateSubmit = async (e: React.FormEvent) => {
     const normalizedEmail = (getPendingVerificationEmail() || currentEmail).trim().toLowerCase();
     setOtpError(null);
     setRegistrationPhase('sending');
-    console.info('[Auth] Resending OTP email via signInWithOtp(shouldCreateUser: true) for:', normalizedEmail);
+    const isLoginResend = mode === 'login';
+    console.info(`[Auth] Resending OTP email via signInWithOtp(shouldCreateUser: ${isLoginResend ? 'false' : 'true'}) for:`, normalizedEmail);
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
         options: {
-          shouldCreateUser: true,
+          shouldCreateUser: !isLoginResend,
         },
       });
       if (error) {
@@ -654,7 +603,6 @@ const handleCreateSubmit = async (e: React.FormEvent) => {
     setLoginUserId(null);
     setLoginError(null);
     setLoginNotice(null);
-    setShowLoginPassword(false);
     setOtpError(null);
     setRegistrationPhase('idle');
     setIsLoginSubmitting(false);
@@ -698,7 +646,7 @@ const handleCreateSubmit = async (e: React.FormEvent) => {
                   </div>
                   <h3 className="text-2xl font-bold text-black">Login to FOODEXA</h3>
                   <p className="text-xs text-[#86868B] leading-relaxed">
-                    Sign in to your FOODEXA account.
+                    Enter your email to receive an 8-digit verification code.
                   </p>
                 </div>
 
@@ -719,32 +667,6 @@ const handleCreateSubmit = async (e: React.FormEvent) => {
                     />
                   </div>
 
-                  <div>
-                    <label className="text-xs font-semibold text-[#515154] mb-1 block">Password</label>
-                    <div className="relative">
-                      <input
-                        type={showLoginPassword ? 'text' : 'password'}
-                        required
-                        value={loginPassword}
-                        onChange={(e) => {
-                          setLoginPassword(e.target.value);
-                          setLoginError(null);
-                        }}
-                        placeholder="Enter your password"
-                        className="w-full apple-input pr-12"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowLoginPassword((value) => !value)}
-                        className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[#515154] transition hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
-                        aria-label={showLoginPassword ? 'Hide Password' : 'Show Password'}
-                        title={showLoginPassword ? 'Hide Password' : 'Show Password'}
-                      >
-                        {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-
                   {loginError && (
                     <div className="p-3 rounded-xl bg-[#FFF0F0] border border-[#FFD6D6] text-xs text-[#FF3B30]">
                       {loginError}
@@ -752,8 +674,30 @@ const handleCreateSubmit = async (e: React.FormEvent) => {
                   )}
 
                   {loginNotice && (
-                    <div className="p-3 rounded-xl bg-[#F2FFF8] border border-[#B8F2D0] text-xs text-[#0A7A37]">
-                      {loginNotice}
+                    <div className="p-3 rounded-xl bg-[#FFF0F0] border border-[#FFD6D6] text-xs text-[#FF3B30]">
+                      <p>{loginNotice}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode('create');
+                          setLoginError(null);
+                          setLoginNotice(null);
+                        }}
+                        className="mt-2 w-full text-center text-xs font-bold text-[#0071E3] hover:underline"
+                      >
+                        CREATE ACCOUNT
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginEmail('');
+                          setLoginError(null);
+                          setLoginNotice(null);
+                        }}
+                        className="mt-1 w-full text-center text-xs font-semibold text-[#86868B] hover:underline"
+                      >
+                        TRY ANOTHER EMAIL
+                      </button>
                     </div>
                   )}
 
@@ -765,24 +709,16 @@ const handleCreateSubmit = async (e: React.FormEvent) => {
                     {isLoginSubmitting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin text-white" />
-                        <span>Logging in...</span>
+                        <span>Sending OTP...</span>
                       </>
                     ) : (
                       <>
-                        <span>LOGIN</span>
+                        <span>SEND OTP</span>
                         <ArrowRight className="w-4 h-4 text-white" />
                       </>
                     )}
                   </button>
                 </form>
-
-                <button
-                  type="button"
-                  onClick={handleForgotPassword}
-                  className="w-full text-center text-xs font-semibold text-[#0071E3] hover:underline"
-                >
-                  Forgot Password?
-                </button>
 
                 <div className="p-3 bg-white/80 border border-gray-200 rounded-xl text-center text-xs text-[#86868B]">
                   <span>Institution Administrator? </span>
@@ -962,7 +898,7 @@ const handleCreateSubmit = async (e: React.FormEvent) => {
 
                   <button
                     type="submit"
-                    disabled={isCreatingAccount || !getCurrentForm().fullName.trim() || !getCurrentForm().universityEmail.trim() || getCurrentForm().password.length < 8 || getCurrentForm().password !== getCurrentForm().confirmPassword}
+                    disabled={isCreatingAccount || !getCurrentForm().fullName.trim() || !getCurrentForm().universityEmail.trim()}
                     className="relative w-full overflow-hidden btn-primary mt-2"
                   >
                     {isCreatingAccount && (

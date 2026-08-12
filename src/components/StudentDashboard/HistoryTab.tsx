@@ -162,9 +162,20 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-[10px] font-bold text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/40">
                           Token: {tokenNumber}
                         </span>
-                      )}
-                    </div>
                   )}
+                </div>
+              )}
+
+              {/* Cancellation Audit */}
+              {isCancelled && (order.cancelled_by || order.cancelled_at) && (
+                <div className="mt-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 flex items-center gap-2 text-[11px] text-red-600 dark:text-red-400">
+                  <XCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    Cancelled{order.cancelled_by ? ` by ${order.cancelled_by}` : ''}
+                    {order.cancelled_at ? ` · ${formatDateTime(order.cancelled_at)}` : ''}
+                  </span>
+                </div>
+              )}
                 </div>
 
                 {/* Card Footer */}

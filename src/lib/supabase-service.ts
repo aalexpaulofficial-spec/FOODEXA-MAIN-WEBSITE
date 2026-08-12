@@ -352,6 +352,8 @@ export function mapOrder(row: any): Order {
     razorpay_order_id: row.razorpay_order_id || null,
     razorpay_payment_id: row.razorpay_payment_id || null,
     razorpay_signature: row.razorpay_signature || null,
+    cancelled_at: row.cancelled_at || null,
+    cancelled_by: row.cancelled_by || null,
   };
 }
 
@@ -808,20 +810,36 @@ export async function fetchOrderById(orderId: string): Promise<Order | null> {
   return mapOrder(data);
 }
 
-export async function cancelOrder(orderId: string): Promise<{ success: boolean; error?: string }> {
+export async function cancelOrder(
+  orderId: string,
+  cancelledBy?: string
+): Promise<{ success: boolean; error?: string }> {
   const now = new Date().toISOString();
 
-  // Update order to cancelled state
-  const { error } = await supabase.from('orders').update({
+  const updatePayload: Record<string, any> = {
     status: 'cancelled',
     order_status: 'Cancelled',
     payment_status: 'refund_pending', // Assume manual refund if already paid
     kitchen_status: 'Cancelled',
     counter_status: 'Cancelled',
-    updated_at: now
-  }).eq('id', orderId);
+    cancelled_at: now,
+    cancelled_by: cancelledBy || 'unknown',
+    updated_at: now,
+  };
+
+  const { error } = await supabase.from('orders').update(updatePayload).eq('id', orderId);
 
   if (error) {
+    // Fallback: if the cancellation-audit columns have not been migrated yet,
+    // retry without them so cancellation still succeeds.
+    const msg = String(error.message || '').toLowerCase();
+    const missingColumn = msg.includes('column') && (msg.includes('cancelled_at') || msg.includes('cancelled_by'));
+    if (missingColumn) {
+      const { cancelled_at, cancelled_by, ...legacy } = updatePayload;
+      const { error: legacyError } = await supabase.from('orders').update(legacy).eq('id', orderId);
+      if (legacyError) return { success: false, error: legacyError.message };
+      return { success: true };
+    }
     return { success: false, error: error.message };
   }
   return { success: true };

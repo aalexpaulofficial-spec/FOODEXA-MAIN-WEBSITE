@@ -162,7 +162,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
     const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference', 'registration_id', 'student_id', 'plan', 'account_created_at'];
+        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference', 'registration_id', 'student_id', 'foodexa_plan', 'account_created_at'];
        const safePayload: Record<string, any> = {};
        for (const key of KNOWN_PROFILE_COLUMNS) {
          if (key in payload) {
@@ -189,7 +189,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const msg = String(error.message || '').toLowerCase();
           const missingColumn = (msg.includes('column') && (msg.includes('registration_id') || msg.includes('student_id') || msg.includes('plan'))) || msg.includes('could not find the column');
           if (missingColumn) {
-            const { registration_id, student_id, plan, ...legacyPayload } = safePayload;
+            const { registration_id, student_id, foodexa_plan, ...legacyPayload } = safePayload;
             const { error: legacyError } = await supabase
               .from('profiles')
               .upsert(legacyPayload, { onConflict: 'user_id' });
@@ -209,7 +209,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { error: null as Error | null };
      }, []);
 
-    const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, campus_block, programme, department, semester, designation, avatar_url, diet_preference, registration_id, student_id, plan, account_created_at';
+    const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, campus_block, programme, department, semester, designation, avatar_url, diet_preference, registration_id, student_id, foodexa_plan, account_created_at';
 
     // Ensure a profile carries permanent identifiers. If they are missing (e.g. a
     // profile created before this feature), generate them ONCE and persist them so
@@ -246,9 +246,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
            .eq('user_id', userId)
            .maybeSingle();
 
-         if (error) {
-           console.error('[Auth] Profile fetch error:', error.message);
-         }
+          if (error) {
+            console.error('[Auth] Profile fetch error:', error.message);
+            // A schema/column error (e.g. "column profiles.plan does not exist")
+            // is NOT the same as "profile missing". Never auto-create a profile in
+            // response to a bad column name — fix the query instead and bail out.
+            return null;
+          }
 
         if (data) {
           let fetchedProfile = { ...data } as Profile;
@@ -258,6 +262,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return fetchedProfile;
         }
 
+        // Reaching here means the query succeeded with NO row → the profile is
+        // genuinely missing (not a column error). Auto-create ONLY in this case.
         const { data: userData } = await supabase.auth.getUser();
         const authUser = userData?.user;
         if (!authUser) return null;
@@ -287,7 +293,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           campus_block: authUser.user_metadata?.campus_block || null,
           registration_id: ids.registration_id,
           student_id: ids.student_id,
-          plan: 'Free',
+          foodexa_plan: 'Free',
           account_created_at: new Date().toISOString(),
         });
 
@@ -351,8 +357,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         // Guarantee the permanent identifiers and plan exist.
         await ensureStudentIdentifiers(existing);
-        if (!existing.plan) {
-          const { error } = await upsertProfileSafely({ user_id: userId, plan: 'Free' });
+        if (!existing.foodexa_plan) {
+          const { error } = await upsertProfileSafely({ user_id: userId, foodexa_plan: 'Free' });
           if (error) return { error, profile: null };
         }
         const refreshed = await fetchProfile(userId);
@@ -372,7 +378,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         diet_preference: 'all',
         registration_id: ids.registration_id,
         student_id: ids.student_id,
-        plan: 'Free',
+        foodexa_plan: 'Free',
         account_created_at: new Date().toISOString(),
       });
       if (error) return { error, profile: null };

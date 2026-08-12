@@ -71,8 +71,8 @@ export interface Profile {
   // Permanent FOODEXA identifiers (generated exactly once at account creation)
   registration_id?: string | null;
   student_id?: string | null;
-  // FOODEXA plan loaded from the database
-  plan?: string | null;
+  // FOODEXA plan loaded from the database (column: foodexa_plan)
+  foodexa_plan?: string | null;
   // Account creation timestamp (set once at profile creation)
   account_created_at?: string | null;
 }
@@ -327,6 +327,8 @@ export interface Order {
   razorpay_order_id?: string | null;
   razorpay_payment_id?: string | null;
   razorpay_signature?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
   counter?: string;
   institution_code?: string | null;
 }

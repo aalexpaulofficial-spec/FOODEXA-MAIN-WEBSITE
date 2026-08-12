@@ -1681,7 +1681,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                                <button
                                  onClick={async () => {
                                    setSubmittingOrder(true);
-                                   const res = await cancelOrder(o!.id);
+                                    const res = await cancelOrder(o!.id, effectiveRole || 'student');
                                    if (res.success) { triggerToast && triggerToast('Cancelled', 'Order cancelled and refunded.', 'success'); setActiveTab('history'); }
                                    else { triggerToast && triggerToast('Failed', 'Could not cancel.', 'error'); }
                                    setSubmittingOrder(false);

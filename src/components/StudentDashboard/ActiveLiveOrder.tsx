@@ -97,7 +97,7 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
           {order.items.map(i => `${i.quantity}x ${i.name}`).join(', ') || 'No items'}
         </p>
         {order.counter && (
-          <p className="text-xs text-cyan-200 flex items-center gap-1"><MapPin className="w-3 h-3" /> {order.counter}</p>
+          <p className="text-xs text-cyan-200 flex items-center gap-1"><MapPin className="w-3 h-3" /> Pickup Counter: {order.counter}</p>
         )}
       </div>
 

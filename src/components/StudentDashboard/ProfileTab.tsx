@@ -55,14 +55,14 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
   const displayCampus = institutionData?.campus || '';
   const displayCity = institutionData?.city || '';
 
-  const accountCreated = profile?.created_at || '';
+  const accountCreated = profile?.account_created_at || profile?.created_at || '';
 
   const hasValue = (val: string | null | undefined): boolean => {
     return !!val && val.trim().length > 0;
   };
 
   const detailRows: Array<{ label: string; value: string; icon: React.ReactNode }> = [
-    ...(hasValue(profile?.full_name) ? [{ label: 'Student Name', value: profile!.full_name!, icon: <User className="w-4 h-4" /> }] : []),
+    ...(hasValue(profile?.full_name) ? [{ label: 'Full Name', value: profile!.full_name!, icon: <User className="w-4 h-4" /> }] : []),
     ...(!isVisitor && hasValue(displayEmail) ? [{ label: 'Email', value: displayEmail, icon: <Mail className="w-4 h-4" /> }] : []),
     ...(hasValue(profile?.phone) ? [{ label: 'Phone', value: profile!.phone!, icon: <Phone className="w-4 h-4" /> }] : []),
     ...(hasValue(displayInstitution) ? [{ label: 'Institution', value: displayInstitution, icon: <Building2 className="w-4 h-4" /> }] : []),
@@ -150,8 +150,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
                   <CreditCard className="w-5 h-5 text-[#30D158]" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-[#1D1D1F] dark:text-white">{profile?.plan ? String(profile.plan).charAt(0).toUpperCase() + String(profile.plan).slice(1) : 'Free'}</p>
-                  <p className="text-xs text-[#86868B] dark:text-[#86868B]">{profile?.plan && profile.plan.toLowerCase() !== 'free' ? 'View benefits in app' : '₹0 · 1 Month'}</p>
+                  <p className="text-sm font-bold text-[#1D1D1F] dark:text-white">{profile?.foodexa_plan ? String(profile.foodexa_plan).charAt(0).toUpperCase() + String(profile.foodexa_plan).slice(1) : 'Free'}</p>
+                  <p className="text-xs text-[#86868B] dark:text-[#86868B]">{profile?.foodexa_plan && profile.foodexa_plan.toLowerCase() !== 'free' ? 'View benefits in app' : '₹0 · 1 Month'}</p>
                 </div>
               </div>
               <span className="px-3 py-1 bg-[#30D158]/10 text-[#30D158] text-[10px] font-bold rounded-full uppercase tracking-wider">

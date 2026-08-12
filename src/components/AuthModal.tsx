@@ -27,7 +27,7 @@ interface AuthModalProps {
 type AccountRole = 'student' | 'faculty' | 'guest';
 const ACCOUNT_ROLES: AccountRole[] = ['student', 'faculty', 'guest'];
 const PENDING_VERIFICATION_EMAIL_KEY = 'foodexa_pending_verification_email';
-const RESEND_COOLDOWN_SECONDS = 60;
+const RESEND_COOLDOWN_SECONDS = 30;
 
 const getPendingVerificationEmail = () =>
   (sessionStorage.getItem(PENDING_VERIFICATION_EMAIL_KEY) || '').trim().toLowerCase();

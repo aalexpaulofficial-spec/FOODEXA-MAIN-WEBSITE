@@ -36,7 +36,7 @@ const roles = [
 ];
 
 const PENDING_VERIFICATION_EMAIL_KEY = 'foodexa_pending_verification_email';
-const RESEND_COOLDOWN_SECONDS = 60;
+const RESEND_COOLDOWN_SECONDS = 30;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const initialAccountForm = {
@@ -226,7 +226,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
     sessionStorage.setItem(PENDING_VERIFICATION_EMAIL_KEY, normalizedEmail);
     setPendingSignupEmail(normalizedEmail);
-    setOtpDigits(Array(8).fill(''));
+    setOtpDigits(Array(6).fill(''));
     setResendCountdown(RESEND_COOLDOWN_SECONDS);
     setLoading(false);
     setStep('otp');

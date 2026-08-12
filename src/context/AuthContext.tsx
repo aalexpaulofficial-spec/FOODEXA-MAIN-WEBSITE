@@ -502,11 +502,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return { error: new Error('Please enter the 6-digit verification code sent to your email.'), profile: null, institution: null };
         }
 
-        console.info('[Auth] Attempting OTP verification with type "signup"...');
+        console.info('[Auth] Attempting OTP verification with type "email"...');
         const { data: authData, error } = await supabase.auth.verifyOtp({
           email: normalizedEmail,
           token: safeToken,
-          type: 'signup',
+          type: 'email',
         });
 
         if (error) {
@@ -527,7 +527,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
          };
        }
 
-       console.info('[Auth] OTP verification SUCCEEDED via type "signup" | user:', authData.user.id || '<none>');
+        console.info('[Auth] OTP verification SUCCEEDED via type "email" | user:', authData.user.id || '<none>');
 
       // OTP verified — clear the pending flag and mark email as confirmed
       setIsPendingOtpVerification(false);

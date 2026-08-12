@@ -258,7 +258,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.info('[Auth] Profile missing for user, auto-creating:', userId);
 
         const role = normalizeRole(authUser.user_metadata?.role || pendingOtpProfileRef.current?.role) || 'student';
-        const fullName = authUser.user_metadata?.full_name || pendingOtpProfileRef.current?.fullName || authUser.email?.split('@')[0] || 'User';
+        const safeEmail = authUser.email || '';
+        const fullName = authUser.user_metadata?.full_name?.trim() || pendingOtpProfileRef.current?.fullName?.trim() || safeEmail.split('@')[0]?.trim() || 'FOODEXA Student';
         const institutionId = authUser.user_metadata?.institution_id || pendingOtpProfileRef.current?.institutionId || null;
         const phone = authUser.user_metadata?.phone || pendingOtpProfileRef.current?.phone || null;
 
@@ -356,13 +357,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // No profile yet → create it, keyed by the authenticated user id.
       const ids = generateStudentIdentifiers();
+      const safeEmail = params.email || authUser.email || '';
+      const safeFullName = params.fullName?.trim() || authUser.user_metadata?.full_name?.trim() || pendingOtpProfileRef.current?.fullName?.trim() || safeEmail.split('@')[0]?.trim() || 'FOODEXA Student';
+      const safeRole = params.role || normalizeRole(authUser.user_metadata?.role) || pendingOtpProfileRef.current?.role || 'student';
+
       const { error } = await upsertProfileSafely({
         user_id: userId,
-        email: params.email || authUser.email || '',
-        full_name: params.fullName || authUser.user_metadata?.full_name || null,
-        phone: params.phone || authUser.user_metadata?.phone || null,
-        role: params.role || normalizeRole(authUser.user_metadata?.role) || null,
-        designation: params.role || normalizeRole(authUser.user_metadata?.role) || null,
+        email: safeEmail,
+        full_name: safeFullName,
+        phone: params.phone || authUser.user_metadata?.phone || pendingOtpProfileRef.current?.phone || null,
+        role: safeRole,
+        designation: safeRole,
         institution_id: params.institutionId || null,
         diet_preference: 'all',
         registration_id: ids.registration_id,

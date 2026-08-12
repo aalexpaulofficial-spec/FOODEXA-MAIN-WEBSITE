@@ -20,7 +20,7 @@ interface UseSupabaseOrdersReturn {
 function normalizeStatus(status: any): OrderStatus {
   const s = String(status || 'pending').toLowerCase();
   if (['pending', 'order received'].includes(s)) return 'pending';
-  if (['accepted', 'confirmed'].includes(s)) return 'accepted';
+  if (['accepted', 'confirmed'].includes(s)) return 'confirmed';
   if (['preparing', 'preparation'].includes(s)) return 'preparing';
   if (['ready', 'ready for pickup'].includes(s)) return 'ready';
   if (['completed', 'collected', 'delivered'].includes(s)) return 'completed';

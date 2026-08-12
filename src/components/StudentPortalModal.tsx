@@ -35,7 +35,6 @@ import { NutritionTab } from './StudentDashboard/NutritionTab';
 import { AnalyticsTab } from './StudentDashboard/AnalyticsTab';
 import { HistoryTab } from './StudentDashboard/HistoryTab';
 import { ProfileTab } from './StudentDashboard/ProfileTab';
-import { SwitchCanteenModal } from './StudentDashboard/SwitchCanteenModal';
 import { SwitchInstitutionModal } from './StudentDashboard/SwitchInstitutionModal';
 import { OffersTab } from './StudentDashboard/OffersTab';
 import { OrderCompletionScreen } from './StudentDashboard/OrderCompletionScreen';
@@ -54,7 +53,7 @@ const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'coo
 
 const statusLabel = (s: OrderStatus) => {
   const map: Record<OrderStatus, string> = {
-    pending: 'Pending', accepted: 'Accepted', preparing: 'Preparing', cooking: 'Cooking', quality_check: 'Quality Check', packed: 'Packed',
+    pending: 'Pending', accepted: 'Accepted', confirmed: 'Confirmed', preparing: 'Preparing', cooking: 'Cooking', quality_check: 'Quality Check', packed: 'Packed',
     ready: 'Ready for Pickup', completed: 'Completed', cancelled: 'Cancelled',
   };
   return map[s] || s;
@@ -64,6 +63,7 @@ const statusColor = (s: OrderStatus) => {
   const map: Record<OrderStatus, string> = {
     pending: 'text-amber-300 border-amber-500/40 bg-amber-950/50',
     accepted: 'text-blue-300 border-blue-500/40 bg-blue-950/50',
+    confirmed: 'text-blue-300 border-blue-500/40 bg-blue-950/50',
     preparing: 'text-violet-300 border-violet-500/40 bg-violet-950/50',
     cooking: 'text-orange-300 border-orange-500/40 bg-orange-950/50',
     quality_check: 'text-indigo-300 border-indigo-500/40 bg-indigo-950/50',
@@ -77,7 +77,7 @@ const statusColor = (s: OrderStatus) => {
 
 const statusDot = (s: OrderStatus) => {
   const map: Record<OrderStatus, string> = {
-    pending: 'bg-amber-400', accepted: 'bg-blue-400', preparing: 'bg-violet-400',
+    pending: 'bg-amber-400', accepted: 'bg-blue-400', confirmed: 'bg-blue-400', preparing: 'bg-violet-400',
     cooking: 'bg-orange-400', quality_check: 'bg-indigo-400', packed: 'bg-teal-400',
     ready: 'bg-emerald-400', completed: 'bg-slate-400', cancelled: 'bg-red-400',
   };
@@ -380,7 +380,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [showLeaveInstitution, setShowLeaveInstitution] = useState(false);
   const [leavingInstitution, setLeavingInstitution] = useState(false);
   const [leaveInstitutionMessage, setLeaveInstitutionMessage] = useState<string | null>(null);
-  const [showSwitchCanteen, setShowSwitchCanteen] = useState(false);
   const [showSwitchInstitution, setShowSwitchInstitution] = useState(false);
   const [activeCanteen, setActiveCanteen] = useState<Canteen | null>(null);
   const activeCanteenIdRef = useRef<string | null>(null);
@@ -596,6 +595,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
       const statusMap: Record<string, string> = {
         accepted: 'Order Accepted',
+        confirmed: 'Order Confirmed',
         preparing: 'Preparing Your Order',
         cooking: 'Cooking in Progress',
         ready: 'Ready for Pickup',
@@ -1321,11 +1321,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     userEmail={user?.email}
                     institutionData={effectiveInstitutionData}
                     institutionName={institutionName}
-                    canteens={canteens}
-                    activeCanteenName={activeCanteen?.name || null}
                     isVisitor={isDirect}
                     onSignOut={handleSignOut}
-                    onSwitchCanteen={() => setShowSwitchInstitution(true)}
                     onSwitchInstitution={() => setShowSwitchInstitution(true)}
                     triggerToast={triggerToast}
                   />
@@ -1581,10 +1578,18 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                              <p className="text-[10px] text-gray-500 font-bold uppercase">Kitchen Status</p>
                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.kitchen_status || '—'}</p>
                            </div>
-                           <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-gray-500 font-bold uppercase">Counter Status</p>
-                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.counter_status || '—'}</p>
-                           </div>
+                            <div className="bg-slate-50 rounded-xl p-3">
+                              <p className="text-[10px] text-gray-500 font-bold uppercase">Counter Status</p>
+                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.counter_status || '—'}</p>
+                            </div>
+                            <div className="bg-slate-50 rounded-xl p-3">
+                              <p className="text-[10px] text-gray-500 font-bold uppercase">Student ID</p>
+                              <p className="text-sm font-black text-emerald-700 mt-0.5">{o?.student_id ? String(o.student_id).toUpperCase() : '—'}</p>
+                            </div>
+                            <div className="bg-slate-50 rounded-xl p-3">
+                              <p className="text-[10px] text-gray-500 font-bold uppercase">Pickup Counter</p>
+                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.counter || '—'}</p>
+                            </div>
                            <div className="bg-slate-50 rounded-xl p-3">
                              <p className="text-[10px] text-gray-500 font-bold uppercase">Order Status</p>
                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.order_status || o?.status || '—'}</p>
@@ -1893,20 +1898,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           </div>
         </div>
       )}
-
-      {/* ── SWITCH CANTEEN MODAL ──────────────────────────────── */}
-      <SwitchCanteenModal
-        isOpen={showSwitchCanteen}
-        onClose={() => setShowSwitchCanteen(false)}
-        onSelect={(canteen) => {
-          setActiveCanteen(canteen);
-          activeCanteenIdRef.current = canteen.id;
-          localStorage.setItem(`foodexa-active-canteen-${effectiveUserId}`, JSON.stringify({ id: canteen.id }));
-          setCart([]);
-          triggerToast?.('Canteen Switched', `${canteen.name} is now selected.`, 'success');
-        }}
-        currentCanteenId={activeCanteen?.id || null}
-      />
 
       {/* ── SWITCH INSTITUTION MODAL ──────────────────────────────── */}
       <SwitchInstitutionModal

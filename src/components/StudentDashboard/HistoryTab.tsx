@@ -9,7 +9,7 @@ import { OrderRatingModal } from './OrderRatingModal';
 
 const statusLabel = (s: Order['status']): string => {
   const m: Record<Order['status'], string> = {
-    pending: 'Pending', accepted: 'Accepted', preparing: 'Preparing', cooking: 'Cooking', quality_check: 'Quality Check', packed: 'Packed',
+    pending: 'Pending', accepted: 'Accepted', confirmed: 'Confirmed', preparing: 'Preparing', cooking: 'Cooking', quality_check: 'Quality Check', packed: 'Packed',
     ready: 'Ready', completed: 'Completed', cancelled: 'Refunded',
   };
   return m[s] || s;
@@ -19,6 +19,7 @@ const statusStyle = (s: Order['status']): string => {
   const m: Record<Order['status'], string> = {
     pending: 'bg-amber-50 text-amber-700 border-amber-200',
     accepted: 'bg-blue-50 text-blue-700 border-blue-200',
+    confirmed: 'bg-blue-50 text-blue-700 border-blue-200',
     preparing: 'bg-violet-50 text-violet-700 border-violet-200',
     cooking: 'bg-orange-50 text-orange-700 border-orange-200',
     quality_check: 'bg-indigo-50 text-indigo-700 border-indigo-200',

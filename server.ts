@@ -469,9 +469,9 @@ notes: {
 
         // Update order as paid (idempotent - already done by verify endpoint)
         await supabaseQuery('orders', 'PATCH', {
-          payment_status: 'paid',
-          status: 'accepted',
-          order_status: 'Accepted',
+          payment_status: 'captured',
+          status: 'confirmed',
+          order_status: 'confirmed',
           razorpay_payment_id: razorpay_payment_id,
           payment_method: 'razorpay',
           updated_at: new Date().toISOString(),
@@ -493,9 +493,9 @@ notes: {
         const orderEntity = payload?.payload?.order?.entity;
         if (orderEntity) {
         await supabaseQuery('orders', 'PATCH', {
-          payment_status: 'paid',
-          status: 'accepted',
-          order_status: 'Accepted',
+          payment_status: 'captured',
+          status: 'confirmed',
+          order_status: 'confirmed',
           updated_at: new Date().toISOString(),
         }, { id: orderEntity.id || '' });
 

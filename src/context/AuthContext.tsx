@@ -47,6 +47,22 @@ const normalizeRole = (value: unknown): UserRole | null => {
   return allowed.includes(value as UserRole) ? (value as UserRole) : null;
 };
 
+// ── Permanent FOODEXA identifiers ──────────────────────────────────────────
+// Generated exactly ONCE at account creation and stored permanently in Supabase.
+// Format examples: FX26-A2A1EF (Registration ID) and ST-A2A1EF (Student ID)
+export function generateStudentIdentifiers(): { registration_id: string; student_id: string } {
+  const yy = String(new Date().getFullYear()).slice(-2);
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
+  let suffix = '';
+  for (let i = 0; i < 6; i++) {
+    suffix += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return {
+    registration_id: `FX${yy}-${suffix}`,
+    student_id: `ST-${suffix}`,
+  };
+}
+
 const DIRECT_SESSION_KEY = 'foodexa-direct-session';
 const PENDING_VERIFICATION_EMAIL_KEY = 'foodexa_pending_verification_email';
 
@@ -146,7 +162,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
     const upsertProfileSafely = useCallback(async (payload: Record<string, any>) => {
-        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference'];
+        const KNOWN_PROFILE_COLUMNS = ['user_id', 'email', 'full_name', 'phone', 'role', 'institution_id', 'department', 'semester', 'programme', 'campus_block', 'designation', 'avatar_url', 'diet_preference', 'registration_id', 'student_id', 'plan'];
        const safePayload: Record<string, any> = {};
        for (const key of KNOWN_PROFILE_COLUMNS) {
          if (key in payload) {
@@ -171,7 +187,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
        return { error: null as Error | null };
      }, []);
 
-   const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, campus_block, programme, department, semester, designation, avatar_url, diet_preference';
+    const PROFILE_COLUMNS = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, campus_block, programme, department, semester, designation, avatar_url, diet_preference, registration_id, student_id, plan';
+
+    // Ensure a profile carries permanent identifiers. If they are missing (e.g. a
+    // profile created before this feature), generate them ONCE and persist them so
+    // they never change on subsequent logins.
+    const ensureStudentIdentifiers = useCallback(async (profile: Profile): Promise<Profile> => {
+      if (profile.registration_id && profile.student_id) return profile;
+      const ids = generateStudentIdentifiers();
+      const safePayload: Record<string, any> = {
+        user_id: profile.user_id,
+        registration_id: profile.registration_id || ids.registration_id,
+        student_id: profile.student_id || ids.student_id,
+      };
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update(safePayload)
+          .eq('user_id', profile.user_id);
+        if (!error) {
+          return { ...profile, registration_id: safePayload.registration_id, student_id: safePayload.student_id };
+        }
+        console.warn('[Auth] Could not persist student identifiers:', error.message);
+      } catch (err) {
+        console.warn('[Auth] ensureStudentIdentifiers exception:', err);
+      }
+      // Return the in-memory identifiers even if persist failed (best effort)
+      return { ...profile, registration_id: safePayload.registration_id, student_id: safePayload.student_id };
+    }, []);
 
     const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
       try {
@@ -186,7 +229,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
          }
 
         if (data) {
-          const fetchedProfile = { ...data } as Profile;
+          let fetchedProfile = { ...data } as Profile;
+          fetchedProfile = await ensureStudentIdentifiers(fetchedProfile);
           setProfile(fetchedProfile);
           await loadInstitutionForProfile(fetchedProfile);
           return fetchedProfile;
@@ -206,6 +250,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return null;
         }
 
+        const ids = generateStudentIdentifiers();
         const { error: upsertError } = await upsertProfileSafely({
           user_id: userId,
           email: authUser.email || '',
@@ -218,6 +263,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           semester: authUser.user_metadata?.semester || null,
           programme: authUser.user_metadata?.programme || null,
           campus_block: authUser.user_metadata?.campus_block || null,
+          registration_id: ids.registration_id,
+          student_id: ids.student_id,
         });
 
         if (upsertError) {

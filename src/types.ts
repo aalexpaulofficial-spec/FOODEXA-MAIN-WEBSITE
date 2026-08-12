@@ -68,6 +68,11 @@ export interface Profile {
   wallet_balance?: number;
   total_orders?: number;
   favorite_counters?: string[];
+  // Permanent FOODEXA identifiers (generated exactly once at account creation)
+  registration_id?: string | null;
+  student_id?: string | null;
+  // FOODEXA plan loaded from the database
+  plan?: string | null;
 }
 
 export interface Canteen {
@@ -262,7 +267,7 @@ export interface MenuCategory {
   description?: string;
 }
 
-export type OrderStatus = 'pending' | 'accepted' | 'preparing' | 'cooking' | 'quality_check' | 'packed' | 'ready' | 'completed' | 'cancelled';
+export type OrderStatus = 'pending' | 'accepted' | 'confirmed' | 'preparing' | 'cooking' | 'quality_check' | 'packed' | 'ready' | 'completed' | 'cancelled';
 
 export interface OrderItem {
   id?: string;

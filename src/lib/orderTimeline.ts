@@ -17,6 +17,7 @@ export type TimelineStage = 0 | 1 | 2 | 3 | -1;
 export const ORDER_STATUS_TO_TIMELINE: Record<string, TimelineStage> = {
   pending: 0,
   accepted: 0,
+  confirmed: 0,
   preparing: 1,
   cooking: 1,
   quality_check: 1,

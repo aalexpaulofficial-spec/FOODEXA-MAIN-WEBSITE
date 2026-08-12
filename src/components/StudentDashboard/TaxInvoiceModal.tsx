@@ -95,11 +95,15 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
             <div class="info-value">${studentDisplayName}</div>
           </div>
           <div class="info-box">
+            <div class="info-label">Student ID</div>
+            <div class="info-value">${order.student_id ? String(order.student_id).toUpperCase() : 'N/A'}</div>
+          </div>
+          <div class="info-box">
             <div class="info-label">Institution</div>
             <div class="info-value">${institutionName}</div>
           </div>
           <div class="info-box">
-            <div class="info-label">Canteen / Counter</div>
+            <div class="info-label">Pickup Counter</div>
             <div class="info-value">${order.counter || 'N/A'}</div>
           </div>
           ${pickupCode ? `<div class="info-box"><div class="info-label">Pickup Code</div><div class="info-value">${pickupCode}</div></div>` : ''}
@@ -225,6 +229,10 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
                 <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{studentDisplayName}</p>
               </div>
               <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Student ID</p>
+                <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 truncate">{order.student_id ? String(order.student_id).toUpperCase() : 'N/A'}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-1 mb-0.5">
                   <Building2 className="w-3 h-3 text-slate-400" />
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Institution</p>
@@ -234,7 +242,7 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
               <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-1 mb-0.5">
                   <MapPin className="w-3 h-3 text-slate-400" />
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Canteen</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Pickup Counter</p>
                 </div>
                 <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{order.counter || 'N/A'}</p>
               </div>

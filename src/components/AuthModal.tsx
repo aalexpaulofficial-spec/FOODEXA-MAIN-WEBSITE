@@ -34,17 +34,14 @@ const getPendingVerificationEmail = () =>
 
 const mapOtpErrorMessage = (message: string) => {
   const lower = message.toLowerCase();
-  if (lower.includes('expired')) {
-    return 'This verification code has expired. Please request a new code.';
+  if (lower.includes('expired') || lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
+    return 'Invalid or expired verification code. Please check the latest code in your email and try again.';
   }
   if (lower.includes('rate limit') || lower.includes('too many')) {
     return 'Verification service is temporarily unavailable. Please try again.';
   }
   if (lower.includes('network') || lower.includes('fetch')) {
     return 'Verification service is temporarily unavailable. Please try again.';
-  }
-  if (lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
-    return 'Invalid verification code. Please check the latest code in your email.';
   }
   return message;
 };
@@ -268,26 +265,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
      });
   };
 
-  const handleInstitutionCodeChange = (code: string) => {
-    if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
-    setInstitutionVerifyCode(code);
-    setValidatedInstitution(null);
-    setInstitutionError(null);
-    const trimmed = code.trim();
-    if (!trimmed) return;
-    setValidatingCode(true);
-    institutionCodeTimerRef.current = setTimeout(async () => {
-      const { error, data } = await validateInstitutionCode(trimmed);
-      if (error || !data) {
-        setInstitutionError(error || 'Invalid Institution Code');
-        setValidatedInstitution(null);
-      } else {
-        setValidatedInstitution(data);
-        setInstitutionData(data);
-      }
-      setValidatingCode(false);
-    }, 500);
-  };
+   // Track whether institution verification is in progress
+   const [isVerifyingInstitution, setIsVerifyingInstitution] = useState(false);
+
+   const handleInstitutionCodeChange = (code: string) => {
+     if (institutionCodeTimerRef.current) clearTimeout(institutionCodeTimerRef.current);
+     setInstitutionVerifyCode(code);
+     setValidatedInstitution(null);
+     setInstitutionError(null);
+     const trimmed = code.trim();
+     if (!trimmed) return;
+     setValidatingCode(true);
+     institutionCodeTimerRef.current = setTimeout(async () => {
+       const { error, data } = await validateInstitutionCode(trimmed);
+       if (error || !data) {
+         setInstitutionError(error || 'Invalid Institution Code');
+         setValidatedInstitution(null);
+       } else {
+         setValidatedInstitution(data);
+         setInstitutionData(data);
+       }
+       setValidatingCode(false);
+     }, 500);
+   };
 
 
   const handleLoginInstitutionVerify = async () => {
@@ -1175,60 +1175,66 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!institutionVerifyCode.trim()) return;
-                  setValidatingCode(true);
-                  setInstitutionError(null);
+               <button
+                 type="button"
+                 onClick={async () => {
+                   if (isVerifyingInstitution || !institutionVerifyCode.trim()) return;
+                   setIsVerifyingInstitution(true);
+                   setValidatingCode(true);
+                   setInstitutionError(null);
 
-                  const { error: validateError, data: validatedInst } = await validateInstitutionCode(institutionVerifyCode);
+                   try {
+                     const { error: validateError, data: validatedInst } = await validateInstitutionCode(institutionVerifyCode);
 
-                  if (validateError || !validatedInst) {
-                    setInstitutionError(validateError || 'Invalid Institution Code');
-                    setValidatingCode(false);
-                    return;
-                  }
+                     if (validateError || !validatedInst) {
+                       setInstitutionError(validateError || 'Invalid Institution Code');
+                       setValidatedInstitution(null);
+                       return;
+                     }
 
-                  setValidatedInstitution(validatedInst);
-                  setVerifiedInstitution(validatedInst);
-                  setInstitutionData(validatedInst);
-                  setValidatingCode(false);
+                     setValidatedInstitution(validatedInst);
+                     setVerifiedInstitution(validatedInst);
+                     setInstitutionData(validatedInst);
 
-                  // Now create/update the profile with institution_id
-                  const { error: profileError } = await updateProfile({
-                    full_name: getCurrentForm().fullName || authProfile?.full_name || '',
-                    role: selectedAccountRole,
-                    institution_id: validatedInst.institution_id,
-                  });
+                     // Now create/update the profile with institution_id and designation
+                     const { error: profileError } = await updateProfile({
+                       full_name: getCurrentForm().fullName || authProfile?.full_name || '',
+                       role: selectedAccountRole,
+                       designation: selectedAccountRole,
+                       institution_id: validatedInst.institution_id,
+                     });
 
-                  if (profileError) {
-                    setInstitutionError(profileError.message || 'Failed to complete profile.');
-                    return;
-                  }
+                     if (profileError) {
+                       setInstitutionError(profileError.message || 'Failed to complete profile.');
+                       return;
+                     }
 
-                  await refreshProfile();
+                     await refreshProfile();
 
-                  setStep('success');
-                  if (onLoginSuccess && authProfile) {
-                    onLoginSuccess({ profile: authProfile, institution: validatedInst });
-                  }
-                }}
-                disabled={!institutionVerifyCode.trim() || validatingCode}
-                className="w-full btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {validatingCode ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    <span>Verifying...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Join Institution & Continue</span>
-                    <ArrowRight className="w-4 h-4 text-white" />
-                  </>
-                )}
-              </button>
+                     setStep('success');
+                     if (onLoginSuccess && authProfile) {
+                       onLoginSuccess({ profile: authProfile, institution: validatedInst });
+                     }
+                   } finally {
+                     setValidatingCode(false);
+                     setIsVerifyingInstitution(false);
+                   }
+                 }}
+                 disabled={!institutionVerifyCode.trim() || validatingCode || isVerifyingInstitution}
+                 className="w-full btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+               >
+                 {validatingCode || isVerifyingInstitution ? (
+                   <>
+                     <Loader2 className="w-4 h-4 animate-spin text-white" />
+                     <span>Verifying...</span>
+                   </>
+                 ) : (
+                   <>
+                     <span>ENTER DASHBOARD</span>
+                     <ArrowRight className="w-4 h-4 text-white" />
+                   </>
+                 )}
+               </button>
             </div>
           </div>
         )}

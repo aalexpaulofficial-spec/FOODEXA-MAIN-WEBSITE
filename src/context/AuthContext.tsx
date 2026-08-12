@@ -53,17 +53,14 @@ const PENDING_VERIFICATION_EMAIL_KEY = 'foodexa_pending_verification_email';
 
 const mapOtpErrorMessage = (message: string) => {
   const lower = message.toLowerCase();
-  if (lower.includes('expired')) {
-    return 'This verification code has expired. Please request a new code.';
+  if (lower.includes('expired') || lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
+    return 'Invalid or expired verification code. Please check the latest code in your email and try again.';
   }
   if (lower.includes('rate limit') || lower.includes('too many')) {
     return 'Verification service is temporarily unavailable. Please try again.';
   }
   if (lower.includes('network') || lower.includes('fetch')) {
     return 'Verification service is temporarily unavailable. Please try again.';
-  }
-  if (lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
-    return 'Invalid verification code. Please check the latest code in your email.';
   }
   return message;
 };
@@ -85,6 +82,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     phone: string | null;
   } | null>(null);
   const pendingOtpProfileRef = React.useRef<typeof pendingOtpProfile>(null);
+  const signUpInProgressRef = React.useRef(false);
+  const verifyOtpInProgressRef = React.useRef(false);
 
   // ── Direct user session (institution code + name + role, no Supabase auth) ──
   const [directSession, setDirectSession] = useState<DirectSession | null>(() => {
@@ -341,6 +340,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       facultyId?: string;
     }
   ) => {
+    if (signUpInProgressRef.current) {
+      return { error: new Error('Registration is already in progress. Please wait.') };
+    }
+    signUpInProgressRef.current = true;
+
     const trimmedEmail = email.trim().toLowerCase();
 
     // Resolve institution_id: prefer direct param, then context state
@@ -372,6 +376,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         data: {
           full_name: fullName.trim(),
           role,
+          designation: role,
           institution_id: resolvedInstitutionId,
           institution_code: metadata?.institutionCode?.trim() || null,
           phone: metadata?.phone?.trim() || null,
@@ -387,6 +392,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
      if (error) {
        console.error('[FOODEXA SIGNUP ERROR]', error);
+       signUpInProgressRef.current = false;
        setIsPendingOtpVerification(false);
        sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
        return { error: new Error(error.message) };
@@ -397,6 +403,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (authUser && Array.isArray(authUser.identities) && authUser.identities.length === 0) {
       console.warn('[Auth] Signup attempted with an existing email address:', trimmedEmail);
+      signUpInProgressRef.current = false;
       setIsPendingOtpVerification(false);
       sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
       return { error: new Error('This email is already registered. Please log in instead.') };
@@ -416,6 +423,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (!authUser) {
       console.error('[FOODEXA SIGNUP ERROR] Registration succeeded but no user was returned.');
+      signUpInProgressRef.current = false;
       setIsPendingOtpVerification(false);
       sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
       return { error: new Error('Registration succeeded but no user was returned. Please try again.') };
@@ -426,6 +434,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Do NOT call signInWithOtp() — that sends a second email via the
     // "Magic Link" template and can cause rate-limit / delivery conflicts.
     console.info('[Auth] signUp() succeeded. Supabase Auth dispatches the confirmation OTP email.');
+    signUpInProgressRef.current = false;
     return { error: null };
   };
 
@@ -474,107 +483,116 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // FIX: Strengthened institution_id resolution with last-resort API lookup
   const verifyOtp = async (email: string, token: string) => {
+     if (verifyOtpInProgressRef.current) {
+       return { error: new Error('Verification is already in progress. Please wait.'), profile: null, institution: null };
+     }
+     verifyOtpInProgressRef.current = true;
+
      const normalizedEmail = (email || sessionStorage.getItem(PENDING_VERIFICATION_EMAIL_KEY) || '').trim().toLowerCase();
      const safeToken = (token || '').replace(/\D/g, '').trim();
      console.info('[Auth] OTP verification request | email:', normalizedEmail, '| token length:', safeToken.length, '| authUser:', user?.id || '<none>');
 
-     if (!normalizedEmail) {
-       return { error: new Error('An email address is required to verify the OTP.'), profile: null, institution: null };
-     }
-     if (!safeToken) {
-       return { error: new Error('Please enter the OTP code sent to your email.'), profile: null, institution: null };
-     }
-     if (safeToken.length !== 8) {
-       return { error: new Error('Please enter the 8-digit verification code sent to your email.'), profile: null, institution: null };
-     }
+     try {
+       if (!normalizedEmail) {
+         return { error: new Error('An email address is required to verify the OTP.'), profile: null, institution: null };
+       }
+       if (!safeToken) {
+         return { error: new Error('Please enter the OTP code sent to your email.'), profile: null, institution: null };
+       }
+       if (safeToken.length !== 8) {
+         return { error: new Error('Please enter the 8-digit verification code sent to your email.'), profile: null, institution: null };
+       }
 
-      console.info('[Auth] Attempting OTP verification with type "signup"...');
-      const { data: authData, error } = await supabase.auth.verifyOtp({
-        email: normalizedEmail,
-        token: safeToken,
-        type: 'signup',
-      });
+       console.info('[Auth] Attempting OTP verification with type "signup"...');
+       const { data: authData, error } = await supabase.auth.verifyOtp({
+         email: normalizedEmail,
+         token: safeToken,
+         type: 'signup',
+       });
 
-      if (error) {
-        console.error('[FOODEXA OTP ERROR]', error);
+       if (error) {
+         console.error('[FOODEXA OTP ERROR]', error);
+         return {
+           error: new Error(mapOtpErrorMessage(error.message)),
+           profile: null,
+           institution: null,
+         };
+       }
+
+       if (!authData?.session || !authData?.user) {
+         console.error('[FOODEXA OTP ERROR] Verification returned no authenticated session.');
+         return {
+           error: new Error('Verification succeeded, but no authenticated session was returned. Please try again.'),
+           profile: null,
+           institution: null,
+         };
+       }
+
+       console.info('[Auth] OTP verification SUCCEEDED via type "signup" | user:', authData.user.id || '<none>');
+
+      // OTP verified — clear the pending flag and mark email as confirmed
+      setIsPendingOtpVerification(false);
+      setIsEmailVerified(true);
+      sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
+
+      // verifyOtp already establishes a session; fetch the freshly authenticated user.
+      const { data: currentUserData, error: userError } = await supabase.auth.getUser();
+      const authUser = currentUserData?.user;
+      const userId = authUser?.id;
+
+      if (userError || !userId) {
+        console.error('[Auth] Unable to get user after OTP verification:', userError?.name, '-', userError?.message);
         return {
-          error: new Error(mapOtpErrorMessage(error.message)),
+          error: new Error(userError?.message || 'OTP verified but unable to load your account. Please try signing in.'),
           profile: null,
           institution: null,
         };
       }
 
-      if (!authData?.session || !authData?.user) {
-        console.error('[FOODEXA OTP ERROR] Verification returned no authenticated session.');
-        return {
-          error: new Error('Verification succeeded, but no authenticated session was returned. Please try again.'),
-          profile: null,
-          institution: null,
-        };
-      }
+      console.info('[Auth] Authenticated user after OTP verification | userId:', userId, '| email_confirmed_at:', authUser.email_confirmed_at || 'NULL', '| email:', authUser.email);
 
-      console.info('[Auth] OTP verification SUCCEEDED via type "signup" | user:', authData.user.id || '<none>');
+      // OTP verified successfully. Profile creation will happen after
+       // institution code verification in the AuthModal.
+       // Return the authenticated user info without creating a profile yet.
+       const pendingProfile = pendingOtpProfileRef.current || pendingOtpProfile;
+       const userData = authUser.user_metadata || {};
 
-     // OTP verified — clear the pending flag and mark email as confirmed
-     setIsPendingOtpVerification(false);
-     setIsEmailVerified(true);
-     sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
+       // Try to fetch existing profile (may exist from a previous attempt)
+       let existingProfile = await fetchProfile(userId);
 
-     // verifyOtp already establishes a session; fetch the freshly authenticated user.
-     const { data: currentUserData, error: userError } = await supabase.auth.getUser();
-     const authUser = currentUserData?.user;
-     const userId = authUser?.id;
+       if (existingProfile) {
+         // Profile already exists — load institution and return
+         let fetchedInstitution: InstitutionData | null = null;
+         if (existingProfile.institution_id) {
+           const { data: instData } = await supabase
+             .from('institutions')
+             .select('id, name, campus, city, state, country, institution_code')
+             .eq('id', existingProfile.institution_id)
+             .maybeSingle();
+           if (instData) {
+             fetchedInstitution = {
+               institution_id: instData.id,
+               institution_name: instData.name || '',
+               campus: instData.campus || '',
+               city: instData.city || '',
+               state: instData.state || '',
+               country: instData.country || '',
+               institution_code: instData.institution_code || '',
+             };
+             setInstitutionData(fetchedInstitution);
+           }
+         }
+         setPendingRegistrationProfile(null);
+         return { error: null, profile: existingProfile, institution: fetchedInstitution };
+       }
 
-     if (userError || !userId) {
-       console.error('[Auth] Unable to get user after OTP verification:', userError?.name, '-', userError?.message);
-       return {
-         error: new Error(userError?.message || 'OTP verified but unable to load your account. Please try signing in.'),
-         profile: null,
-         institution: null,
-       };
+       // No existing profile — return null profile so AuthModal shows institution step
+       console.info('[Auth] OTP verified but no profile exists yet. Awaiting institution code verification.');
+       return { error: null, profile: null, institution: null };
+     } finally {
+       verifyOtpInProgressRef.current = false;
      }
-
-     console.info('[Auth] Authenticated user after OTP verification | userId:', userId, '| email_confirmed_at:', authUser.email_confirmed_at || 'NULL', '| email:', authUser.email);
-
-     // OTP verified successfully. Profile creation will happen after
-      // institution code verification in the AuthModal.
-      // Return the authenticated user info without creating a profile yet.
-      const pendingProfile = pendingOtpProfileRef.current || pendingOtpProfile;
-      const userData = authUser.user_metadata || {};
-
-      // Try to fetch existing profile (may exist from a previous attempt)
-      let existingProfile = await fetchProfile(userId);
-
-      if (existingProfile) {
-        // Profile already exists — load institution and return
-        let fetchedInstitution: InstitutionData | null = null;
-        if (existingProfile.institution_id) {
-          const { data: instData } = await supabase
-            .from('institutions')
-            .select('id, name, campus, city, state, country, institution_code')
-            .eq('id', existingProfile.institution_id)
-            .maybeSingle();
-          if (instData) {
-            fetchedInstitution = {
-              institution_id: instData.id,
-              institution_name: instData.name || '',
-              campus: instData.campus || '',
-              city: instData.city || '',
-              state: instData.state || '',
-              country: instData.country || '',
-              institution_code: instData.institution_code || '',
-            };
-            setInstitutionData(fetchedInstitution);
-          }
-        }
-        setPendingRegistrationProfile(null);
-        return { error: null, profile: existingProfile, institution: fetchedInstitution };
-      }
-
-      // No existing profile — return null profile so AuthModal shows institution step
-      console.info('[Auth] OTP verified but no profile exists yet. Awaiting institution code verification.');
-      return { error: null, profile: null, institution: null };
-    };
+   };
 
    const ensureProfileExists = async (userId: string): Promise<Profile | null> => {
      return await fetchProfile(userId);
@@ -593,26 +611,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     sessionStorage.removeItem(PENDING_VERIFICATION_EMAIL_KEY);
   };
 
-  const joinWithCodeRoleName = useCallback(async (
-    institutionCode: string,
-    role: 'student' | 'faculty' | 'guest',
-    displayName: string
-  ): Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }> => {
-    try {
-      // 1. Validate institution code against live Supabase
-      const { error: instError, data: instData } = await validateInstitutionCode(institutionCode);
-      if (instError || !instData) {
-        return { error: instError || 'Invalid institution code.', profile: null, institution: null };
-      }
+   const joinWithCodeRoleName = useCallback(async (
+     institutionCode: string,
+     role: 'student' | 'faculty' | 'guest',
+     displayName: string
+   ): Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }> => {
+     try {
+       // 1. Validate institution code against live Supabase
+       const { error: instError, data: instData } = await validateInstitutionCode(institutionCode);
+       if (instError || !instData) {
+         return { error: instError || 'Invalid institution code.', profile: null, institution: null };
+       }
 
-      // 2. If an authenticated (Google) user exists, persist institution to their Supabase profile
-      if (user) {
-        const { error: upsertError } = await upsertProfileSafely({
-          user_id: user.id,
-          full_name: displayName.trim(),
-          role,
-          institution_id: instData.institution_id,
-        });
+       // 2. If an authenticated (Google) user exists, persist institution to their Supabase profile
+       if (user) {
+         const { error: upsertError } = await upsertProfileSafely({
+           user_id: user.id,
+           full_name: displayName.trim(),
+           role,
+           designation: role,
+           institution_id: instData.institution_id,
+         });
 
         if (upsertError) {
           console.error('[Auth] joinWithCodeRoleName profile upsert error:', upsertError.message);
@@ -669,28 +688,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [user, validateInstitutionCode, upsertProfileSafely, fetchProfile, setInstitutionData]);
 
-  // Direct Access flow: role + name + email + institution code → temporary session
-  const joinWithDirectAccess = useCallback(async (
-    institutionCode: string,
-    role: 'student' | 'faculty' | 'guest',
-    displayName: string,
-    email: string
-  ): Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }> => {
-    try {
-      // 1. Validate institution code against live Supabase
-      const { error: instError, data: instData } = await validateInstitutionCode(institutionCode);
-      if (instError || !instData) {
-        return { error: instError || 'Invalid institution code.', profile: null, institution: null };
-      }
+   // Direct Access flow: role + name + email + institution code → temporary session
+   const joinWithDirectAccess = useCallback(async (
+     institutionCode: string,
+     role: 'student' | 'faculty' | 'guest',
+     displayName: string,
+     email: string
+   ): Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }> => {
+     try {
+       // 1. Validate institution code against live Supabase
+       const { error: instError, data: instData } = await validateInstitutionCode(institutionCode);
+       if (instError || !instData) {
+         return { error: instError || 'Invalid institution code.', profile: null, institution: null };
+       }
 
-      // 2. If an authenticated (Google) user exists, persist institution to their Supabase profile
-      if (user) {
-        const { error: upsertError } = await upsertProfileSafely({
-          user_id: user.id,
-          full_name: displayName.trim(),
-          role,
-          institution_id: instData.institution_id,
-        });
+       // 2. If an authenticated (Google) user exists, persist institution to their Supabase profile
+       if (user) {
+         const { error: upsertError } = await upsertProfileSafely({
+           user_id: user.id,
+           full_name: displayName.trim(),
+           role,
+           designation: role,
+           institution_id: instData.institution_id,
+         });
 
         if (upsertError) {
           console.error('[Auth] joinWithDirectAccess profile upsert error:', upsertError.message);
@@ -798,7 +818,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       case 'canteen_manager':
         return '/institution-dashboard';
       case 'faculty':
-        return '/student-dashboard';
+        return '/faculty-dashboard';
+      case 'guest':
+        return '/guest-dashboard';
       case 'super_admin':
         return '/super-admin-portal';
       default:
@@ -905,6 +927,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { error: updateError } = await upsertProfileSafely({
           user_id: user.id,
           institution_id: newInstitutionId,
+          designation: profile?.role || null,
         });
 
         if (updateError) {

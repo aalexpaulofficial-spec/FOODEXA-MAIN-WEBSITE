@@ -76,14 +76,11 @@ const getPasswordStrength = (password: string) => {
 const mapOtpErrorMessage = (message: string) => {
   const lower = message.toLowerCase();
 
-  if (lower.includes('expired')) {
-    return 'This verification code has expired. Please request a new code.';
-  }
-  if (lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
-    return 'Invalid or expired verification code.\nPlease check the 8-digit code and try again.';
+  if (lower.includes('expired') || lower.includes('invalid') || lower.includes('otp') || lower.includes('token')) {
+    return 'Invalid or expired verification code. Please check the latest code in your email and try again.';
   }
   if (lower.includes('network') || lower.includes('fetch') || lower.includes('server') || lower.includes('rate limit') || lower.includes('too many')) {
-    return 'Unable to verify right now. Please try again.';
+    return 'Verification service is temporarily unavailable. Please try again.';
   }
 
   return 'Unable to verify right now. Please try again.';
@@ -389,6 +386,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       email: authUser.email || normalizedEmail,
       full_name: fullName,
       role: selectedRole,
+      designation: selectedRole,
       institution_id: institution.institution_id,
       department: null,
       semester: null,
@@ -396,7 +394,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
       campus_block: null,
     };
 
-    const profileColumns = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, department, semester, programme, campus_block';
+    const profileColumns = 'id, user_id, institution_id, full_name, email, phone, role, created_at, updated_at, department, semester, programme, campus_block, designation';
 
     const { data: savedProfile, error: profileError } = await supabase
       .from('profiles')
@@ -758,7 +756,7 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
                 </>
               ) : (
                 <>
-                  <span>VERIFY INSTITUTION</span>
+                  <span>ENTER DASHBOARD</span>
                   <ArrowRight className="h-4 w-4 text-white" />
                 </>
               )}

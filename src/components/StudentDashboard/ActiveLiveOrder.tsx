@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, QrCode, CheckCircle2, XCircle, ChevronRight, Zap, MapPin, Hash, Star } from 'lucide-react';
+import { Clock, QrCode, CheckCircle2, XCircle, ChevronRight, Zap, MapPin, Hash, Star, User, CreditCard } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { Order } from '../../types';
 import { getTimelineLabel, getTimelineStage, isOrderCancelled, STUDENT_TIMELINE_LABELS, STUDENT_TIMELINE_DESCRIPTIONS } from '../../lib/orderTimeline';
@@ -9,12 +9,18 @@ interface ActiveLiveOrderProps {
   orders: Order[];
   onTrack: (o: Order) => void;
   onQrOpen: (o: Order) => void;
+  studentName?: string;
+  studentId?: string;
+  registrationId?: string;
 }
 
 export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
   orders,
   onTrack,
   onQrOpen,
+  studentName,
+  studentId,
+  registrationId,
 }) => {
   const order = orders[0];
   if (!order) return null;
@@ -25,10 +31,14 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
   const isCompleted = order.status === 'completed';
   const isReady = order.status === 'ready';
 
-  const orderNumber = order.order_number || order.order_id?.replace('#FX-', '') || String(order.id).slice(-8).toUpperCase();
+  const orderNumber = order.order_number
+    ? `#FX-${String(order.order_number).padStart(4, '0')}`
+    : order.order_id || '';
   const pickupCode = order.pickup_code || order.pickup_token || '';
   const tokenNumber = order.token_number || order.pickup_token || '';
   const estimatedReadyTime = order.estimated_ready_at;
+  const counterName = order.counter_name || order.counter || 'Counter';
+  const canteenName = order.canteen_name || '';
 
   return (
     <motion.div
@@ -71,7 +81,7 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
             </div>
             {orderNumber && (
               <h3 className="text-lg font-bold text-white tracking-tight">
-                Order #{orderNumber}
+                Order {orderNumber}
               </h3>
             )}
           </div>
@@ -90,18 +100,61 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
         )}
       </div>
 
-      {/* Items */}
+      {/* Items with quantities */}
       <div className="my-4 space-y-2">
         <p className="text-xs text-[#86868B] uppercase font-bold tracking-wider">Items Ordered</p>
-        <p className="text-sm font-semibold text-white line-clamp-1">
-          {order.items.map(i => `${i.quantity}x ${i.name}`).join(', ') || 'No items'}
-        </p>
-        {order.counter && (
-          <p className="text-xs text-cyan-200 flex items-center gap-1"><MapPin className="w-3 h-3" /> Pickup Counter: {order.counter}</p>
+        {order.items.length > 0 ? (
+          <div className="space-y-1">
+            {order.items.map((item, i) => (
+              <div key={i} className="flex items-center justify-between text-sm">
+                <span className="text-white font-semibold">
+                  {item.name} <span className="text-cyan-300 font-bold">x{item.quantity}</span>
+                </span>
+                <span className="text-white font-bold">{formatINR(item.price * item.quantity)}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-white/60">No items</p>
         )}
       </div>
 
-      {/* Mini Timeline */}
+      {/* Counter & Pickup Info */}
+      <div className="my-4 grid grid-cols-2 gap-2">
+        <div className="bg-white/10 backdrop-blur-md rounded-[12px] p-3 border border-white/10">
+          <p className="text-[10px] text-cyan-300 font-bold uppercase tracking-wider flex items-center gap-1">
+            <MapPin className="w-3 h-3" /> Pickup Counter
+          </p>
+          <p className="text-sm font-extrabold text-white mt-0.5">{counterName}</p>
+          {canteenName && <p className="text-[10px] text-white/50 mt-0.5">{canteenName}</p>}
+        </div>
+        {tokenNumber && (
+          <div className="bg-white/10 backdrop-blur-md rounded-[12px] p-3 border border-white/10">
+            <p className="text-[10px] text-amber-300 font-bold uppercase tracking-wider flex items-center gap-1">
+              <Hash className="w-3 h-3" /> Token Number
+            </p>
+            <p className="text-sm font-extrabold text-white mt-0.5">{tokenNumber}</p>
+          </div>
+        )}
+        {pickupCode && (
+          <div className="bg-white/10 backdrop-blur-md rounded-[12px] p-3 border border-white/10">
+            <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider flex items-center gap-1">
+              <QrCode className="w-3 h-3" /> Pickup Code
+            </p>
+            <p className="text-sm font-extrabold text-white mt-0.5">{pickupCode}</p>
+          </div>
+        )}
+        {studentId && (
+          <div className="bg-white/10 backdrop-blur-md rounded-[12px] p-3 border border-white/10">
+            <p className="text-[10px] text-blue-300 font-bold uppercase tracking-wider flex items-center gap-1">
+              <User className="w-3 h-3" /> Student ID
+            </p>
+            <p className="text-sm font-extrabold text-white mt-0.5">{studentId}</p>
+          </div>
+        )}
+      </div>
+
+      {/* 5-Step Mini Timeline */}
       {!isCancelled && (
         <div className="my-4">
           <div className="flex items-center gap-1">
@@ -139,16 +192,16 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
             {tokenNumber && (
               <div className="text-right">
                 <p className="text-xs text-amber-300 font-bold uppercase tracking-wider">Token</p>
-                <p className="text-xl font-black text-white mt-1">#{tokenNumber}</p>
+                <p className="text-xl font-black text-white mt-1">{tokenNumber}</p>
               </div>
             )}
           </div>
-          <p className="text-xs text-emerald-200 mt-2">Your order is ready for pickup. Show this code at the counter.</p>
+          <p className="text-xs text-emerald-200 mt-2">Show this code at {counterName}.</p>
         </motion.div>
       )}
 
-      {/* Status Grid */}
-      <div className="my-4 space-y-2">
+      {/* Status Label */}
+      <div className="my-3 space-y-2">
         <div className="flex items-center justify-between text-xs">
           <span className="font-bold text-[#0071E3] flex items-center gap-1">
             {isCancelled ? (
@@ -158,25 +211,7 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
             )}
             {stageLabel}
           </span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-          <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
-            <p className="text-[10px] text-[#86868B] font-bold uppercase">Kitchen</p>
-            <p className="text-sm font-extrabold text-white mt-0.5">{order.kitchen_status || order.status || '—'}</p>
-          </div>
-          <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
-            <p className="text-[10px] text-[#86868B] font-bold uppercase">Counter</p>
-            <p className="text-sm font-extrabold text-white mt-0.5">{order.counter_status || '—'}</p>
-          </div>
-          <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
-            <p className="text-[10px] text-[#86868B] font-bold uppercase">Order</p>
-            <p className="text-sm font-extrabold text-white mt-0.5">{order.order_status || order.status || '—'}</p>
-          </div>
-          <div className="bg-white/5 rounded-xl p-2.5 border border-white/10">
-            <p className="text-[10px] text-[#86868B] font-bold uppercase">Total</p>
-            <p className="text-sm font-extrabold text-white mt-0.5">{formatINR(order.total_amount)}</p>
-          </div>
+          <span className="font-bold text-white">{formatINR(order.total_amount)}</span>
         </div>
       </div>
 

@@ -48,7 +48,10 @@ interface ExploreTabProps {
   setSearchQuery: (v: string) => void;
   institutionName: string;
   dbBanners?: any[];
-  canteens: Canteen[];
+  canteens?: Canteen[];
+  studentName?: string;
+  studentId?: string;
+  registrationId?: string;
 }
 
 const getCanteenName = (item: MenuItem, canteens: Canteen[]): string => {
@@ -81,6 +84,9 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
   institutionName,
   dbBanners,
   canteens,
+  studentName,
+  studentId,
+  registrationId,
 }) => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [dietaryFilter, setDietaryFilter] = useState<'all' | 'veg' | 'non-veg'>('all');
@@ -339,7 +345,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
 
         {/* ── ActiveLiveOrder (CurrentActiveOrderCard) ────────────── */}
         {activeOrders.length > 0 && (
-          <ActiveLiveOrder orders={activeOrders} onTrack={onTrackOrder} onQrOpen={onQrOpen} />
+          <ActiveLiveOrder orders={activeOrders} onTrack={onTrackOrder} onQrOpen={onQrOpen} studentName={studentName} studentId={studentId} registrationId={registrationId} />
         )}
 
         {/* ── AI Recommendation Card ─────────────────────────── */}

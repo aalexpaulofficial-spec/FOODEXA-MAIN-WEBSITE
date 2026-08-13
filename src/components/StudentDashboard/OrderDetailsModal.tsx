@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { X, Building2, MapPin, Clock, CreditCard, Hash, QrCode, Package, CheckCircle2, XCircle, Calendar, Tag } from 'lucide-react';
+import { X, Building2, MapPin, Clock, CreditCard, Hash, QrCode, Package, CheckCircle2, XCircle, Calendar, Tag, User } from 'lucide-react';
 import type { Order } from '../../types';
 import { formatINR, formatDateTime } from '../../lib/supabase-service';
 
@@ -9,6 +9,12 @@ interface OrderDetailsModalProps {
   onClose: () => void;
   order: Order;
   institutionName: string;
+  studentName?: string;
+  studentId?: string;
+  registrationId?: string;
+  itemsLoading?: boolean;
+  itemsError?: string;
+  onRetryItems?: () => void;
 }
 
 const statusLabel = (s: Order['status']): string => {
@@ -35,13 +41,19 @@ const statusStyle = (s: Order['status']): string => {
   return m[s] || 'bg-slate-100 text-slate-600 border-slate-200';
 };
 
-export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, order, institutionName }) => {
+export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, order, institutionName, studentName, studentId, registrationId, itemsLoading, itemsError, onRetryItems }) => {
   if (!isOpen) return null;
 
-  const orderNumber = order.order_number || order.order_id || '';
+  const orderNumber = order.order_number
+    ? `#FX-${String(order.order_number).padStart(4, '0')}`
+    : order.order_id || '';
   const pickupCode = order.pickup_code || order.pickup_token || '';
   const tokenNumber = order.token_number || order.pickup_token || '';
-  const invoiceNumber = `INV-${orderNumber.replace('#FX-', '').replace('FDX-', '')}`;
+  const counterName = order.counter_name || order.counter || 'N/A';
+  const canteenName = order.canteen_name || '';
+  const displayStudentName = studentName || order.customer_name || 'Student';
+  const displayStudentId = studentId || order.registration_id || 'N/A';
+  const displayRegId = registrationId || order.registration_id || 'N/A';
   const paymentMethod = order.payment_method === 'razorpay' ? 'UPI / Razorpay'
     : order.payment_method === 'cash' ? 'Cash at Counter'
     : order.payment_method === 'wallet' ? 'FOODEXA Wallet'
@@ -83,7 +95,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, on
             </span>
           </div>
 
-          {/* Institution & Canteen */}
+          {/* Institution & Canteen & Counter */}
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
               <div className="flex items-center gap-1.5 mb-1">
@@ -92,15 +104,47 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, on
               </div>
               <p className="text-sm font-bold text-slate-900 truncate">{institutionName}</p>
             </div>
-            {order.counter && (
+            {canteenName && (
               <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
                 <div className="flex items-center gap-1.5 mb-1">
                   <MapPin className="w-3.5 h-3.5 text-slate-400" />
                   <p className="text-[10px] font-bold text-slate-400 uppercase">Canteen</p>
                 </div>
-                <p className="text-sm font-bold text-slate-900 truncate">{order.counter}</p>
+                <p className="text-sm font-bold text-slate-900 truncate">{canteenName}</p>
               </div>
             )}
+            <div className="rounded-xl bg-blue-50 p-3 border border-blue-100">
+              <div className="flex items-center gap-1.5 mb-1">
+                <MapPin className="w-3.5 h-3.5 text-blue-400" />
+                <p className="text-[10px] font-bold text-blue-400 uppercase">Counter</p>
+              </div>
+              <p className="text-sm font-black text-blue-700 truncate">{counterName}</p>
+            </div>
+          </div>
+
+          {/* Student Identity */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+              <div className="flex items-center gap-1.5 mb-1">
+                <User className="w-3.5 h-3.5 text-slate-400" />
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Student</p>
+              </div>
+              <p className="text-sm font-bold text-slate-900 truncate">{displayStudentName}</p>
+            </div>
+            <div className="rounded-xl bg-emerald-50 p-3 border border-emerald-100">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Hash className="w-3.5 h-3.5 text-emerald-400" />
+                <p className="text-[10px] font-bold text-emerald-400 uppercase">Student ID</p>
+              </div>
+              <p className="text-sm font-black text-emerald-700 truncate">{displayStudentId}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Hash className="w-3.5 h-3.5 text-slate-400" />
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Registration ID</p>
+              </div>
+              <p className="text-sm font-bold text-slate-900 truncate">{displayRegId}</p>
+            </div>
           </div>
 
           {/* Pickup & Token */}
@@ -153,7 +197,21 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, on
               <h3 className="text-sm font-bold text-slate-900">Ordered Items ({order.items.length})</h3>
             </div>
             <div className="divide-y divide-slate-100">
-              {order.items.length === 0 ? (
+              {itemsLoading ? (
+                <div className="px-4 py-6 text-center text-sm text-slate-500 font-semibold">Loading order items...</div>
+              ) : itemsError ? (
+                <div className="px-4 py-6 text-center">
+                  <p className="text-sm text-red-500 font-semibold">Unable to load order items.</p>
+                  {onRetryItems && (
+                    <button
+                      onClick={onRetryItems}
+                      className="mt-2 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors"
+                    >
+                      Retry
+                    </button>
+                  )}
+                </div>
+              ) : order.items.length === 0 ? (
                 <div className="px-4 py-4 text-center text-sm text-slate-400">No items recorded</div>
               ) : (
                 order.items.map((item, i) => (
@@ -174,7 +232,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, on
                         </div>
                       )}
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-slate-500">{item.quantity}x</span>
+                        <span className="text-xs text-slate-500">x{item.quantity}</span>
                         <span className="text-xs text-slate-400">·</span>
                         <span className="text-xs text-slate-500">{formatINR(item.price)} each</span>
                       </div>
@@ -204,14 +262,23 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, on
 
           {/* Pricing Breakdown */}
           <div className="rounded-2xl border border-slate-200 p-4 space-y-2.5">
-            <div className="flex justify-between text-sm text-slate-600">
-              <span>Subtotal</span>
-              <span className="font-bold text-slate-900">{formatINR(subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-sm text-slate-600">
-              <span>Convenience Fee</span>
-              <span className="font-bold text-slate-900">{formatINR(convenienceFee)}</span>
-            </div>
+            {itemsLoading || itemsError || order.items.length === 0 ? (
+              <div className="flex justify-between text-sm text-slate-500">
+                <span>Subtotal</span>
+                <span>{itemsLoading ? 'Calculating...' : '—'}</span>
+              </div>
+            ) : (
+              <div className="flex justify-between text-sm text-slate-600">
+                <span>Subtotal</span>
+                <span className="font-bold text-slate-900">{formatINR(subtotal)}</span>
+              </div>
+            )}
+            {convenienceFee > 0 && (
+              <div className="flex justify-between text-sm text-slate-600">
+                <span>Convenience Fee</span>
+                <span className="font-bold text-slate-900">{formatINR(convenienceFee)}</span>
+              </div>
+            )}
             {discount > 0 && (
               <div className="flex justify-between text-sm text-emerald-600">
                 <span>Discount</span>

@@ -237,7 +237,8 @@ export const OrderCompletionScreen: React.FC<OrderCompletionScreenProps> = ({
           {/* Order Details */}
           <div className="px-4 sm:px-6 pb-4 sm:pb-5 space-y-2.5">
             <DetailRow icon={Building2} label="Institution" value={institutionName} />
-            {order.counter && <DetailRow icon={MapPin} label="Canteen / Counter" value={order.counter} />}
+            {(order.counter_name || order.counter) && <DetailRow icon={MapPin} label="Counter" value={order.counter_name || order.counter || ''} />}
+            {order.canteen_name && <DetailRow icon={MapPin} label="Canteen" value={order.canteen_name} />}
             <DetailRow
               icon={Calendar}
               label="Date & Time"

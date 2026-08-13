@@ -331,6 +331,8 @@ export interface Order {
   cancelled_at?: string | null;
   cancelled_by?: string | null;
   counter?: string;
+  counter_name?: string | null;
+  canteen_name?: string | null;
   institution_code?: string | null;
 }
 

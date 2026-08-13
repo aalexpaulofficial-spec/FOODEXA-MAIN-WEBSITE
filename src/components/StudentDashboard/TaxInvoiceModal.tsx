@@ -10,9 +10,14 @@ interface TaxInvoiceModalProps {
   order: Order;
   institutionName: string;
   studentName?: string;
+  studentId?: string;
+  registrationId?: string;
+  itemsLoading?: boolean;
+  itemsError?: string;
+  onRetryItems?: () => void;
 }
 
-export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClose, order, institutionName, studentName }) => {
+export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClose, order, institutionName, studentName, studentId, registrationId, itemsLoading, itemsError, onRetryItems }) => {
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen) return null;
@@ -27,12 +32,16 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
     : order.payment_method === 'cash' ? 'Cash at Counter'
     : order.payment_method === 'wallet' ? 'FOODEXA Wallet'
     : order.payment_method || 'N/A';
-  const paymentId = order.razorpay_payment_id || '';
   const orderDate = order.created_at ? formatDateTime(order.created_at) : '';
   const studentDisplayName = studentName || order.customer_name || 'Student';
+  const displayStudentId = studentId || order.registration_id || 'N/A';
+  const displayRegId = registrationId || order.registration_id || 'N/A';
+  const counterName = order.counter_name || order.counter || 'N/A';
+  const canteenName = order.canteen_name || '';
 
   const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const convenienceFee = 0;
+  const tax = 0;
   const discount = order.total_amount < subtotal ? subtotal - order.total_amount : 0;
   const grandTotal = order.total_amount;
 
@@ -83,36 +92,35 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
         <div class="invoice-number">${invoiceNumber}</div>
         <div class="grid">
           <div class="info-box">
-            <div class="info-label">Order Number</div>
-            <div class="info-value">${orderNumber}</div>
-          </div>
-          <div class="info-box">
-            <div class="info-label">Status</div>
-            <div class="info-value"><span class="status-badge">${order.status.toUpperCase()}</span></div>
-          </div>
-          <div class="info-box">
             <div class="info-label">Student</div>
             <div class="info-value">${studentDisplayName}</div>
           </div>
           <div class="info-box">
             <div class="info-label">Student ID</div>
-            <div class="info-value">${order.student_id ? String(order.student_id).toUpperCase() : 'N/A'}</div>
+            <div class="info-value">${displayStudentId}</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Registration ID</div>
+            <div class="info-value">${displayRegId}</div>
           </div>
           <div class="info-box">
             <div class="info-label">Institution</div>
             <div class="info-value">${institutionName}</div>
           </div>
           <div class="info-box">
-            <div class="info-label">Pickup Counter</div>
-            <div class="info-value">${order.counter || 'N/A'}</div>
+            <div class="info-label">Canteen</div>
+            <div class="info-value">${canteenName || 'N/A'}</div>
           </div>
-          ${pickupCode ? `<div class="info-box"><div class="info-label">Pickup Code</div><div class="info-value">${pickupCode}</div></div>` : ''}
+          <div class="info-box">
+            <div class="info-label">Counter</div>
+            <div class="info-value">${counterName}</div>
+          </div>
           ${tokenNumber ? `<div class="info-box"><div class="info-label">Token Number</div><div class="info-value">${tokenNumber}</div></div>` : ''}
+          ${pickupCode ? `<div class="info-box"><div class="info-label">Pickup Code</div><div class="info-value">${pickupCode}</div></div>` : ''}
           <div class="info-box">
             <div class="info-label">Payment Method</div>
             <div class="info-value">${paymentMethod}</div>
           </div>
-          ${paymentId ? `<div class="info-box"><div class="info-label">Payment ID</div><div class="info-value" style="font-size:11px;word-break:break-all">${paymentId}</div></div>` : ''}
           <div class="info-box">
             <div class="info-label">Order Date</div>
             <div class="info-value">${orderDate}</div>
@@ -128,10 +136,16 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
             </tr>
           </thead>
           <tbody>
-            ${order.items.map(item => `
+            ${itemsLoading ? `
+              <tr><td colspan="4" style="padding:20px;text-align:center;color:#64748b;font-weight:600">Loading order items...</td></tr>
+            ` : itemsError ? `
+              <tr><td colspan="4" style="padding:20px;text-align:center;color:#ef4444;font-weight:600">Unable to load order items.</td></tr>
+            ` : order.items.length === 0 ? `
+              <tr><td colspan="4" style="padding:20px;text-align:center;color:#94a3b8;font-weight:600">No items recorded for this order</td></tr>
+            ` : order.items.map(item => `
               <tr>
                 <td style="font-weight:600">${item.name}</td>
-                <td class="qty" style="text-align:center">${item.quantity}</td>
+                <td class="qty" style="text-align:center">x${item.quantity}</td>
                 <td class="price" style="text-align:right">${formatINR(item.price)}</td>
                 <td class="price" style="text-align:right">${formatINR(item.price * item.quantity)}</td>
               </tr>
@@ -139,9 +153,14 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
           </tbody>
         </table>
         <div class="totals">
-          <div class="total-row"><span>Subtotal</span><span>${formatINR(subtotal)}</span></div>
-          <div class="total-row"><span>Convenience Fee</span><span>${formatINR(convenienceFee)}</span></div>
-          ${discount > 0 ? `<div class="total-row" style="color:#059669"><span>Discount</span><span>-${formatINR(discount)}</span></div>` : ''}
+          ${itemsLoading || itemsError || order.items.length === 0 ? `
+            <div class="total-row"><span>Subtotal</span><span>${itemsLoading ? 'Calculating...' : '—'}</span></div>
+          ` : `
+            <div class="total-row"><span>Subtotal</span><span>${formatINR(subtotal)}</span></div>
+            ${convenienceFee > 0 ? `<div class="total-row"><span>Convenience Fee</span><span>${formatINR(convenienceFee)}</span></div>` : ''}
+            ${tax > 0 ? `<div class="total-row"><span>Tax</span><span>${formatINR(tax)}</span></div>` : ''}
+            ${discount > 0 ? `<div class="total-row" style="color:#059669"><span>Discount</span><span>-${formatINR(discount)}</span></div>` : ''}
+          `}
           <div class="total-row grand"><span>Grand Total</span><span>${formatINR(grandTotal)}</span></div>
         </div>
         <div class="footer">
@@ -230,7 +249,11 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
               </div>
               <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Student ID</p>
-                <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 truncate">{order.student_id ? String(order.student_id).toUpperCase() : 'N/A'}</p>
+                <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 truncate">{displayStudentId}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Registration ID</p>
+                <p className="text-sm font-black text-blue-700 dark:text-blue-400 truncate">{displayRegId}</p>
               </div>
               <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-1 mb-0.5">
@@ -239,12 +262,21 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
                 </div>
                 <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{institutionName}</p>
               </div>
+              {canteenName && (
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <MapPin className="w-3 h-3 text-slate-400" />
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Canteen</p>
+                  </div>
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{canteenName}</p>
+                </div>
+              )}
               <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-1 mb-0.5">
                   <MapPin className="w-3 h-3 text-slate-400" />
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Pickup Counter</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Counter</p>
                 </div>
-                <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{order.counter || 'N/A'}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{counterName}</p>
               </div>
               {pickupCode && (
                 <div className="rounded-xl bg-blue-50 dark:bg-blue-950/30 p-3 border border-blue-100 dark:border-blue-900/40">
@@ -271,15 +303,6 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
                 </div>
                 <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{paymentMethod}</p>
               </div>
-              {paymentId && (
-                <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-1 mb-0.5">
-                    <CreditCard className="w-3 h-3 text-slate-400" />
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Payment ID</p>
-                  </div>
-                  <p className="text-[10px] font-mono font-bold text-slate-900 dark:text-slate-100 break-all">{paymentId}</p>
-                </div>
-              )}
               <div className="rounded-xl bg-slate-50 dark:bg-slate-800 p-3 border border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-1 mb-0.5">
                   <Calendar className="w-3 h-3 text-slate-400" />
@@ -301,47 +324,96 @@ export const TaxInvoiceModal: React.FC<TaxInvoiceModalProps> = ({ isOpen, onClos
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {order.items.map((item, i) => (
-                    <tr key={i}>
-                      <td className="px-4 py-2.5">
-                        <p className="text-sm font-bold text-slate-900">{item.name}</p>
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        <span className="text-sm font-bold text-slate-700">{item.quantity}</span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <span className="text-sm text-slate-600">{formatINR(item.price)}</span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <span className="text-sm font-bold text-slate-900">{formatINR(item.price * item.quantity)}</span>
+                  {itemsLoading ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-6 text-center text-sm text-slate-500 font-semibold">
+                        Loading order items...
                       </td>
                     </tr>
-                  ))}
+                  ) : itemsError ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-6 text-center">
+                        <p className="text-sm text-red-500 font-semibold">Unable to load order items.</p>
+                        {onRetryItems && (
+                          <button
+                            onClick={onRetryItems}
+                            className="mt-2 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors"
+                          >
+                            Retry
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ) : order.items.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-6 text-center text-sm text-slate-400 font-semibold">
+                        No items recorded for this order
+                      </td>
+                    </tr>
+                  ) : (
+                    order.items.map((item, i) => (
+                      <tr key={i}>
+                        <td className="px-4 py-2.5">
+                          <p className="text-sm font-bold text-slate-900">{item.name}</p>
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <span className="text-sm font-bold text-slate-700">x{item.quantity}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <span className="text-sm text-slate-600">{formatINR(item.price)}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <span className="text-sm font-bold text-slate-900">{formatINR(item.price * item.quantity)}</span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
 
             {/* Pricing */}
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm text-slate-600">
-                <span>Subtotal</span>
-                <span className="font-bold text-slate-900">{formatINR(subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-sm text-slate-600">
-                <span>Convenience Fee</span>
-                <span className="font-bold text-slate-900">{formatINR(convenienceFee)}</span>
-              </div>
-              {discount > 0 && (
-                <div className="flex justify-between text-sm text-emerald-600">
-                  <span>Discount</span>
-                  <span className="font-bold">-{formatINR(discount)}</span>
+            {itemsLoading || itemsError || order.items.length === 0 ? (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm text-slate-500">
+                  <span>Subtotal</span>
+                  <span>{itemsLoading ? 'Calculating...' : '—'}</span>
                 </div>
-              )}
-              <div className="border-t-2 border-slate-900 pt-2.5 flex justify-between">
-                <span className="text-base font-bold text-slate-900">Grand Total</span>
-                <span className="text-xl font-black text-slate-900">{formatINR(grandTotal)}</span>
+                <div className="border-t-2 border-slate-900 pt-2.5 flex justify-between">
+                  <span className="text-base font-bold text-slate-900">Grand Total</span>
+                  <span className="text-xl font-black text-slate-900">{formatINR(grandTotal)}</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm text-slate-600">
+                  <span>Subtotal</span>
+                  <span className="font-bold text-slate-900">{formatINR(subtotal)}</span>
+                </div>
+                {convenienceFee > 0 && (
+                  <div className="flex justify-between text-sm text-slate-600">
+                    <span>Convenience Fee</span>
+                    <span className="font-bold text-slate-900">{formatINR(convenienceFee)}</span>
+                  </div>
+                )}
+                {tax > 0 && (
+                  <div className="flex justify-between text-sm text-slate-600">
+                    <span>Tax</span>
+                    <span className="font-bold text-slate-900">{formatINR(tax)}</span>
+                  </div>
+                )}
+                {discount > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-600">
+                    <span>Discount</span>
+                    <span className="font-bold">-{formatINR(discount)}</span>
+                  </div>
+                )}
+                <div className="border-t-2 border-slate-900 pt-2.5 flex justify-between">
+                  <span className="text-base font-bold text-slate-900">Grand Total</span>
+                  <span className="text-xl font-black text-slate-900">{formatINR(grandTotal)}</span>
+                </div>
+              </div>
+            )}
 
             {/* Footer */}
             <div className="text-center pt-4 border-t border-slate-200">

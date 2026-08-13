@@ -38,6 +38,11 @@ interface HistoryTabProps {
   institutionName: string;
   userId: string;
   studentName?: string;
+  studentId?: string;
+  registrationId?: string;
+  itemsLoading?: boolean;
+  itemsError?: string;
+  onRetryItems?: () => void;
   triggerToast?: (title: string, description: string, type?: 'success' | 'warning' | 'info') => void;
 }
 
@@ -48,6 +53,11 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
   institutionName,
   userId,
   studentName,
+  studentId,
+  registrationId,
+  itemsLoading,
+  itemsError,
+  onRetryItems,
   triggerToast,
 }) => {
   const [detailsOrder, setDetailsOrder] = useState<Order | null>(null);
@@ -73,10 +83,10 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
         </div>
 
         {detailsOrder && (
-          <OrderDetailsModal isOpen={true} onClose={() => setDetailsOrder(null)} order={detailsOrder} institutionName={institutionName} />
+          <OrderDetailsModal isOpen={true} onClose={() => setDetailsOrder(null)} order={detailsOrder} institutionName={institutionName} studentName={studentName} studentId={studentId} registrationId={registrationId} itemsLoading={itemsLoading} itemsError={itemsError} onRetryItems={onRetryItems} />
         )}
         {invoiceOrder && (
-          <TaxInvoiceModal isOpen={true} onClose={() => setInvoiceOrder(null)} order={invoiceOrder} institutionName={institutionName} studentName={studentName} />
+          <TaxInvoiceModal isOpen={true} onClose={() => setInvoiceOrder(null)} order={invoiceOrder} institutionName={institutionName} studentName={studentName} studentId={studentId} registrationId={registrationId} itemsLoading={itemsLoading} itemsError={itemsError} onRetryItems={onRetryItems} />
         )}
         {ratingOrder && (
           <OrderRatingModal isOpen={true} onClose={() => setRatingOrder(null)} order={ratingOrder} userId={userId} triggerToast={triggerToast} />
@@ -135,7 +145,9 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                 <div className="px-4 py-3 space-y-2">
                   <div className="flex items-center gap-1.5 text-xs text-slate-400">
                     <MapPin className="w-3 h-3" />
-                    <span className="font-medium">{order.counter || institutionName}</span>
+                    <span className="font-medium">
+                      {order.counter_name || order.counter || ''}{order.canteen_name ? ` · ${order.canteen_name}` : ''}
+                    </span>
                   </div>
 
                   <div className="space-y-1">
@@ -223,10 +235,10 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
 
       {/* Modals */}
       {detailsOrder && (
-        <OrderDetailsModal isOpen={true} onClose={() => setDetailsOrder(null)} order={detailsOrder} institutionName={institutionName} />
+        <OrderDetailsModal isOpen={true} onClose={() => setDetailsOrder(null)} order={detailsOrder} institutionName={institutionName} studentName={studentName} studentId={studentId} registrationId={registrationId} itemsLoading={itemsLoading} itemsError={itemsError} onRetryItems={onRetryItems} />
       )}
       {invoiceOrder && (
-        <TaxInvoiceModal isOpen={true} onClose={() => setInvoiceOrder(null)} order={invoiceOrder} institutionName={institutionName} studentName={studentName} />
+        <TaxInvoiceModal isOpen={true} onClose={() => setInvoiceOrder(null)} order={invoiceOrder} institutionName={institutionName} studentName={studentName} studentId={studentId} registrationId={registrationId} itemsLoading={itemsLoading} itemsError={itemsError} onRetryItems={onRetryItems} />
       )}
       {ratingOrder && (
         <OrderRatingModal isOpen={true} onClose={() => setRatingOrder(null)} order={ratingOrder} userId={userId} triggerToast={triggerToast} />

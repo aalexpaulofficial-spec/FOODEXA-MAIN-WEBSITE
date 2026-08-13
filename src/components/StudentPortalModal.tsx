@@ -340,7 +340,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const effectiveRole = user ? (profile?.role || null) : (directSession ? directSession.role : null);
 
   // Supabase Realtime orders — single source of truth
-  const { orders, activeOrders, pastOrders, loading: ordersLoading, error: ordersError, refresh: refreshOrders } = useSupabaseOrders({
+  const { orders, activeOrders, pastOrders, loading: ordersLoading, error: ordersError, itemsLoading: orderItemsLoading, itemsError: orderItemsError, refresh: refreshOrders } = useSupabaseOrders({
     userId: effectiveUserId,
     enabled: isOpen && !!effectiveUserId,
   });
@@ -1424,10 +1424,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
       {/* Order Detail Modals */}
       {detailsOrder && (
-        <OrderDetailsModal isOpen={true} onClose={() => setDetailsOrder(null)} order={detailsOrder} institutionName={institutionName} />
+        <OrderDetailsModal isOpen={true} onClose={() => setDetailsOrder(null)} order={detailsOrder} institutionName={institutionName} studentName={effectiveProfile?.full_name || user?.email} studentId={effectiveProfile?.student_id || undefined} registrationId={effectiveProfile?.registration_id || undefined} itemsLoading={orderItemsLoading} itemsError={orderItemsError || undefined} onRetryItems={refreshOrders} />
       )}
       {invoiceOrder && (
-        <TaxInvoiceModal isOpen={true} onClose={() => setInvoiceOrder(null)} order={invoiceOrder} institutionName={institutionName} studentName={profile?.full_name || user?.email} />
+        <TaxInvoiceModal isOpen={true} onClose={() => setInvoiceOrder(null)} order={invoiceOrder} institutionName={institutionName} studentName={effectiveProfile?.full_name || user?.email} studentId={effectiveProfile?.student_id || undefined} registrationId={effectiveProfile?.registration_id || undefined} itemsLoading={orderItemsLoading} itemsError={orderItemsError || undefined} onRetryItems={refreshOrders} />
       )}
       {ratingOrder && (
         <OrderRatingModal isOpen={true} onClose={() => setRatingOrder(null)} order={ratingOrder} userId={user?.id || ''} triggerToast={triggerToast} />
@@ -1525,6 +1525,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     institutionName={institutionName}
                     dbBanners={banners}
                     canteens={canteens}
+                    studentName={effectiveProfile?.full_name || user?.email}
+                    studentId={effectiveProfile?.student_id || undefined}
+                    registrationId={effectiveProfile?.registration_id || undefined}
                   />
                 )}
 
@@ -1559,6 +1562,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     institutionName={institutionName}
                     userId={effectiveUserId}
                     studentName={effectiveProfile?.full_name || user?.email}
+                    studentId={effectiveProfile?.student_id || undefined}
+                    registrationId={effectiveProfile?.registration_id || undefined}
+                    itemsLoading={orderItemsLoading}
+                    itemsError={orderItemsError || undefined}
+                    onRetryItems={refreshOrders}
                     triggerToast={triggerToast}
                     onReorder={(order) => {
                       order.items.forEach((item) => {
@@ -1761,7 +1769,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                    const completed = isOrderCompleted(o?.status);
                    const cancelled = isOrderCancelled(o?.status);
 
-                    if (!o && paidPendingConfirmation) {
+if (!o && paidPendingConfirmation) {
                       return (
                         <div className="max-w-md mx-auto space-y-5 py-10 text-center">
                           <div className="w-24 h-24 mx-auto bg-emerald-50 border border-emerald-200 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/10">
@@ -1771,16 +1779,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                             <p className="text-xs font-black uppercase tracking-widest text-emerald-600">Payment Successful</p>
                             <h2 className="text-2xl font-black text-slate-900">Order Confirmation Pending</h2>
                             <p className="text-sm text-slate-600 font-semibold">{paidPendingConfirmation.message}</p>
-                          </div>
-                          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-left space-y-3">
-                            <div>
-                              <p className="text-[10px] font-bold uppercase text-slate-400">Payment ID</p>
-                              <p className="text-xs font-mono font-bold text-slate-900 break-all">{paidPendingConfirmation.razorpay_payment_id}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-bold uppercase text-slate-400">Razorpay Order</p>
-                              <p className="text-xs font-mono font-bold text-slate-900 break-all">{paidPendingConfirmation.razorpay_order_id}</p>
-                            </div>
                           </div>
                           <button
                             onClick={async () => { await refreshOrders(); }}
@@ -1871,7 +1869,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                          </div>
                        </div>
 
-                       {/* Live Detail Grid */}
+{/* Live Detail Grid */}
                        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
                          <h3 className="font-bold text-slate-900 mb-4">Order Details</h3>
                          <div className="grid grid-cols-2 gap-3 text-xs">
@@ -1880,21 +1878,29 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.token_number || o?.pickup_token || '—'}</p>
                            </div>
                            <div className="bg-slate-50 rounded-xl p-3">
+                             <p className="text-[10px] text-gray-500 font-bold uppercase">Pickup Code</p>
+                             <p className="text-sm font-black text-emerald-700 mt-0.5">{pickupCode || '—'}</p>
+                           </div>
+                           <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+                             <p className="text-[10px] text-blue-500 font-bold uppercase">Pickup Counter</p>
+                             <p className="text-sm font-black text-blue-700 mt-0.5">{o?.counter_name || o?.counter || '—'}</p>
+                           </div>
+                           <div className="bg-slate-50 rounded-xl p-3">
                              <p className="text-[10px] text-gray-500 font-bold uppercase">Kitchen Status</p>
                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.kitchen_status || '—'}</p>
                            </div>
-                            <div className="bg-slate-50 rounded-xl p-3">
-                              <p className="text-[10px] text-gray-500 font-bold uppercase">Counter Status</p>
-                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.counter_status || '—'}</p>
-                            </div>
-                            <div className="bg-slate-50 rounded-xl p-3">
-                              <p className="text-[10px] text-gray-500 font-bold uppercase">Student ID</p>
-                              <p className="text-sm font-black text-emerald-700 mt-0.5">{o?.student_id ? String(o.student_id).toUpperCase() : '—'}</p>
-                            </div>
-                            <div className="bg-slate-50 rounded-xl p-3">
-                              <p className="text-[10px] text-gray-500 font-bold uppercase">Pickup Counter</p>
-                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.counter || '—'}</p>
-                            </div>
+                           <div className="bg-slate-50 rounded-xl p-3">
+                             <p className="text-[10px] text-gray-500 font-bold uppercase">Counter Status</p>
+                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.counter_status || '—'}</p>
+                           </div>
+                           <div className="bg-slate-50 rounded-xl p-3">
+                             <p className="text-[10px] text-gray-500 font-bold uppercase">Student ID</p>
+                             <p className="text-sm font-black text-emerald-700 mt-0.5">{effectiveProfile?.student_id || o?.registration_id || '—'}</p>
+                           </div>
+                           <div className="bg-slate-50 rounded-xl p-3">
+                             <p className="text-[10px] text-gray-500 font-bold uppercase">Registration ID</p>
+                             <p className="text-sm font-black text-slate-900 mt-0.5">{effectiveProfile?.registration_id || '—'}</p>
+                           </div>
                            <div className="bg-slate-50 rounded-xl p-3">
                              <p className="text-[10px] text-gray-500 font-bold uppercase">Order Status</p>
                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.order_status || o?.status || '—'}</p>
@@ -1908,6 +1914,34 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.items?.length ?? 0} item(s)</p>
                            </div>
                          </div>
+                       </div>
+
+                       {/* Items & Counter */}
+                       <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
+                         <div className="flex items-center justify-between mb-3">
+                           <h3 className="font-bold text-slate-900">Your Items</h3>
+                           <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-bold border border-blue-100">
+                             {o?.counter_name || o?.counter || 'Counter'}
+                           </span>
+                         </div>
+                         {o && o.items.length > 0 ? (
+                           <div className="space-y-2">
+                             {o.items.map((it, i) => (
+                               <div key={i} className="flex items-center justify-between text-sm">
+                                 <span className="text-slate-800 font-semibold">
+                                   {it.name} <span className="text-blue-600 font-black">x{it.quantity}</span>
+                                 </span>
+                                 <span className="text-slate-900 font-bold">{formatINR(it.price * it.quantity)}</span>
+                               </div>
+                             ))}
+                             <div className="border-t border-slate-100 pt-2 flex items-center justify-between">
+                               <span className="text-xs font-bold text-slate-500 uppercase">Total</span>
+                               <span className="text-base font-black text-slate-900">{formatINR(o.total_amount)}</span>
+                             </div>
+                           </div>
+                         ) : (
+                           <p className="text-sm text-slate-400 font-semibold">Loading order items...</p>
+                         )}
                        </div>
 
                        {/* 4-Step Vertical Tracker driven by DB status (single source of truth) */}

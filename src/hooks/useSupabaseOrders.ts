@@ -14,6 +14,8 @@ interface UseSupabaseOrdersReturn {
   pastOrders: Order[];
   loading: boolean;
   error: string | null;
+  itemsLoading: boolean;
+  itemsError: string | null;
   refresh: () => Promise<void>;
 }
 
@@ -39,16 +41,18 @@ function mapJoinedItems(orderRow: any): OrderItem[] {
   if (Array.isArray(joinedItems) && joinedItems.length > 0) {
     return joinedItems.map((oi: any) => {
       const mi = oi.menu_items;
+      const snapshotName = String(oi.name || '').trim();
+      const snapshotPrice = Number(oi.price);
       return {
         id: String(oi.id || ''),
         order_id: String(oi.order_id || ''),
         menu_item_id: String(oi.menu_item_id || ''),
-        name: String(mi?.food_name || 'Item'),
-        variant: String(mi?.category_name || mi?.food_type || ''),
+        name: snapshotName || String(mi?.food_name || 'Item'),
+        variant: String(mi?.category_name || mi?.food_type || oi.variant || ''),
         quantity: Number(oi.quantity || 1),
-        price: Number(oi.price || 0),
-        image_url: mi?.image_url || null,
-        is_veg: mi?.is_veg !== undefined ? mi.is_veg : null,
+        price: !isNaN(snapshotPrice) && snapshotPrice >= 0 ? snapshotPrice : Number(mi?.price || 0),
+        image_url: mi?.image_url || oi.image_url || null,
+        is_veg: oi.is_veg !== undefined ? oi.is_veg : (mi?.is_veg !== undefined ? mi.is_veg : null),
       };
     });
   }
@@ -68,7 +72,7 @@ function mapJoinedItems(orderRow: any): OrderItem[] {
 
 function mapOrderRow(r: any): Order {
   const authUserId = String(r.student_id || r.user_id || '');
-  const counterCode = r.counter_code || r.counter_name || r.counter || 'Counter assignment pending';
+  const counterCode = r.counter_code || r.counter_name || r.counter || '';
   
   return {
     id: String(r.id),
@@ -86,6 +90,8 @@ function mapOrderRow(r: any): Order {
     order_id: r.order_number ? `#FX-${String(r.order_number).padStart(4, '0')}` : `#FX-${String(r.id).slice(-4).toUpperCase()}`,
     order_number: r.order_number || undefined,
     counter: counterCode,
+    counter_name: r._resolved_counter_name || r.counter_name || counterCode || null,
+    canteen_name: r._resolved_canteen_name || r.canteen_name || null,
     items: mapJoinedItems(r),
     total_amount: Number(r.total_amount || 0),
     transaction_amount: Number(r.transaction_amount || r.total_amount || 0),
@@ -121,13 +127,15 @@ function mapOrderRow(r: any): Order {
 }
 
 // Include counter_code, payment_status, order_status, paid_at, cancelled_at
-const ORDER_COLUMNS = 'id, student_id, registration_id, email, customer_name, phone, institution_id, canteen_id, counter_code, total_amount, transaction_amount, status, order_status, order_number, pickup_code, qr_code, qr_pickup_code, token_number, pickup_token, notes, kitchen_status, counter_status, estimated_ready_at, payment_status, created_at, accepted_at, preparing_at, ready_at, completed_at, updated_at, paid_at, cancelled_at, cancelled_by, payment_method, razorpay_order_id, razorpay_payment_id, razorpay_signature';
-const ORDER_ITEM_COLUMNS = 'id, order_id, menu_item_id, quantity, price, subtotal, created_at, menu_items(id, food_name, food_type, category_name, image_url, is_veg, price)';
+const ORDER_COLUMNS = 'id, student_id, registration_id, email, customer_name, phone, institution_id, canteen_id, counter_id, counter, counter_code, total_amount, transaction_amount, status, order_status, order_number, pickup_code, qr_code, qr_pickup_code, token_number, pickup_token, notes, kitchen_status, counter_status, estimated_ready_at, payment_status, created_at, accepted_at, preparing_at, ready_at, completed_at, updated_at, paid_at, cancelled_at, cancelled_by, payment_method, razorpay_order_id, razorpay_payment_id, razorpay_signature';
+const ORDER_ITEM_COLUMNS = 'id, order_id, menu_item_id, name, variant, quantity, price, subtotal, image_url, created_at, menu_items(id, food_name, food_type, category_name, image_url, is_veg, price)';
 
 export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersOptions): UseSupabaseOrdersReturn {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [itemsLoading, setItemsLoading] = useState(false);
+  const [itemsError, setItemsError] = useState<string | null>(null);
   const channelRef = useRef<any>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
@@ -169,14 +177,19 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
       let orderItems: any[] = [];
 
       if (orderIds.length > 0) {
+        if (mountedRef.current) setItemsLoading(true);
         const { data: itemRows, error: itemsError } = await supabase
           .from('order_items')
           .select(ORDER_ITEM_COLUMNS)
           .in('order_id', orderIds);
 
+        if (mountedRef.current) setItemsLoading(false);
+
         if (itemsError) {
           console.warn('[useSupabaseOrders] order_items fetch failed:', itemsError.message);
+          if (mountedRef.current) setItemsError(itemsError.message);
         } else {
+          if (mountedRef.current) setItemsError(null);
           orderItems = itemRows || [];
         }
       }
@@ -190,14 +203,45 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
         itemsByOrderId.set(key, current);
       }
 
+      // Resolve canteen and counter names from DB
+      const canteenIds = [...new Set(rows.map((r: any) => r.canteen_id).filter(Boolean))];
+      const counterCodes = [...new Set(rows.map((r: any) => r.counter_code || r.counter).filter(Boolean))];
+
+      const canteenNameMap = new Map<string, string>();
+      const counterNameMap = new Map<string, string>();
+
+      if (canteenIds.length > 0) {
+        const { data: canteenRows } = await supabase
+          .from('canteens')
+          .select('id, name')
+          .in('id', canteenIds);
+        for (const c of canteenRows || []) {
+          canteenNameMap.set(String(c.id), String(c.name || ''));
+        }
+      }
+
+      if (counterCodes.length > 0) {
+        const { data: counterRows } = await supabase
+          .from('counters')
+          .select('id, name, code')
+          .or(`id.in.(${counterCodes.join(',')}),code.in.(${counterCodes.join(',')})`);
+        for (const c of counterRows || []) {
+          if (c.id) counterNameMap.set(String(c.id), String(c.name || ''));
+          if (c.code) counterNameMap.set(String(c.code), String(c.name || ''));
+        }
+      }
+
       if (mountedRef.current) {
         setOrders(
-          rows.map((row: any) =>
-            mapOrderRow({
+          rows.map((row: any) => {
+            const counterKey = row.counter_id || row.counter_code || row.counter || '';
+            return mapOrderRow({
               ...row,
               order_items: itemsByOrderId.get(String(row.id)) || [],
-            })
-          )
+              _resolved_canteen_name: canteenNameMap.get(String(row.canteen_id || '')) || null,
+              _resolved_counter_name: counterNameMap.get(String(counterKey)) || row.counter_name || row.counter || null,
+            });
+          })
         );
         setError(null);
       }
@@ -227,9 +271,34 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
         .select(ORDER_ITEM_COLUMNS)
         .eq('order_id', orderId);
 
+      // Resolve canteen and counter names
+      let resolvedCanteenName: string | null = null;
+      let resolvedCounterName: string | null = null;
+
+      if (freshRow.canteen_id) {
+        const { data: canteenRow } = await supabase
+          .from('canteens')
+          .select('name')
+          .eq('id', freshRow.canteen_id)
+          .maybeSingle();
+        resolvedCanteenName = canteenRow?.name || null;
+      }
+
+      const counterKey = freshRow.counter_id || freshRow.counter_code || freshRow.counter || '';
+      if (counterKey) {
+        const { data: counterRow } = await supabase
+          .from('counters')
+          .select('name')
+          .or(`id.eq.${counterKey},code.eq.${counterKey}`)
+          .maybeSingle();
+        resolvedCounterName = counterRow?.name || freshRow.counter_code || freshRow.counter || null;
+      }
+
       const mapped = mapOrderRow({
         ...freshRow,
         order_items: itemsError ? [] : (itemRows || []),
+        _resolved_canteen_name: resolvedCanteenName,
+        _resolved_counter_name: resolvedCounterName,
       });
 
       if (mountedRef.current) {
@@ -248,6 +317,8 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
     if (!enabled || !userId) {
       setOrders([]);
       setLoading(false);
+      setItemsLoading(false);
+      setItemsError(null);
       return;
     }
 
@@ -325,5 +396,5 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
   const activeOrders = orders.filter(o => isOrderActive(o.status));
   const pastOrders = orders.filter(o => isOrderPast(o.status));
 
-  return { orders, activeOrders, pastOrders, loading, error, refresh };
+  return { orders, activeOrders, pastOrders, loading, error, itemsLoading, itemsError, refresh };
 }

@@ -1,29 +1,31 @@
 export const STUDENT_TIMELINE_LABELS = [
-  'Order Confirmed',
+  'Order Placed',
+  'Confirmed',
   'Preparing',
-  'Ready at Counter',
-  'Order Collected',
+  'Ready',
+  'Completed',
 ] as const;
 
 export const STUDENT_TIMELINE_DESCRIPTIONS = [
-  'Received at campus kitchen server',
+  'Your order has been received',
+  'Kitchen has confirmed your order',
   'Kitchen is preparing your order',
-  'Scan QR at counter screen',
+  'Ready for pickup at counter',
   'Enjoy your meal!',
 ] as const;
 
-export type TimelineStage = 0 | 1 | 2 | 3 | -1;
+export type TimelineStage = 0 | 1 | 2 | 3 | 4 | -1;
 
 export const ORDER_STATUS_TO_TIMELINE: Record<string, TimelineStage> = {
   pending: 0,
-  accepted: 0,
-  confirmed: 0,
-  preparing: 1,
-  cooking: 1,
-  quality_check: 1,
-  packed: 1,
-  ready: 2,
-  completed: 3,
+  accepted: 1,
+  confirmed: 1,
+  preparing: 2,
+  cooking: 2,
+  quality_check: 2,
+  packed: 2,
+  ready: 3,
+  completed: 4,
   cancelled: -1,
 };
 
@@ -40,7 +42,7 @@ export function getTimelineLabel(status: unknown): string {
   if (s === 'cancelled' || s === 'canceled' || s === 'refunded') return 'Order Cancelled';
   const stage = getTimelineStage(status);
   if (stage < 0) return 'Order Cancelled';
-  return STUDENT_TIMELINE_LABELS[stage as number] ?? 'Order Confirmed';
+  return STUDENT_TIMELINE_LABELS[stage as number] ?? 'Order Placed';
 }
 
 export function getTimelineDescription(status: unknown): string {
@@ -53,11 +55,11 @@ export function getTimelineDescription(status: unknown): string {
 
 export function isOrderActive(status: unknown): boolean {
   const stage = getTimelineStage(status);
-  return stage >= 0 && stage < 3;
+  return stage >= 0 && stage < 4;
 }
 
 export function isOrderCompleted(status: unknown): boolean {
-  return getTimelineStage(status) === 3;
+  return getTimelineStage(status) === 4;
 }
 
 export function isOrderCancelled(status: unknown): boolean {

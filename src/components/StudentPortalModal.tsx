@@ -1028,7 +1028,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     const menuItemIds = Array.from(new Set(cart.map((e) => e.item.id).filter(Boolean)));
     const { data: menuRows, error: menuErr } = await supabase
       .from('menu_items')
-      .select('id, institution_id, canteen_id, name')
+      .select('id, institution_id, canteen_id, food_name')
       .in('id', menuItemIds);
 
     if (menuErr) {
@@ -1052,7 +1052,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         return;
       }
       if (!m.canteen_id) {
-        const msg = `The item "${m.name}" is not assigned to a canteen yet.`;
+        const msg = `The item "${m.food_name}" is not assigned to a canteen yet.`;
         console.error('[FOODEXA PAYMENT ERROR] canteen', msg);
         setError(msg);
         resetPaymentButton();
@@ -1060,7 +1060,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         return;
       }
       if (m.institution_id && m.institution_id !== liveInstitutionId) {
-        const msg = `"${m.name}" belongs to another institution.`;
+        const msg = `"${m.food_name}" belongs to another institution.`;
         console.error('[FOODEXA PAYMENT ERROR] institution', msg);
         setError(msg);
         resetPaymentButton();

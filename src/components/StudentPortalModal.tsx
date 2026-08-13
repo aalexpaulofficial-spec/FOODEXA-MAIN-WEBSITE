@@ -905,88 +905,217 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   // Order is ONLY created in Supabase AFTER payment succeeds.
   // Institution never sees unpaid orders.
   const handlePlaceOrder = async () => {
-    // RULE 6/12: never block purely on a stale/missing role if the profile in
-    // Supabase already has one. Re-fetch the profile first, then only fail with a
-    // helpful message if the role is genuinely absent.
-    let resolvedRole: UserRole | null = effectiveRole;
-    if (!resolvedRole && user?.id) {
-      const { data: liveRow } = await supabase
-        .from('profiles')
-        .select('role, institution_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      if (liveRow?.role) {
-        resolvedRole = liveRow.role as UserRole;
-        await refreshProfile();
-      }
-    }
-    if (!resolvedRole) {
-      setError('Your profile is missing a role. Please complete your profile, or contact support if this persists.');
+    // Small helper so we NEVER leave the button stuck on "Opening secure payment...".
+    const resetPaymentButton = () => {
       setSubmittingOrder(false);
-      return;
-    }
-    if (!cart.length) return;
+      setPaymentInitStatus('idle');
+    };
 
-    setSubmittingOrder(true); setError(null);
+    setSubmittingOrder(true);
+    setError(null);
     setPaymentInitStatus('creating_order');
     console.log('[FOODEXA PAYMENT] Button clicked');
 
-    // Get institution_id — from profile (auth) or direct session
-    let liveInstitutionId: string | null = null;
-    if (user?.id) {
-      // Re-fetch institution_id fresh from DB — React state may be stale
-      const { data: freshProfileRow, error: profileFetchError } = await supabase
-        .from('profiles')
-        .select('institution_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+    // ── STEP 2: Authenticate the Supabase user ───────────────────────────
+    let authUserId: string | null = null;
+    let authEmail: string | null = null;
+    let isDirect = false;
 
-      if (profileFetchError) {
-        const msg = 'Unable to verify your profile. Please try again.';
-        setError(msg);
-        if (triggerToast) triggerToast('Profile Error', msg, 'warning');
-        setSubmittingOrder(false);
-        return;
-      }
-      liveInstitutionId = freshProfileRow?.institution_id || profile?.institution_id || null;
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authData?.user) {
+      authUserId = authData.user.id;
+      authEmail = authData.user.email || null;
+      console.log('[FOODEXA PAYMENT] Auth user:', authUserId);
     } else if (directSession) {
-      // Direct user — institution from temporary session
-      liveInstitutionId = directSession.institutionId;
-    }
-
-    if (!liveInstitutionId) {
-      const msg = 'You must join an institution before placing an order.';
+      isDirect = true;
+      authUserId = `direct_${directSession.temporarySessionId || directSession.institutionId || 'guest'}`;
+      authEmail = directSession.email || null;
+      console.log('[FOODEXA PAYMENT] Auth user:', authUserId, '(direct session)');
+    } else {
+      const msg = 'Your session has expired. Please sign in again.';
+      console.error('[FOODEXA PAYMENT ERROR] auth', msg);
       setError(msg);
-      if (triggerToast) triggerToast('Missing Institution', msg, 'warning');
-      setSubmittingOrder(false);
+      resetPaymentButton();
+      if (triggerToast) triggerToast('Session Expired', msg, 'warning');
       return;
     }
 
-    const cartCanteenIds = Array.from(new Set(cart.map((entry) => entry.item.canteen_id || entry.item.counter_id).filter(Boolean)));
-    if (cartCanteenIds.length === 0) {
-      const msg = 'The selected menu items are not assigned to a canteen yet. Please refresh the menu and try again.';
+    // ── STEP 3: Load profile (use ONLY real columns) ────────────────────
+    let liveInstitutionId: string | null = null;
+    let validatedName = '';
+    let validatedEmail = authEmail || '';
+    let validatedPhone = '';
+    let validatedRole: UserRole | null = null;
+
+    if (!isDirect) {
+      const { data: profileRow, error: profileError } = await supabase
+        .from('profiles')
+        .select('user_id, institution_id, full_name, email, phone, role')
+        .eq('user_id', authUserId)
+        .maybeSingle();
+
+      console.log('[FOODEXA PAYMENT] Profile loaded:', profileRow?.institution_id || 'none');
+
+      if (profileError) {
+        const msg = 'Unable to verify your profile. Please try again.';
+        console.error('[FOODEXA PAYMENT ERROR] profile', profileError.message);
+        setError(msg);
+        resetPaymentButton();
+        if (triggerToast) triggerToast('Profile Error', msg, 'warning');
+        return;
+      }
+      if (!profileRow) {
+        const msg = 'Your profile is incomplete. Please complete your profile and try again.';
+        console.error('[FOODEXA PAYMENT ERROR] profile', 'profile row not found');
+        setError(msg);
+        resetPaymentButton();
+        if (triggerToast) triggerToast('Profile Error', msg, 'warning');
+        return;
+      }
+      liveInstitutionId = profileRow.institution_id || null;
+      validatedName = profileRow.full_name || '';
+      validatedEmail = profileRow.email || authEmail || '';
+      validatedPhone = profileRow.phone || '';
+      validatedRole = (profileRow.role as UserRole) || null;
+    } else {
+      liveInstitutionId = directSession.institutionId || null;
+      validatedName = directSession.name || '';
+      validatedEmail = directSession.email || '';
+      validatedRole = (directSession.role as UserRole) || null;
+      console.log('[FOODEXA PAYMENT] Profile loaded (direct):', liveInstitutionId);
+    }
+
+    // ── STEP 4: Validate institution ─────────────────────────────────────
+    if (!liveInstitutionId) {
+      const msg = 'You must join an institution before placing an order.';
+      console.error('[FOODEXA PAYMENT ERROR] institution', msg);
       setError(msg);
-      setSubmittingOrder(false);
+      resetPaymentButton();
+      if (triggerToast) triggerToast('Missing Institution', msg, 'warning');
+      return;
+    }
+
+    // ── STEP 5: Validate role (students only) ────────────────────────────
+    if (!validatedRole) {
+      const msg = 'Your profile is missing a role. Please complete your profile, or contact support if this persists.';
+      console.error('[FOODEXA PAYMENT ERROR] role', msg);
+      setError(msg);
+      resetPaymentButton();
+      if (triggerToast) triggerToast('Profile Error', msg, 'warning');
+      return;
+    }
+    if (validatedRole !== 'student' && !isDirect) {
+      const msg = 'Only student accounts can place orders.';
+      console.error('[FOODEXA PAYMENT ERROR] role', msg);
+      setError(msg);
+      resetPaymentButton();
+      if (triggerToast) triggerToast('Access Denied', msg, 'warning');
+      return;
+    }
+
+    // ── STEP 6: Validate cart ─────────────────────────────────────────────
+    if (!cart.length) {
+      const msg = 'Your cart is empty.';
+      console.error('[FOODEXA PAYMENT ERROR] cart', msg);
+      setError(msg);
+      resetPaymentButton();
+      return;
+    }
+    console.log('[FOODEXA PAYMENT] Cart validated:', cart.length);
+
+    // Validate each menu item against the authoritative menu_items table.
+    // Use the REAL menu_items.canteen_id (PART 2) — never guess a canteen.
+    const menuItemIds = Array.from(new Set(cart.map((e) => e.item.id).filter(Boolean)));
+    const { data: menuRows, error: menuErr } = await supabase
+      .from('menu_items')
+      .select('id, institution_id, canteen_id, name')
+      .in('id', menuItemIds);
+
+    if (menuErr) {
+      const msg = 'Unable to validate your cart. Please try again.';
+      console.error('[FOODEXA PAYMENT ERROR] menu', menuErr.message);
+      setError(msg);
+      resetPaymentButton();
+      if (triggerToast) triggerToast('Cart Error', msg, 'warning');
+      return;
+    }
+
+    const menuMap = new Map((menuRows || []).map((r) => [r.id, r]));
+    for (const entry of cart) {
+      const m = menuMap.get(entry.item.id);
+      if (!m) {
+        const msg = `"${entry.item.name}" is no longer available. Please refresh your cart.`;
+        console.error('[FOODEXA PAYMENT ERROR] menu', msg);
+        setError(msg);
+        resetPaymentButton();
+        if (triggerToast) triggerToast('Item Unavailable', msg, 'warning');
+        return;
+      }
+      if (!m.canteen_id) {
+        const msg = `The item "${m.name}" is not assigned to a canteen yet.`;
+        console.error('[FOODEXA PAYMENT ERROR] canteen', msg);
+        setError(msg);
+        resetPaymentButton();
+        if (triggerToast) triggerToast('Canteen Missing', msg, 'warning');
+        return;
+      }
+      if (m.institution_id && m.institution_id !== liveInstitutionId) {
+        const msg = `"${m.name}" belongs to another institution.`;
+        console.error('[FOODEXA PAYMENT ERROR] institution', msg);
+        setError(msg);
+        resetPaymentButton();
+        if (triggerToast) triggerToast('Institution Mismatch', msg, 'warning');
+        return;
+      }
+    }
+
+    // Exactly one canteen per order
+    const canteenIds = Array.from(new Set((menuRows || []).map((r) => r.canteen_id).filter(Boolean)));
+    if (canteenIds.length === 0) {
+      const msg = 'The selected menu items are not assigned to a canteen yet.';
+      console.error('[FOODEXA PAYMENT ERROR] canteen', msg);
+      setError(msg);
+      resetPaymentButton();
       if (triggerToast) triggerToast('Canteen Missing', msg, 'warning');
       return;
     }
-    if (cartCanteenIds.length > 1) {
+    if (canteenIds.length > 1) {
       const msg = 'Please checkout items from one canteen at a time.';
+      console.error('[FOODEXA PAYMENT ERROR] canteen', msg);
       setError(msg);
-      setSubmittingOrder(false);
+      resetPaymentButton();
       if (triggerToast) triggerToast('One Canteen Per Order', msg, 'warning');
       return;
     }
 
-    const selectedCanteenId = String(cartCanteenIds[0]);
-    const availableCanteen = await findActiveCanteen(liveInstitutionId, selectedCanteenId);
-    if (!availableCanteen) {
-      const msg = 'The selected canteen is not active for your institution right now. Please choose another available item.';
+    const selectedCanteenId = String(canteenIds[0]);
+
+    // Verify the canteen exists and belongs to the student's institution (PART 2).
+    // Do NOT require a separately selected canteen — use the menu item's canteen_id.
+    const { data: canteenRow, error: canteenErr } = await supabase
+      .from('canteens')
+      .select('id, institution_id, name')
+      .eq('id', selectedCanteenId)
+      .maybeSingle();
+
+    if (canteenErr || !canteenRow) {
+      const msg = `The selected canteen (${selectedCanteenId}) could not be found.`;
+      console.error('[FOODEXA PAYMENT ERROR] canteen', msg);
       setError(msg);
-      setSubmittingOrder(false);
-      if (triggerToast) triggerToast('Canteen Unavailable', msg, 'warning');
+      resetPaymentButton();
+      if (triggerToast) triggerToast('Canteen Missing', msg, 'warning');
       return;
     }
+    if (canteenRow.institution_id && canteenRow.institution_id !== liveInstitutionId) {
+      const msg = 'The selected canteen does not belong to your institution.';
+      console.error('[FOODEXA PAYMENT ERROR] canteen', msg);
+      setError(msg);
+      resetPaymentButton();
+      if (triggerToast) triggerToast('Canteen Mismatch', msg, 'warning');
+      return;
+    }
+
+    console.log('[FOODEXA PAYMENT] Canteen validated:', selectedCanteenId);
 
     try {
       const now = new Date();
@@ -1011,103 +1140,116 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
          is_veg: e.item.is_veg,
         }));
 
-      // ── STEP 1: Create Razorpay order (NO Supabase write yet) ──────────
-      const customerEmail = effectiveProfile?.email || `${directSession?.name || 'guest'}@foodexa.direct`;
-      const customerName = effectiveProfile?.full_name || (effectiveRole ? effectiveRole.charAt(0).toUpperCase() + effectiveRole.slice(1) : 'Guest');
-      const customerPhone = effectiveProfile?.phone || '0000000000';
-      console.log('[FOODEXA PAYMENT] User authenticated:', !!user || !!directSession);
-      console.log('[FOODEXA PAYMENT] Cart validated:', cart.length, 'items');
+      // ── STEP 7: Calculate total amount (rupees) ────────────────────────
+      const customerEmail = validatedEmail || `${validatedName || 'guest'}@foodexa.direct`;
+      const customerName = validatedName || (validatedRole ? validatedRole.charAt(0).toUpperCase() + validatedRole.slice(1) : 'Guest');
+      const customerPhone = validatedPhone || '0000000000';
       console.log('[FOODEXA PAYMENT] Amount calculated:', cartGrandTotal);
-      console.log('[FOODEXA PAYMENT] Creating Razorpay order');
+
+      // ── STEP 8: Create Razorpay order on the SERVER ────────────────────
+      console.log('[FOODEXA PAYMENT] Creating Razorpay order...');
       const razorpayResult = await createRazorpayOrder({
         amount: cartGrandTotal,
         currency: 'INR',
-        user_id: effectiveUserId || `direct_${directSession?.temporarySessionId || 'unknown'}`,
+        user_id: authUserId || '',
         email: customerEmail,
         phone: customerPhone,
         name: customerName,
         institution_id: liveInstitutionId,
         order_id: tempReceiptId,
         items: itemsForBackend,
+        canteen_id: selectedCanteenId,
       });
 
       if (!razorpayResult.success || !razorpayResult.order_id) {
         const msg = razorpayResult.error || 'Unable to connect to payment gateway. Please try again.';
-        console.error('[Payment] Razorpay order creation failed:', msg);
-        setError('We couldn\'t start the payment. Please try again.');
+        console.error('[FOODEXA PAYMENT ERROR] create-order', msg);
+        setError("We couldn't start the payment. Please try again.");
         setActiveTab('payment_failed');
-        setSubmittingOrder(false);
-        setPaymentInitStatus('idle');
-        if (triggerToast) triggerToast('Payment Unavailable', 'We couldn\'t start the payment. Please try again.', 'warning');
+        resetPaymentButton();
+        if (triggerToast) triggerToast('Payment Unavailable', "We couldn't start the payment. Please try again.", 'warning');
         return;
       }
 
-      console.log('[FOODEXA PAYMENT] Razorpay order created:', razorpayResult.order_id);
+      console.log('[FOODEXA PAYMENT] Razorpay order response:', razorpayResult.order_id);
       const razorpayKeyId = razorpayResult.razorpay_key_id;
       if (!razorpayKeyId) {
-        setError('Payment configuration error.');
-        setSubmittingOrder(false);
-        setPaymentInitStatus('idle');
+        const msg = 'Razorpay server configuration is incomplete.';
+        console.error('[FOODEXA PAYMENT ERROR] config', msg);
+        setError(msg);
+        setActiveTab('payment_failed');
+        resetPaymentButton();
+        if (triggerToast) triggerToast('Payment Error', msg, 'warning');
         return;
       }
 
-      // ── STEP 2: Load Razorpay Checkout script and open ─────────────────
+      // ── STEP 9: Load Razorpay Checkout.js ──────────────────────────────
       setPaymentInitStatus('loading_gateway');
-      console.log('[FOODEXA PAYMENT] Loading Razorpay Checkout');
+      console.log('[FOODEXA PAYMENT] Loading Razorpay Checkout...');
       try {
         await loadRazorpayScript();
       } catch (scriptErr: any) {
-        console.error('[FOODEXA PAYMENT] Razorpay script load failed:', scriptErr);
+        console.error('[FOODEXA PAYMENT ERROR] script', scriptErr?.message || scriptErr);
         setError('Payment gateway could not be loaded. Please try again.');
         setActiveTab('payment_failed');
-        setSubmittingOrder(false);
-        setPaymentInitStatus('idle');
+        resetPaymentButton();
+        if (triggerToast) triggerToast('Payment Gateway Error', 'Payment gateway could not be loaded. Please try again.', 'warning');
+        return;
+      }
+      console.log('[FOODEXA PAYMENT] Razorpay Checkout loaded');
+
+      if (!window.Razorpay) {
+        const msg = 'Razorpay SDK failed to load';
+        console.error('[FOODEXA PAYMENT ERROR] sdk', msg);
+        setError('Payment gateway could not be loaded. Please try again.');
+        setActiveTab('payment_failed');
+        resetPaymentButton();
         if (triggerToast) triggerToast('Payment Gateway Error', 'Payment gateway could not be loaded. Please try again.', 'warning');
         return;
       }
 
+      // ── STEP 10: Open Razorpay Checkout ────────────────────────────────
       setPaymentInitStatus('opening_checkout');
-      console.log('[FOODEXA PAYMENT] Opening Razorpay Checkout');
+      console.log('[FOODEXA PAYMENT] Creating Razorpay instance');
       const options: any = {
         key: razorpayKeyId,
         amount: razorpayResult.amount,
         currency: razorpayResult.currency || 'INR',
         name: 'FOODEXA',
-        description: `Campus Order`,
-        image: 'https://foodexa.com/logo.png',
+        description: 'FOODEXA Campus Food Order',
         order_id: razorpayResult.order_id,
+
         handler: async function (response: any) {
           const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = response;
-          console.log('[FOODEXA PAYMENT] Payment response received');
+          console.log('[FOODEXA PAYMENT] Razorpay payment response received', response);
+
           try {
-            // ── STEP 3: Server-side verification ────────────────────────
+            // ── SERVER-SIDE VERIFICATION (HMAC SHA256) ──────────────────
             console.log('[FOODEXA PAYMENT] Verifying payment with server');
             const verifyResult = await verifyRazorpayPayment({
               razorpay_order_id,
               razorpay_payment_id,
               razorpay_signature,
-              user_id: effectiveUserId,
+              user_id: authUserId || '',
               order_id: tempReceiptId,
             });
 
             if (!verifyResult.success) {
-              // Payment failed — NO order was created in Supabase
-              console.error('[Payment] Verification failed:', verifyResult.error);
-              setError(paymentMessage('We could not verify your payment. Any amount debited will be reconciled automatically.'));
+              // Payment failed — NO order created in Supabase
+              console.error('[FOODEXA PAYMENT ERROR] verify', verifyResult.error);
+              setError('We could not verify your payment. Any amount debited will be reconciled automatically.');
               setActiveTab('payment_failed');
-              setSubmittingOrder(false);
-              setPaymentInitStatus('idle');
+              resetPaymentButton();
               if (triggerToast) triggerToast('Payment Verification Failed', verifyResult.error || 'Contact support.', 'warning');
               return;
             }
 
             console.log('[FOODEXA PAYMENT] Payment verified');
-            // ── STEP 4: Create order + order_items in Supabase ──────────
-            // Only now does the institution see the order
+            // ── CREATE FOODEXA ORDER (only after verification) ───────────
             const createResult = await createOrderAfterPayment({
-              user_id: user?.id || '',
+              user_id: authUserId || '',
               email: customerEmail,
-              role: resolvedRole,
+              role: validatedRole || 'student',
               customer_name: customerName,
               phone: customerPhone,
               institution_id: liveInstitutionId,
@@ -1124,21 +1266,20 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             });
 
             if (createResult.error || !createResult.data) {
-              console.error('[Payment] Order creation failed after verification:', createResult.error);
-              const pendingMessage = createResult.error?.toLowerCase().includes('canteen')
+              console.error('[FOODEXA PAYMENT ERROR] create-order-after-payment', createResult.error);
+              const pendingMessage = (createResult.error || '').toLowerCase().includes('canteen')
                 ? 'Payment received. Your order is awaiting canteen confirmation.'
                 : 'Payment received. We are confirming your order.';
               setPaidPendingConfirmation({ razorpay_order_id, razorpay_payment_id, message: pendingMessage });
               setError(pendingMessage);
               setActiveTab('payment_success');
-              setSubmittingOrder(false);
-              setPaymentInitStatus('idle');
+              resetPaymentButton();
               if (triggerToast) triggerToast('Payment Received', pendingMessage, 'warning');
               return;
             }
 
             console.log('[FOODEXA PAYMENT] FOODEXA order created:', createResult.data.id);
-            // ── STEP 5: Success — refresh and show confirmation ──────────
+            // ── SUCCESS — refresh and show confirmation ──────────────────
             await refreshOrders();
             setCart([]);
             setPaidPendingConfirmation(null);
@@ -1146,13 +1287,12 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             setCouponDiscount(0);
             setCouponCode('');
             setActiveTab('payment_success');
-            setSubmittingOrder(false);
-            setPaymentInitStatus('idle');
+            resetPaymentButton();
             setError(null);
             if (triggerToast) triggerToast('Order Placed!', 'Your order is being prepared.', 'success');
 
           } catch (verifyErr: any) {
-            console.error('[Payment] Verification/order confirmation exception:', verifyErr);
+            console.error('[FOODEXA PAYMENT ERROR] confirm', verifyErr?.message || verifyErr);
             setPaidPendingConfirmation({
               razorpay_order_id,
               razorpay_payment_id,
@@ -1160,48 +1300,52 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             });
             setError('Payment received. We are confirming your order.');
             setActiveTab('payment_success');
-            setSubmittingOrder(false);
-            setPaymentInitStatus('idle');
+            resetPaymentButton();
             if (triggerToast) triggerToast('Payment Received', 'Payment completed but order confirmation needs review.', 'warning');
           }
         },
+
         prefill: {
-          name: profile.full_name || '',
-          email: profile.email || '',
-          contact: profile.phone || '',
+          name: validatedName,
+          email: validatedEmail,
+          contact: validatedPhone || '',
         },
         notes: {
           institution_id: liveInstitutionId,
           receipt: tempReceiptId,
         },
-        theme: { color: '#10b981' },
+        theme: {
+          color: '#2563EB',
+        },
         modal: {
           ondismiss: function () {
-            console.log('[FOODEXA PAYMENT] Checkout dismissed by user');
-            setSubmittingOrder(false);
-            setPaymentInitStatus('idle');
-          }
+            console.log('[FOODEXA PAYMENT] Razorpay Checkout dismissed');
+            resetPaymentButton();
+            setError('Payment was cancelled. Your cart is still saved.');
+            if (triggerToast) triggerToast('Payment Cancelled', 'Payment was cancelled. Your cart is still saved.', 'info');
+          },
         },
       };
 
       const razorpay = new window.Razorpay(options);
-      razorpay.on('payment.failed', async function (response: any) {
+      razorpay.on('payment.failed', function (response: any) {
         // NO order was created in Supabase — nothing to update
-        console.warn('[Payment] Razorpay checkout failed:', response?.error);
-        setError(paymentMessage());
+        console.error('[FOODEXA PAYMENT ERROR] razorpay-failed', response?.error);
+        setError(response?.error?.description || 'Payment failed. Please try again.');
         setActiveTab('payment_failed');
-        setSubmittingOrder(false);
-        setPaymentInitStatus('idle');
+        resetPaymentButton();
         if (triggerToast) triggerToast('Payment Failed', response?.error?.description || 'Please try again.', 'warning');
       });
-      console.log('[FOODEXA PAYMENT] Checkout opened');
+
+      console.log('[FOODEXA PAYMENT] Opening Razorpay Checkout');
       razorpay.open();
+      console.log('[FOODEXA PAYMENT] Razorpay Checkout opened');
 
     } catch (err: any) {
-      console.error('[Payment] Initiation exception:', err);
-      setError(paymentMessage('We could not start the payment. Please try again.'));
+      console.error('[FOODEXA PAYMENT ERROR]', err?.message || err);
+      setError('We could not start the payment. Please try again.');
       setActiveTab('payment_failed');
-      setSubmittingOrder(false);
+      resetPaymentButton();
       if (triggerToast) triggerToast('Payment Error', err?.message || 'Failed to initiate payment.', 'warning');
     }
   };

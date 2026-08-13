@@ -90,6 +90,45 @@ async function startServer() {
     return { data, error: null };
   }
 
+  async function getSupabaseAuthUser(authHeader: string | undefined) {
+    const token = authHeader?.replace(/^Bearer\s+/i, '').trim();
+    if (!token || !supabaseUrl || !supabaseAnonKey) {
+      return { user: null, error: 'Authentication is required.' };
+    }
+
+    const resp = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/auth/v1/user`, {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!resp.ok) {
+      return { user: null, error: 'Your session has expired. Please sign in again.' };
+    }
+
+    return { user: await resp.json(), error: null };
+  }
+
+  async function fetchSupabaseRows(table: string, query: string) {
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return { data: null, error: 'Razorpay server configuration is incomplete.' };
+    }
+
+    const resp = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/rest/v1/${table}?${query}`, {
+      headers: {
+        apikey: supabaseServiceKey,
+        Authorization: `Bearer ${supabaseServiceKey}`,
+        Accept: 'application/json',
+      },
+    });
+
+    const text = await resp.text();
+    if (!resp.ok) return { data: null, error: text || `Failed to query ${table}.` };
+    return { data: text ? JSON.parse(text) : [], error: null };
+  }
+
   // System instruction for LX - FOODEXA's AI Companion
   const LX_SYSTEM_INSTRUCTION = `You are LX, the official AI Companion for FOODEXA — the Smart Campus Food Ordering Platform.
 Your purpose is to help students, campus food vendors, and university dining staff with food ordering, meal recommendations, dietary preferences, budget optimization, queue jump estimation, group order planning, and campus dining insights.

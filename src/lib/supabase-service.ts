@@ -989,11 +989,16 @@ export async function createRazorpayOrder(params: {
   order_id: string;
   counter?: string;
   items?: any[];
+  canteen_id?: string | null;
 }): Promise<{ success: boolean; order_id?: string; razorpay_key_id?: string; amount?: number; currency?: string; error?: string }> {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
     const resp = await fetch('/api/razorpay/create-order', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
       body: JSON.stringify({
         amount: params.amount,
         currency: params.currency || 'INR',
@@ -1006,6 +1011,7 @@ export async function createRazorpayOrder(params: {
         order_id: params.order_id,
         counter: params.counter,
         items: params.items,
+        canteen_id: params.canteen_id,
       }),
     });
     const data = await resp.json();
@@ -1026,9 +1032,13 @@ export async function verifyRazorpayPayment(params: {
   order_id: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
     const resp = await fetch('/api/razorpay/verify-payment', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
       body: JSON.stringify(params),
     });
     const data = await resp.json();

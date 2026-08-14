@@ -27,6 +27,9 @@ interface AuthContextType {
   validateInstitutionCode: (code: string) => Promise<{ error: string | null; data: InstitutionData | null }>;
   signUpWithOtp: (email: string, fullName: string, role: UserRole, metadata?: { institutionCode?: string; institutionId?: string; phone?: string; department?: string; semester?: string; programme?: string; campusBlock?: string; facultyId?: string; }) => Promise<{ error: Error | null }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null; profile: Profile | null; institution: InstitutionData | null }>;
+  // New student entry flow: anonymous Supabase auth + profile creation.
+  // No OTP / password / login UI is shown to the student.
+  startStudentEntry: (fullName: string, email: string, institutionCode: string) => Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }>;
   joinWithCodeRoleName: (institutionCode: string, role: 'student' | 'faculty' | 'guest', displayName: string) => Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }>;
   joinWithDirectAccess: (institutionCode: string, role: 'student' | 'faculty' | 'guest', displayName: string, email: string) => Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }>;
   signOut: () => Promise<void>;
@@ -51,18 +54,18 @@ const normalizeRole = (value: unknown): UserRole | null => {
 
 // ── Permanent FOODEXA identifiers ──────────────────────────────────────────
 // Generated exactly ONCE at account creation and stored permanently in Supabase.
-// Format: FDX-STU-{FirstLetterOfFirstName}{LastLetterOfLastName}{YEAR}
-// Example: Alex Paul → FDX-STU-AL2026, Registration ID: FDX-REG-AL2026
+// Format: FDX-STU-{FirstLetterOfFirstName}{FirstLetterOfLastName}{YEAR}
+// Example: Alex Paul → FDX-STU-AP2026, John David → FDX-STU-JD2026,
+//          Mary Joseph → FDX-REG-MJ2026
 export function generateStudentIdentifiers(userId?: string, fullName?: string): { registration_id: string; student_id: string } {
   const year = new Date().getFullYear();
   let initials = 'XX';
   if (fullName && fullName.trim()) {
     const parts = fullName.trim().split(/\s+/).filter(Boolean);
     if (parts.length >= 2) {
-      // First letter of first name + last letter of last name
+      // First letter of first name + first letter of last name
       const firstLetter = parts[0][0].toUpperCase();
-      const lastPart = parts[parts.length - 1];
-      const lastLetter = lastPart[lastPart.length - 1].toUpperCase();
+      const lastLetter = parts[parts.length - 1][0].toUpperCase();
       initials = firstLetter + lastLetter;
     } else if (parts.length === 1) {
       // First letter + last letter of the single name
@@ -353,10 +356,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // ── Session initialization — Supabase handles persistence natively ────────
    useEffect(() => {
      const initAuth = async () => {
-       const { data: { session: existingSession } } = await supabase.auth.getSession();
-       setSession(existingSession);
-       setUser(existingSession?.user ?? null);
-       setIsEmailVerified(!!existingSession?.user?.email_confirmed_at);
+        const { data: { session: existingSession } } = await supabase.auth.getSession();
+        setSession(existingSession);
+        setUser(existingSession?.user ?? null);
+        setIsEmailVerified(!!existingSession?.user?.email_confirmed_at || !!existingSession?.user?.is_anonymous);
        if (existingSession?.user) {
          await fetchProfile(existingSession.user.id);
 } else if (directSession) {
@@ -381,7 +384,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
-       setIsEmailVerified(!!newSession?.user?.email_confirmed_at);
+       setIsEmailVerified(!!newSession?.user?.email_confirmed_at || !!newSession?.user?.is_anonymous);
        if (newSession?.user) {
          await fetchProfile(newSession.user.id);
        } else if (!directSession) {
@@ -806,6 +809,137 @@ if (safeToken.length !== OTP_LENGTH) {
     }
   }, [user, validateInstitutionCode, upsertProfileSafely, fetchProfile, setInstitutionData]);
 
+  // ── New student entry flow (anonymous Supabase auth) ──────────────────────
+  // Replaces the old OTP / password login for students. The student never sees
+  // any authentication UI — anonymous sign-in is used purely as the internal
+  // identity layer, and auth.uid() becomes the student's user_id.
+  const startStudentEntry = useCallback(async (
+    fullName: string,
+    email: string,
+    institutionCode: string
+  ): Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }> => {
+    try {
+      const code = (institutionCode || '').trim().toUpperCase();
+      const safeName = (fullName || '').trim();
+      const safeEmail = (email || '').trim().toLowerCase();
+
+      if (!safeName) {
+        return { error: 'Please enter your full name.', profile: null, institution: null };
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
+        return { error: 'Please enter a valid email address.', profile: null, institution: null };
+      }
+      if (!code) {
+        return { error: 'Institution code is required.', profile: null, institution: null };
+      }
+
+      // 1. Ensure an authenticated (anonymous) Supabase session — reuse if present.
+      //    Anonymous sign-in is the internal identity layer; the student never
+      //    sees any OTP, password or login UI.
+      let authUser = (await supabase.auth.getUser()).data?.user ?? null;
+      if (!authUser) {
+        const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
+        if (anonError || !anonData?.user) {
+          console.error('[Auth] Anonymous sign-in failed:', anonError?.message);
+          return {
+            error: anonError?.message || 'Unable to start your session. Please try again.',
+            profile: null,
+            institution: null,
+          };
+        }
+        authUser = anonData.user;
+      }
+
+      // 2. Validate institution exists and is active (live Supabase lookup)
+      const { data: instRows, error: instErr } = await supabase
+        .from('institutions')
+        .select('id, name, institution_name, campus, city, state, country, institution_code, status')
+        .eq('institution_code', code)
+        .limit(1);
+
+      const row = Array.isArray(instRows) ? instRows[0] : null;
+      if (instErr || !row) {
+        return {
+          error: 'Institution not found. Please check your institution code.',
+          profile: null,
+          institution: null,
+        };
+      }
+      const rowStatus = String(row.status || '').toLowerCase();
+      if (rowStatus && rowStatus !== 'active' && rowStatus !== 'approved') {
+        return {
+          error: 'This institution is currently unavailable. Please contact your institution administrator.',
+          profile: null,
+          institution: null,
+        };
+      }
+
+      const inst: InstitutionData = {
+        institution_id: row.id,
+        institution_name: row.name || row.institution_name || '',
+        campus: row.campus || '',
+        city: row.city || '',
+        state: row.state || '',
+        country: row.country || '',
+        institution_code: row.institution_code || code,
+      };
+
+      // 3. Create or update the student's profile (permanent identifiers)
+      let existing = await fetchProfile(authUser.id);
+
+      if (!existing) {
+        const ids = generateStudentIdentifiers(authUser.id, safeName);
+        const { error: upsertError } = await upsertProfileSafely({
+          user_id: authUser.id,
+          email: safeEmail,
+          full_name: safeName,
+          phone: null,
+          role: 'student',
+          designation: 'student',
+          institution_id: inst.institution_id,
+          registration_id: ids.registration_id,
+          student_id: ids.student_id,
+          diet_preference: 'all',
+          account_created_at: new Date().toISOString(),
+          foodexa_plan: 'Free',
+          plan: 'Free',
+        });
+        if (upsertError) {
+          return { error: upsertError.message, profile: null, institution: null };
+        }
+        existing = await fetchProfile(authUser.id);
+      } else {
+        // Reuse the existing session/profile — never overwrite permanent IDs.
+        const updates: Record<string, any> = {};
+        if (!existing.institution_id) updates.institution_id = inst.institution_id;
+        if (!existing.student_id || !existing.registration_id) {
+          const ids = generateStudentIdentifiers(authUser.id, existing.full_name || safeName);
+          updates.student_id = existing.student_id || ids.student_id;
+          updates.registration_id = existing.registration_id || ids.registration_id;
+        }
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('profiles').update(updates).eq('user_id', authUser.id);
+          existing = await fetchProfile(authUser.id);
+        }
+      }
+
+      // 4. Reflect the session in React state so dashboards open correctly
+      setUser(authUser);
+      setSession((await supabase.auth.getSession()).data.session ?? null);
+      setIsEmailVerified(true);
+      setInstitutionData(inst);
+
+      return { error: null, profile: existing, institution: inst };
+    } catch (err: any) {
+      console.error('[Auth] startStudentEntry failed:', err);
+      return {
+        error: err?.message || 'Something went wrong. Please try again.',
+        profile: null,
+        institution: null,
+      };
+    }
+  }, [fetchProfile, upsertProfileSafely, setInstitutionData]);
+
   const signOut = async () => {
     if (user) {
       // Google/email user: sign out from Supabase
@@ -1009,6 +1143,7 @@ if (safeToken.length !== OTP_LENGTH) {
       validateInstitutionCode,
       signUpWithOtp,
       verifyOtp,
+      startStudentEntry,
       joinWithCodeRoleName,
       joinWithDirectAccess,
       signOut,

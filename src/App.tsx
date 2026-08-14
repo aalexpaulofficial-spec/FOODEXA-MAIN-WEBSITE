@@ -513,15 +513,6 @@ export default function App() {
           const dashRoute = getDashboardRoute(liveProfile.role) || '/student-dashboard';
           navigate(dashRoute, { replace: true });
         }}
-        onOpenLogin={() => {
-          setIsStartFoodexaOpen(false);
-          setAuthInitialMode('login');
-          setIsAuthOpen(true);
-        }}
-        onDirectAccess={() => {
-          setIsStartFoodexaOpen(false);
-          setIsJoinInstitutionOpen(true);
-        }}
       />
 
       <StudentPortalModal

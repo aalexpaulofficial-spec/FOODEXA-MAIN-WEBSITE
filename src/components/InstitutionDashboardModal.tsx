@@ -14,8 +14,38 @@ interface InstitutionDashboardModalProps {
 }
 
 const STATUS_QUEUE: Record<string, QueueFilter> = {
-  pending: 'incoming', accepted: 'preparing', preparing: 'preparing', ready: 'ready', completed: 'completed', cancelled: 'completed',
+  pending: 'incoming',
+  confirmed: 'preparing',
+  accepted: 'preparing',
+  preparing: 'preparing',
+  ready: 'ready',
+  completed: 'completed',
+  cancelled: 'completed',
 };
+
+function normalizeStatus(status: string | null | undefined): string {
+  const s = String(status || 'pending').toLowerCase();
+  if (['pending', 'order received'].includes(s)) return 'pending';
+  if (['accepted', 'confirmed'].includes(s)) return 'confirmed';
+  if (['preparing', 'preparation', 'cooking', 'quality_check', 'packed'].includes(s)) return 'preparing';
+  if (['ready', 'ready for pickup'].includes(s)) return 'ready';
+  if (['completed', 'collected', 'delivered'].includes(s)) return 'completed';
+  if (['cancelled', 'canceled'].includes(s)) return 'cancelled';
+  return 'pending';
+}
+
+function statusBadgeClass(status: string): string {
+  const s = normalizeStatus(status);
+  switch (s) {
+    case 'pending': return 'bg-amber-100 text-amber-700 border-amber-200';
+    case 'confirmed': return 'bg-blue-100 text-blue-700 border-blue-200';
+    case 'preparing': return 'bg-violet-100 text-violet-700 border-violet-200';
+    case 'ready': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    case 'completed': return 'bg-gray-100 text-gray-600 border-gray-200';
+    case 'cancelled': return 'bg-red-100 text-red-600 border-red-200';
+    default: return 'bg-gray-100 text-gray-600 border-gray-200';
+  }
+}
 
 export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps> = ({ isOpen, onClose }) => {
   const { user, profile, signOut, institutionData } = useAuth();
@@ -37,7 +67,7 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
         supabase.from('orders').select('*', { count: 'exact', head: true }).eq('institution_id', profile.institution_id),
         supabase.from('menu_items').select('*').eq('institution_id', profile.institution_id).order('food_name', { ascending: true }),
         supabase.from('counters').select('name').eq('institution_id', profile.institution_id).eq('status', 'open'),
-        supabase.from('orders').select('*').eq('institution_id', profile.institution_id).order('created_at', { ascending: false }),
+        supabase.from('orders').select('*, order_items(id, order_id, menu_item_id, name, quantity, price, subtotal)').eq('institution_id', profile.institution_id).order('created_at', { ascending: false }),
       ]);
 
       const mapped = (menuData || []).map(mapMenuItem);
@@ -112,7 +142,7 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
   };
 
   const queued = orders.reduce<Record<QueueFilter, any[]>>((acc, o) => {
-    const qf = STATUS_QUEUE[(o.status || 'pending').toLowerCase()] || 'incoming';
+    const qf = STATUS_QUEUE[normalizeStatus(o.status)] || 'incoming';
     acc[qf] = acc[qf] || [];
     acc[qf].push(o);
     return acc;
@@ -340,19 +370,24 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                     <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center text-xs text-gray-400">No orders yet.</div>
                   ) : (
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {orders.slice(0, 50).map((o: any) => (
+                      {orders.slice(0, 50).map((o: any) => {
+                        const ns = normalizeStatus(o.status);
+                        return (
                         <div key={o.id} className="rounded-2xl border border-gray-200 bg-white p-4">
                           <div className="flex items-center justify-between">
-                            <p className="text-xs font-black text-emerald-300">{o.order_id} {o.token_number && <span className="ml-1 text-amber-300">· {o.token_number}</span>}</p>
-                            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${o.status === 'completed' ? 'text-emerald-300' : o.status === 'preparing' ? 'text-indigo-300' : o.status === 'ready' ? 'text-emerald-300' : 'text-yellow-300'}`}>{o.status}</span>
+                            <p className="text-xs font-black text-gray-900">{o.token_number || 'TKN-????'} <span className="ml-1 text-gray-500">· {o.customer_name || 'Customer'}</span></p>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusBadgeClass(o.status)}`}>{ns}</span>
                           </div>
-                          <p className="mt-2 text-xs text-gray-600">Counter: {o.canteen_id || o.counter_status || ''}</p>
-                          <p className="text-xs text-gray-600">Items: {o.items?.length || 0}</p>
-                          <p className="text-xs text-gray-600">Total: {o.total_amount}</p>
-                          {o.pickup_code && <p className="text-xs text-cyan-400 font-mono mt-1">Code: {o.pickup_code}</p>}
-                          {o.estimated_ready_at && <p className="text-xs text-amber-400 font-bold mt-1">~{Math.round((new Date(o.estimated_ready_at).getTime() - Date.now()) / 60000) || 15} mins est.</p>}
+                          <div className="mt-2 space-y-1">
+                            <p className="text-xs text-gray-600">Counter: <span className="font-bold text-gray-800">{o.counter_name || o.counter_code || o.canteen_id || '—'}</span></p>
+                            {o.pickup_code && <p className="text-xs text-cyan-600 font-mono font-bold">Pickup: {o.pickup_code}</p>}
+                            <p className="text-xs text-gray-600">Items: {o.items?.length || 0} · Total: ₹{Number(o.total_amount || 0).toLocaleString('en-IN')}</p>
+                            {o.estimated_ready_at && <p className="text-xs text-amber-600 font-bold">~{Math.max(0, Math.round((new Date(o.estimated_ready_at).getTime() - Date.now()) / 60000))} mins est.</p>}
+                            <p className="text-[10px] text-gray-400">{o.created_at ? new Date(o.created_at).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit' }) : ''}</p>
+                          </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </section>

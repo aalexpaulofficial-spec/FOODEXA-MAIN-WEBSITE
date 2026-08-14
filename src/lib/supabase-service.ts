@@ -265,7 +265,7 @@ function isMissingSchemaError(error: any): boolean {
   return ['schema cache', 'could not find the table', 'does not exist', 'not found'].some((text) => message.includes(text));
 }
 
-function createOrderItemsPayload(orderId: string, items: { id: string; name?: string; variant?: string | null; quantity: number; price: number; subtotal?: number }[]) {
+function createOrderItemsPayload(orderId: string, items: { id: string; name?: string; variant?: string | null; quantity: number; price: number; subtotal?: number; image_url?: string; is_veg?: boolean }[]) {
   return items.map((item) => ({
     order_id: orderId,
     menu_item_id: item.id,
@@ -274,6 +274,8 @@ function createOrderItemsPayload(orderId: string, items: { id: string; name?: st
     quantity: item.quantity,
     price: item.price,
     subtotal: item.subtotal ?? (item.price * item.quantity),
+    image_url: item.image_url || null,
+    is_veg: item.is_veg !== undefined ? item.is_veg : null,
   }));
 }
 
@@ -292,16 +294,20 @@ function resolveOrderItems(row: any): OrderItem[] {
   if (Array.isArray(joinedItems) && joinedItems.length > 0) {
     return joinedItems.map((oi: any) => {
       const mi = oi.menu_items;
+      // Prefer snapshot data from order_items (name, price, subtotal)
+      // These are copied at order creation time so historical orders remain accurate
+      const snapshotName = String(oi.name || '').trim();
+      const snapshotPrice = Number(oi.price);
       return {
         id: String(oi.id || ''),
         order_id: String(oi.order_id || ''),
         menu_item_id: String(oi.menu_item_id || ''),
-        name: String(mi?.food_name || 'Item'),
-        variant: String(mi?.category_name || mi?.food_type || ''),
+        name: snapshotName || String(mi?.food_name || 'Item'),
+        variant: String(mi?.category_name || mi?.food_type || oi.variant || ''),
         quantity: Number(oi.quantity || 1),
-        price: Number(oi.price || 0),
-        image_url: mi?.image_url || null,
-        is_veg: mi?.is_veg !== undefined ? mi.is_veg : null,
+        price: !isNaN(snapshotPrice) && snapshotPrice >= 0 ? snapshotPrice : Number(mi?.price || 0),
+        image_url: oi.image_url || mi?.image_url || null,
+        is_veg: oi.is_veg !== undefined ? oi.is_veg : (mi?.is_veg !== undefined ? mi.is_veg : null),
       };
     });
   }
@@ -872,8 +878,8 @@ export async function updateOrderAfterPayment(params: {
     .from('orders')
     .update({
       payment_status: 'paid',
-      status: 'accepted',
-      order_status: 'Accepted',
+      status: 'confirmed',
+      order_status: 'confirmed',
       payment_method: 'razorpay',
       razorpay_order_id: params.razorpay_order_id,
       razorpay_payment_id: params.razorpay_payment_id,
@@ -881,8 +887,8 @@ export async function updateOrderAfterPayment(params: {
       paid_at: now,
       accepted_at: now,
       updated_at: now,
-      kitchen_status: 'Pending',
-      counter_status: 'Incoming',
+      kitchen_status: 'pending',
+      counter_status: 'incoming',
       estimated_ready_at: new Date(Date.now() + prepTime * 60000).toISOString(),
     })
     .eq('id', params.order_id)
@@ -965,7 +971,18 @@ function getPickupTypePrefix(pickupType: string | null | undefined): string {
 }
 
 // Generate sequential pickup code like B-0001, L-0002, etc.
+// Uses atomic RPC when available to prevent race conditions.
 async function generatePickupCode(prefix: string): Promise<string> {
+  try {
+    const { data, error } = await supabase.rpc('next_pickup_code_number', { p_prefix: prefix });
+    if (!error && typeof data === 'number') {
+      return `${prefix}-${String(data).padStart(4, '0')}`;
+    }
+  } catch {
+    // RPC not available — fall back to count-based approach
+  }
+
+  // Fallback: count-based (non-atomic, acceptable for low volume)
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayStr = todayStart.toISOString().slice(0, 10);
@@ -981,7 +998,18 @@ async function generatePickupCode(prefix: string): Promise<string> {
 }
 
 // Generate sequential token number like TKN-0001
+// Uses atomic RPC when available to prevent race conditions.
 async function generateTokenNumber(): Promise<string> {
+  try {
+    const { data, error } = await supabase.rpc('next_token_number');
+    if (!error && typeof data === 'number') {
+      return `TKN-${String(data).padStart(4, '0')}`;
+    }
+  } catch {
+    // RPC not available — fall back to count-based approach
+  }
+
+  // Fallback: count-based (non-atomic, acceptable for low volume)
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayStr = todayStart.toISOString().slice(0, 10);
@@ -996,8 +1024,8 @@ async function generateTokenNumber(): Promise<string> {
   return `TKN-${String(nextSeq).padStart(4, '0')}`;
 }
 
-// Resolve the pickup type from the canteen/counter configuration.
-// The canteen's counter_code or counter_name determines the pickup category.
+// Pickup counter is determined by the canteen's counter configuration.
+// The canteen's counter_code or name determines the pickup category.
 function resolvePickupTypeFromCanteen(canteen: ActiveCanteenAssignment | null): string {
   if (!canteen) return 'breakfast';
   const name = (canteen.counter_code || canteen.name || '').toLowerCase();
@@ -1007,6 +1035,14 @@ function resolvePickupTypeFromCanteen(canteen: ActiveCanteenAssignment | null): 
   if (name.includes('guest')) return 'guest';
   if (name.includes('break')) return 'breakfast';
   return 'breakfast';
+}
+
+// Resolve the pickup counter display name from the canteen configuration.
+// This reads the actual canteen/counter name so the student sees the real
+// counter assigned by the institution admin, not a hardcoded value.
+export function resolvePickupCounterFromCanteen(canteen: ActiveCanteenAssignment | null): string {
+  if (!canteen) return 'Counter 1';
+  return canteen.counter_code || canteen.name || 'Counter 1';
 }
 
 export async function cancelOrder(

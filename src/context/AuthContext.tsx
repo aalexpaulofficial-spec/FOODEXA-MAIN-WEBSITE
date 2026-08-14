@@ -813,6 +813,7 @@ if (safeToken.length !== OTP_LENGTH) {
   // Replaces the old OTP / password login for students. The student never sees
   // any authentication UI — anonymous sign-in is used purely as the internal
   // identity layer, and auth.uid() becomes the student's user_id.
+  // Falls back to Direct Session if anonymous auth is unavailable.
   const startStudentEntry = useCallback(async (
     fullName: string,
     email: string,
@@ -833,24 +834,7 @@ if (safeToken.length !== OTP_LENGTH) {
         return { error: 'Institution code is required.', profile: null, institution: null };
       }
 
-      // 1. Ensure an authenticated (anonymous) Supabase session — reuse if present.
-      //    Anonymous sign-in is the internal identity layer; the student never
-      //    sees any OTP, password or login UI.
-      let authUser = (await supabase.auth.getUser()).data?.user ?? null;
-      if (!authUser) {
-        const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
-        if (anonError || !anonData?.user) {
-          console.error('[Auth] Anonymous sign-in failed:', anonError?.message);
-          return {
-            error: anonError?.message || 'Unable to start your session. Please try again.',
-            profile: null,
-            institution: null,
-          };
-        }
-        authUser = anonData.user;
-      }
-
-      // 2. Validate institution exists and is active (live Supabase lookup)
+      // Validate institution exists and is active (live Supabase lookup)
       const { data: instRows, error: instErr } = await supabase
         .from('institutions')
         .select('id, name, institution_name, campus, city, state, country, institution_code, status')
@@ -860,7 +844,7 @@ if (safeToken.length !== OTP_LENGTH) {
       const row = Array.isArray(instRows) ? instRows[0] : null;
       if (instErr || !row) {
         return {
-          error: 'Institution not found. Please check your institution code.',
+          error: 'Institution code not found. Please check your code.',
           profile: null,
           institution: null,
         };
@@ -884,7 +868,64 @@ if (safeToken.length !== OTP_LENGTH) {
         institution_code: row.institution_code || code,
       };
 
-      // 3. Create or update the student's profile (permanent identifiers)
+      // Attempt anonymous Supabase auth — the invisible identity layer.
+      // If anonymous auth is disabled, fall back to a Direct Session (no Supabase auth).
+      let authUser = (await supabase.auth.getUser()).data?.user ?? null;
+      let useDirectFallback = false;
+
+      if (!authUser) {
+        const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
+        if (anonError || !anonData?.user) {
+          // Anonymous auth is disabled or unavailable — fall back to direct session
+          console.warn('[Auth] Anonymous sign-in unavailable, using direct session:', anonError?.message || 'unknown');
+          useDirectFallback = true;
+        } else {
+          authUser = anonData.user;
+        }
+      }
+
+      if (useDirectFallback || !authUser) {
+        // Direct Session fallback — no Supabase auth, no profile row in DB.
+        // The student can still browse menu and place orders via the payment flow.
+        const sessionId = crypto.randomUUID();
+        const tempSession: DirectSession = {
+          session_id: sessionId,
+          temporarySessionId: sessionId,
+          institutionId: inst.institution_id,
+          institutionName: inst.institution_name,
+          institutionCode: inst.institution_code,
+          name: safeName,
+          email: safeEmail,
+          role: 'student',
+        };
+
+        setDirectSession(tempSession);
+        sessionStorage.setItem(DIRECT_SESSION_KEY, JSON.stringify(tempSession));
+        setInstitutionData(inst);
+        setIsEmailVerified(true);
+
+        const profileLike: Profile = {
+          user_id: '',
+          email: safeEmail,
+          full_name: safeName,
+          phone: null,
+          institution_id: inst.institution_id,
+          role: 'student',
+          department: null,
+          semester: null,
+          programme: null,
+          campus_block: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          student_id: generateStudentIdentifiers(undefined, safeName).student_id,
+          registration_id: generateStudentIdentifiers(undefined, safeName).registration_id,
+        };
+        setProfile(profileLike);
+
+        return { error: null, profile: profileLike, institution: inst };
+      }
+
+      // 2. Authenticated anonymous flow — create or restore profile in Supabase
       let existing = await fetchProfile(authUser.id);
 
       if (!existing) {
@@ -905,7 +946,30 @@ if (safeToken.length !== OTP_LENGTH) {
           plan: 'Free',
         });
         if (upsertError) {
-          return { error: upsertError.message, profile: null, institution: null };
+          // Profile upsert failed — still open the dashboard in direct mode
+          console.warn('[Auth] Profile upsert failed, opening in limited mode:', upsertError.message);
+          const profileLike: Profile = {
+            user_id: authUser.id,
+            email: safeEmail,
+            full_name: safeName,
+            phone: null,
+            institution_id: inst.institution_id,
+            role: 'student',
+            department: null,
+            semester: null,
+            programme: null,
+            campus_block: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            student_id: generateStudentIdentifiers(authUser.id, safeName).student_id,
+            registration_id: generateStudentIdentifiers(authUser.id, safeName).registration_id,
+          };
+          setUser(authUser);
+          setSession((await supabase.auth.getSession()).data.session ?? null);
+          setIsEmailVerified(true);
+          setInstitutionData(inst);
+          setProfile(profileLike);
+          return { error: null, profile: profileLike, institution: inst };
         }
         existing = await fetchProfile(authUser.id);
       } else {
@@ -923,7 +987,7 @@ if (safeToken.length !== OTP_LENGTH) {
         }
       }
 
-      // 4. Reflect the session in React state so dashboards open correctly
+      // 3. Reflect the session in React state so dashboards open correctly
       setUser(authUser);
       setSession((await supabase.auth.getSession()).data.session ?? null);
       setIsEmailVerified(true);

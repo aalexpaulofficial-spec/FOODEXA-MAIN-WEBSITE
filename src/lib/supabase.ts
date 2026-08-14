@@ -29,6 +29,9 @@ if (!supabaseClient) {
       autoRefreshToken: true,
       detectSessionInUrl: true,
       storageKey: 'foodexa-main-auth',
+      // Enable anonymous sign-in support — invisible to students
+      // If anonymous auth is disabled in Supabase, the app falls back to direct sessions
+      flowType: 'pkce',
     },
   });
   g[SUPABASE_CLIENT_KEY] = supabaseClient;

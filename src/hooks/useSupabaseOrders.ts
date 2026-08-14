@@ -41,6 +41,7 @@ function mapJoinedItems(orderRow: any): OrderItem[] {
   if (Array.isArray(joinedItems) && joinedItems.length > 0) {
     return joinedItems.map((oi: any) => {
       const mi = oi.menu_items;
+      // Prefer snapshot data from order_items (copied at order creation time)
       const snapshotName = String(oi.name || '').trim();
       const snapshotPrice = Number(oi.price);
       return {
@@ -51,7 +52,7 @@ function mapJoinedItems(orderRow: any): OrderItem[] {
         variant: String(mi?.category_name || mi?.food_type || oi.variant || ''),
         quantity: Number(oi.quantity || 1),
         price: !isNaN(snapshotPrice) && snapshotPrice >= 0 ? snapshotPrice : Number(mi?.price || 0),
-        image_url: mi?.image_url || oi.image_url || null,
+        image_url: oi.image_url || mi?.image_url || null,
         is_veg: oi.is_veg !== undefined ? oi.is_veg : (mi?.is_veg !== undefined ? mi.is_veg : null),
       };
     });
@@ -130,7 +131,7 @@ function mapOrderRow(r: any): Order {
 
 // Include counter_code, payment_status, order_status, paid_at, cancelled_at, cancel_deadline_at, pickup_type
 const ORDER_COLUMNS = 'id, student_id, registration_id, email, customer_name, phone, institution_id, canteen_id, counter_id, counter, counter_code, total_amount, transaction_amount, status, order_status, order_number, pickup_code, pickup_type, qr_code, qr_pickup_code, token_number, pickup_token, notes, kitchen_status, counter_status, estimated_ready_at, cancel_deadline_at, payment_status, created_at, accepted_at, preparing_at, ready_at, completed_at, updated_at, paid_at, cancelled_at, cancelled_by, payment_method, razorpay_order_id, razorpay_payment_id, razorpay_signature';
-const ORDER_ITEM_COLUMNS = 'id, order_id, menu_item_id, name, variant, quantity, price, subtotal, image_url, created_at, menu_items(id, food_name, food_type, category_name, image_url, is_veg, price)';
+const ORDER_ITEM_COLUMNS = 'id, order_id, menu_item_id, name, variant, quantity, price, subtotal, image_url, is_veg, created_at, menu_items(id, food_name, food_type, category_name, image_url, is_veg, price)';
 
 export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersOptions): UseSupabaseOrdersReturn {
   const [orders, setOrders] = useState<Order[]>([]);

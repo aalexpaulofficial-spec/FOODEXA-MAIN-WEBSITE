@@ -75,6 +75,8 @@ export default async function handler(req, res) {
         customer_email: req.body.email || null,
         customer_phone: req.body.phone || null,
         customer_name: req.body.name || null,
+        items_snapshot: JSON.stringify(items || []),
+        canteen_id: req.body.canteen_id || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };

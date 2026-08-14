@@ -1145,7 +1145,7 @@ export async function verifyRazorpayPayment(params: {
   razorpay_signature: string;
   user_id: string;
   order_id: string;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; error?: string; order_id?: string; order_created?: boolean }> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     const resp = await fetch('/api/razorpay/verify-payment', {
@@ -1160,7 +1160,11 @@ export async function verifyRazorpayPayment(params: {
     if (!resp.ok || !data.success) {
       return { success: false, error: data.error || 'Payment verification failed.' };
     }
-    return { success: true };
+    return {
+      success: true,
+      order_id: data.order_id || undefined,
+      order_created: data.order_created || false,
+    };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Network error during payment verification.' };
   }

@@ -155,11 +155,37 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
       return;
     }
     try {
-      const { data: orderRows, error: fetchError } = await supabase
+      let orderRows: any[] = [];
+      let fetchError: any = null;
+
+      // Try fetching by student_id first (works for anonymous auth users via RLS)
+      const { data: byStudentId, error: err1 } = await supabase
         .from('orders')
         .select(ORDER_COLUMNS)
         .eq('student_id', userId)
         .order('created_at', { ascending: false });
+
+      if (!err1 && byStudentId && byStudentId.length > 0) {
+        orderRows = byStudentId;
+      } else {
+        // Fallback: fetch by email (works for direct session users)
+        // The direct session stores email in the order row
+        const { data: byEmail, error: err2 } = await supabase
+          .from('orders')
+          .select(ORDER_COLUMNS)
+          .not('email', 'is', null)
+          .order('created_at', { ascending: false });
+
+        if (!err2 && byEmail) {
+          // Filter client-side by matching the direct session user pattern
+          orderRows = byEmail.filter((row: any) =>
+            row.student_id === userId ||
+            (row.student_id && String(row.student_id).startsWith('direct_'))
+          );
+        } else {
+          fetchError = err2 || err1;
+        }
+      }
 
       if (fetchError) {
         setError(fetchError.message);

@@ -48,7 +48,7 @@ declare global { interface Window { Razorpay: any } }
 interface StudentPortalModalProps { isOpen: boolean; onClose: () => void; role?: UserRole; triggerToast?: (title: string, description: string, type?: 'success' | 'warning' | 'info' | 'ai') => void }
 type PortalTab = 'explore' | 'nutrition' | 'analytics' | 'offers' | 'history' | 'profile' | 'checkout' | 'payment_success' | 'payment_failed';
 
-const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'accepted', 'preparing', 'cooking', 'quality_check', 'packed', 'ready'];
+const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready'];
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -311,9 +311,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
   const [banners, setBanners] = useState<any[]>([]);
 
   // Determine effective user ID and institution data (auth or direct session)
-  // Google users: user.id is the student_id
-  // Direct users: student_id is NULL (temporary session)
-  const effectiveUserId = user?.id || '';
+  // Anonymous auth users: user.id is the student_id (matches auth.uid())
+  // Direct session users: student_id is the direct session ID
+  const effectiveUserId = user?.id || (directSession ? `direct_${directSession.temporarySessionId}` : '');
   const effectiveInstitutionData = user ? institutionData : (directSession ? {
     institution_id: directSession.institutionId,
     institution_name: directSession.institutionName,
@@ -1224,7 +1224,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
           console.log('[FOODEXA PAYMENT] Razorpay payment response received', response);
 
           try {
-            // ── SERVER-SIDE VERIFICATION (HMAC SHA256) ──────────────────
+            // ── SERVER-SIDE VERIFICATION + ORDER CREATION ──────────────
+            // verify-payment.js now creates the order and order_items server-side
+            // using the service_role key (bypasses RLS).
             console.log('[FOODEXA PAYMENT] Verifying payment with server');
             const verifyResult = await verifyRazorpayPayment({
               razorpay_order_id,
@@ -1235,7 +1237,6 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             });
 
             if (!verifyResult.success) {
-              // Payment failed — NO order created in Supabase
               console.error('[FOODEXA PAYMENT ERROR] verify', verifyResult.error);
               setError('We could not verify your payment. Any amount debited will be reconciled automatically.');
               setActiveTab('payment_failed');
@@ -1244,8 +1245,27 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               return;
             }
 
-            console.log('[FOODEXA PAYMENT] Payment verified');
-            // ── CREATE FOODEXA ORDER (only after verification) ───────────
+            console.log('[FOODEXA PAYMENT] Payment verified. Server order_created:', verifyResult.order_created, 'order_id:', verifyResult.order_id);
+
+            // ── CASE 1: Server created the order successfully ──────────
+            if (verifyResult.order_created && verifyResult.order_id) {
+              console.log('[FOODEXA PAYMENT] Server created order:', verifyResult.order_id);
+              await refreshOrders();
+              setCart([]);
+              setPaidPendingConfirmation(null);
+              setShowCart(false);
+              setCouponDiscount(0);
+              setCouponCode('');
+              setActiveTab('payment_success');
+              resetPaymentButton();
+              setError(null);
+              if (triggerToast) triggerToast('Order Placed!', 'Your order has been confirmed.', 'success');
+              return;
+            }
+
+            // ── CASE 2: Server verified payment but order not created ──
+            // Try client-side fallback (createOrderAfterPayment with RLS)
+            console.warn('[FOODEXA PAYMENT] Server did not create order, trying client-side fallback');
             const createResult = await createOrderAfterPayment({
               user_id: authUserId || '',
               email: customerEmail,
@@ -1267,19 +1287,16 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
             if (createResult.error || !createResult.data) {
               console.error('[FOODEXA PAYMENT ERROR] create-order-after-payment', createResult.error);
-              const pendingMessage = (createResult.error || '').toLowerCase().includes('canteen')
-                ? 'Payment received. Your order is awaiting canteen confirmation.'
-                : 'Payment received. We are confirming your order.';
-              setPaidPendingConfirmation({ razorpay_order_id, razorpay_payment_id, message: pendingMessage });
-              setError(pendingMessage);
-              setActiveTab('payment_success');
+              // Payment was verified but order creation failed both server-side and client-side
+              const errorMsg = 'Payment was received, but we could not create the order. Please retry order confirmation.';
+              setError(errorMsg);
+              setActiveTab('payment_failed');
               resetPaymentButton();
-              if (triggerToast) triggerToast('Payment Received', pendingMessage, 'warning');
+              if (triggerToast) triggerToast('Order Pending', errorMsg, 'warning');
               return;
             }
 
-            console.log('[FOODEXA PAYMENT] FOODEXA order created:', createResult.data.id);
-            // ── SUCCESS — refresh and show confirmation ──────────────────
+            console.log('[FOODEXA PAYMENT] Client-side order created:', createResult.data.id);
             await refreshOrders();
             setCart([]);
             setPaidPendingConfirmation(null);
@@ -1293,15 +1310,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
           } catch (verifyErr: any) {
             console.error('[FOODEXA PAYMENT ERROR] confirm', verifyErr?.message || verifyErr);
-            setPaidPendingConfirmation({
-              razorpay_order_id,
-              razorpay_payment_id,
-              message: 'Payment received. We are confirming your order.',
-            });
-            setError('Payment received. We are confirming your order.');
-            setActiveTab('payment_success');
+            // Payment was received but something went wrong during verification
+            setError('Payment was received, but we could not confirm your order. Please retry order confirmation.');
+            setActiveTab('payment_failed');
             resetPaymentButton();
-            if (triggerToast) triggerToast('Payment Received', 'Payment completed but order confirmation needs review.', 'warning');
+            if (triggerToast) triggerToast('Payment Received', 'Order confirmation needs review. Please contact support.', 'warning');
           }
         },
 
@@ -1763,7 +1776,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                 {/* PAYMENT SUCCESS TAB */}
                 {/* ═══════════════════ LIVE CANTEEN TRACKING ═══════════════════ */}
                  {activeTab === 'payment_success' && (() => {
-                   const o = activeOrders[0] || orders.find(ord => ['pending','accepted','preparing','cooking','quality_check','packed','ready','completed'].includes(ord.status)) || orders[0];
+                    const o = activeOrders[0] || orders.find(ord => ['pending','confirmed','preparing','ready','completed'].includes(ord.status)) || orders[0];
                    const stage = getTimelineStage(o?.status);
                    const label = o ? getTimelineLabel(o.status) : 'Order Confirmed';
                    const completed = isOrderCompleted(o?.status);
@@ -1772,16 +1785,27 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 if (!o && paidPendingConfirmation) {
                       return (
                         <div className="max-w-md mx-auto space-y-5 py-10 text-center">
-                          <div className="w-24 h-24 mx-auto bg-emerald-50 border border-emerald-200 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/10">
-                            <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+                          <div className="w-24 h-24 mx-auto bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/10">
+                            <AlertCircle className="w-12 h-12 text-amber-500" />
                           </div>
                           <div className="space-y-2">
-                            <p className="text-xs font-black uppercase tracking-widest text-emerald-600">Payment Successful</p>
+                            <p className="text-xs font-black uppercase tracking-widest text-amber-600">Payment Received</p>
                             <h2 className="text-2xl font-black text-slate-900">Order Confirmation Pending</h2>
                             <p className="text-sm text-slate-600 font-semibold">{paidPendingConfirmation.message}</p>
                           </div>
                           <button
-                            onClick={async () => { await refreshOrders(); }}
+                            onClick={async () => {
+                              await refreshOrders();
+                              // After refresh, if the order appeared, it will show the live tracking
+                              // If not, show error
+                              setTimeout(() => {
+                                const latestActive = orders.find(ord => ['pending','confirmed','preparing','cooking','quality_check','packed','ready','completed'].includes(ord.status));
+                                if (!latestActive) {
+                                  setError('Payment was received, but we could not create the order. Please retry order confirmation.');
+                                  setActiveTab('payment_failed');
+                                }
+                              }, 2000);
+                            }}
                             className="w-full rounded-2xl bg-[#0071E3] py-4 text-sm font-black text-white shadow-lg shadow-blue-500/25 hover:bg-[#0066CC] transition-all"
                           >
                             Check Order Status

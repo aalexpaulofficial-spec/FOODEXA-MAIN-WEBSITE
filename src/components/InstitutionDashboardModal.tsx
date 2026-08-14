@@ -109,7 +109,7 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
   // Realtime subscription for orders
   useEffect(() => {
     if (!isOpen || !profile?.institution_id) return;
-    const channel = supabase.channel('institution-orders');
+    const channel = supabase.channel(`inst-orders-${profile.institution_id}`);
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'orders', filter: `institution_id=eq.${profile.institution_id}` },
@@ -124,9 +124,18 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
         }
       }
     );
+    // Also subscribe to order_items changes to refresh the order list
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'order_items' },
+      () => {
+        // Order items changed — refresh the full order list to get updated items
+        load();
+      }
+    );
     channel.subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [isOpen, profile?.institution_id]);
+  }, [isOpen, profile?.institution_id, load]);
 
   const handleStockUpdate = async (id: string, newStock: number) => {
     setSavingStock(true);
@@ -372,6 +381,29 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {orders.slice(0, 50).map((o: any) => {
                         const ns = normalizeStatus(o.status);
+                        const nextStatus = ns === 'pending' ? 'confirmed' : ns === 'confirmed' ? 'preparing' : ns === 'preparing' ? 'ready' : ns === 'ready' ? 'completed' : null;
+                        const nextLabel = nextStatus === 'confirmed' ? 'Accept' : nextStatus === 'preparing' ? 'Start Prep' : nextStatus === 'ready' ? 'Mark Ready' : nextStatus === 'completed' ? 'Complete' : '';
+
+                        const handleStatusUpdate = async (orderId: string, newStatus: string) => {
+                          const now = new Date().toISOString();
+                          const updates: Record<string, any> = {
+                            status: newStatus,
+                            order_status: newStatus,
+                            updated_at: now,
+                          };
+                          if (newStatus === 'confirmed') { updates.accepted_at = now; updates.kitchen_status = 'pending'; updates.counter_status = 'incoming'; }
+                          if (newStatus === 'preparing') { updates.preparing_at = now; updates.kitchen_status = 'preparing'; updates.counter_status = 'preparing'; }
+                          if (newStatus === 'ready') { updates.ready_at = now; updates.kitchen_status = 'ready'; updates.counter_status = 'ready'; }
+                          if (newStatus === 'completed') { updates.completed_at = now; updates.kitchen_status = 'completed'; updates.counter_status = 'completed'; }
+
+                          const { error } = await supabase.from('orders').update(updates).eq('id', orderId);
+                          if (error) {
+                            console.error('Status update failed:', error.message);
+                          } else {
+                            setOrders((prev) => prev.map((order) => order.id === orderId ? { ...order, ...updates } : order));
+                          }
+                        };
+
                         return (
                         <div key={o.id} className="rounded-2xl border border-gray-200 bg-white p-4">
                           <div className="flex items-center justify-between">
@@ -381,10 +413,27 @@ export const InstitutionDashboardModal: React.FC<InstitutionDashboardModalProps>
                           <div className="mt-2 space-y-1">
                             <p className="text-xs text-gray-600">Counter: <span className="font-bold text-gray-800">{o.counter_name || o.counter_code || o.canteen_id || '—'}</span></p>
                             {o.pickup_code && <p className="text-xs text-cyan-600 font-mono font-bold">Pickup: {o.pickup_code}</p>}
-                            <p className="text-xs text-gray-600">Items: {o.items?.length || 0} · Total: ₹{Number(o.total_amount || 0).toLocaleString('en-IN')}</p>
+                            {o.order_items && o.order_items.length > 0 && (
+                              <div className="mt-1 space-y-0.5">
+                                {o.order_items.map((item: any, idx: number) => (
+                                  <p key={idx} className="text-[10px] text-gray-500">
+                                    {item.name || 'Item'} x{item.quantity} · ₹{Number(item.price || 0) * Number(item.quantity || 1)}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                            <p className="text-xs text-gray-600">Items: {o.order_items?.length || 0} · Total: ₹{Number(o.total_amount || 0).toLocaleString('en-IN')}</p>
                             {o.estimated_ready_at && <p className="text-xs text-amber-600 font-bold">~{Math.max(0, Math.round((new Date(o.estimated_ready_at).getTime() - Date.now()) / 60000))} mins est.</p>}
                             <p className="text-[10px] text-gray-400">{o.created_at ? new Date(o.created_at).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit' }) : ''}</p>
                           </div>
+                          {nextStatus && (
+                            <button
+                              onClick={() => handleStatusUpdate(o.id, nextStatus)}
+                              className="mt-3 w-full rounded-xl bg-emerald-500 px-3 py-2 text-[10px] font-bold text-white hover:bg-emerald-600 transition-colors"
+                            >
+                              {nextLabel}
+                            </button>
+                          )}
                         </div>
                         );
                       })}

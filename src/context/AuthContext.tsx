@@ -483,36 +483,70 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { error: 'Institution Code is required.', data: null };
     }
     try {
+      // Try RPC first
       const { data, error: rpcError } = await supabase
         .rpc('get_institution_by_code', { p_institution_code: trimmed.trim() });
 
-      if (rpcError) {
-        console.error('[Auth] validateInstitutionCode RPC error:', rpcError.message);
-        return { error: 'Unable to verify Institution Code. Please try again.', data: null };
+      if (!rpcError && data) {
+        const inst = Array.isArray(data) ? data[0] : data;
+        if (!inst || !inst.id) {
+          // RPC returned null/empty - institution not found
+          return { error: 'Institution code not found. Please check your code.', data: null };
+        }
+        if (inst.status && inst.status !== 'approved' && inst.status !== 'active') {
+          return { error: 'This institution is currently unavailable. Please contact your institution administrator.', data: null };
+        }
+        return {
+          error: null,
+          data: {
+            institution_id: inst.id,
+            institution_name: inst.name || inst.institution_name || '',
+            campus: inst.campus || '',
+            city: inst.city || '',
+            state: inst.state || '',
+            country: inst.country || '',
+            institution_code: inst.institution_code || trimmed.toUpperCase(),
+          } as InstitutionData,
+        };
       }
 
-      if (!data || (Array.isArray(data) && data.length === 0)) {
-        return { error: 'Invalid institution code. Please check your code and try again.', data: null };
+      // Fallback: direct query if RPC not available
+      if (rpcError && (rpcError.message?.includes('function') || rpcError.message?.includes('not found') || rpcError.message?.includes('schema cache'))) {
+        console.warn('[Auth] RPC not available, falling back to direct query');
+        const { data: instRows, error: queryError } = await supabase
+          .from('institutions')
+          .select('id, name, institution_name, campus, city, state, country, institution_code, status')
+          .eq('institution_code', trimmed.trim().toUpperCase())
+          .limit(1);
+
+        if (queryError) {
+          console.error('[Auth] Institution direct query error:', queryError.message);
+          return { error: 'Unable to verify Institution Code. Please try again.', data: null };
+        }
+
+        const inst = instRows?.[0];
+        if (!inst) {
+          return { error: 'Institution code not found. Please check your code.', data: null };
+        }
+        if (inst.status && inst.status !== 'approved' && inst.status !== 'active') {
+          return { error: 'This institution is currently unavailable. Please contact your institution administrator.', data: null };
+        }
+        return {
+          error: null,
+          data: {
+            institution_id: inst.id,
+            institution_name: inst.name || inst.institution_name || '',
+            campus: inst.campus || '',
+            city: inst.city || '',
+            state: inst.state || '',
+            country: inst.country || '',
+            institution_code: inst.institution_code || trimmed.toUpperCase(),
+          } as InstitutionData,
+        };
       }
 
-      const inst = Array.isArray(data) ? data[0] : data;
-
-      if (inst.status && inst.status !== 'approved' && inst.status !== 'active') {
-        return { error: 'This institution is currently unavailable. Please contact your institution administrator.', data: null };
-      }
-
-      return {
-        error: null,
-        data: {
-          institution_id: inst.id,
-          institution_name: inst.name || inst.institution_name || '',
-          campus: inst.campus || '',
-          city: inst.city || '',
-          state: inst.state || '',
-          country: inst.country || '',
-          institution_code: inst.institution_code || trimmed.toUpperCase(),
-        } as InstitutionData,
-      };
+      console.error('[Auth] validateInstitutionCode RPC error:', rpcError.message);
+      return { error: 'Unable to verify Institution Code. Please try again.', data: null };
     } catch (err: any) {
       console.error('[Auth] Institution code validation exception:', err);
       return { error: 'Unable to verify Institution Code. Please try again.', data: null };
@@ -840,6 +874,12 @@ if (safeToken.length !== OTP_LENGTH) {
         p_institution_code: code,
       });
 
+      // Check if RPC doesn't exist in schema cache
+      if (rpcError && (rpcError.message?.includes('function') || rpcError.message?.includes('not found') || rpcError.message?.includes('schema cache'))) {
+        console.warn('[Auth] start_student_session RPC not found, falling back to direct implementation');
+        return await startStudentEntryFallback(safeName, safeEmail, code);
+      }
+
       if (rpcError) {
         console.error('[Auth] start_student_session RPC error:', rpcError.message);
         return { error: 'Unable to connect. Please try again.', profile: null, institution: null };
@@ -914,6 +954,130 @@ if (safeToken.length !== OTP_LENGTH) {
       };
     }
   }, [setInstitutionData]);
+
+  // Fallback: direct Supabase queries when the RPC doesn't exist
+  const startStudentEntryFallback = async (
+    safeName: string,
+    safeEmail: string,
+    code: string
+  ): Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }> => {
+    // 1. Find institution by code
+    const { data: instRows, error: instError } = await supabase
+      .from('institutions')
+      .select('id, name, institution_name, campus, city, state, country, institution_code, status')
+      .eq('institution_code', code)
+      .limit(1);
+
+    if (instError) {
+      console.error('[Auth] Fallback institution lookup error:', instError.message);
+      return { error: 'Unable to connect to FOODEXA right now. Please try again.', profile: null, institution: null };
+    }
+
+    const inst = instRows?.[0];
+    if (!inst) {
+      return { error: 'Institution code not found. Please check your code.', profile: null, institution: null };
+    }
+
+    if (inst.status && inst.status !== 'active' && inst.status !== 'approved') {
+      return { error: 'This institution is currently unavailable.', profile: null, institution: null };
+    }
+
+    // 2. Check for existing student
+    const { data: existingStudents } = await supabase
+      .from('students')
+      .select('id, email, full_name, student_id, registration_id, institution_id')
+      .eq('email', safeEmail)
+      .eq('institution_id', inst.id)
+      .limit(1);
+
+    let studentRow = existingStudents?.[0] || null;
+
+    // 3. Create new student if needed
+    if (!studentRow) {
+      const year = new Date().getFullYear();
+      const nameParts = safeName.split(/\s+/).filter(Boolean);
+      let firstLetter = 'X';
+      let lastLetter = 'X';
+      if (nameParts.length >= 2) {
+        firstLetter = nameParts[0][0].toUpperCase();
+        lastLetter = nameParts[nameParts.length - 1][0].toUpperCase();
+      } else if (nameParts.length === 1) {
+        firstLetter = nameParts[0][0].toUpperCase();
+        lastLetter = nameParts[0][nameParts[0].length - 1].toUpperCase();
+      }
+      const initials = firstLetter + lastLetter;
+      const studentIdVal = `FDX-STU-${initials}${year}`;
+      const registrationIdVal = `FDX-REG-${initials}${year}`;
+
+      const { data: newStudent, error: insertError } = await supabase
+        .from('students')
+        .insert({
+          email: safeEmail,
+          full_name: safeName,
+          institution_id: inst.id,
+          student_id: studentIdVal,
+          registration_id: registrationIdVal,
+        })
+        .select('id, email, full_name, student_id, registration_id, institution_id')
+        .single();
+
+      if (insertError) {
+        console.error('[Auth] Fallback student insert error:', insertError.message);
+        return { error: 'Unable to create your session. Please try again.', profile: null, institution: null };
+      }
+      studentRow = newStudent;
+    }
+
+    if (!studentRow) {
+      return { error: 'Unable to create your session. Please try again.', profile: null, institution: null };
+    }
+
+    const institutionData: InstitutionData = {
+      institution_id: inst.id,
+      institution_name: inst.name || inst.institution_name || '',
+      campus: inst.campus || '',
+      city: inst.city || '',
+      state: inst.state || '',
+      country: inst.country || '',
+      institution_code: inst.institution_code || code,
+    };
+
+    const tempSession: DirectSession = {
+      session_id: studentRow.id,
+      temporarySessionId: studentRow.id,
+      institutionId: institutionData.institution_id,
+      institutionName: institutionData.institution_name,
+      institutionCode: institutionData.institution_code,
+      name: studentRow.full_name || safeName,
+      email: studentRow.email || safeEmail,
+      role: 'student',
+    };
+
+    setDirectSession(tempSession);
+    sessionStorage.setItem(DIRECT_SESSION_KEY, JSON.stringify(tempSession));
+    setInstitutionData(institutionData);
+    setIsEmailVerified(true);
+
+    const profileLike: Profile = {
+      user_id: studentRow.id,
+      email: studentRow.email || safeEmail,
+      full_name: studentRow.full_name || safeName,
+      phone: null,
+      institution_id: institutionData.institution_id,
+      role: 'student',
+      department: null,
+      semester: null,
+      programme: null,
+      campus_block: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      student_id: studentRow.student_id || '',
+      registration_id: studentRow.registration_id || '',
+    };
+    setProfile(profileLike);
+
+    return { error: null, profile: profileLike, institution: institutionData };
+  };
 
   const signOut = async () => {
     if (user) {

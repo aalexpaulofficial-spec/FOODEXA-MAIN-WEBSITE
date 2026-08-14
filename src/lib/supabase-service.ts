@@ -119,31 +119,48 @@ export async function fetchMenuItems(params?: {
   sortBy?: 'name' | 'popular' | 'newest' | 'price_asc' | 'price_desc' | 'prep_time' | 'rating';
   limit?: number;
 }): Promise<MenuItem[]> {
-  let query = supabase.from('menu_items').select('*');
-  if (params?.institution_id) query = query.eq('institution_id', params.institution_id);
-  if (params?.counter && params.counter !== 'ALL') query = query.eq('canteen_id', params.counter);
-  if (params?.category && params.category !== 'ALL') query = query.eq('food_type', params.category);
-  if (params?.availableOnly !== false) query = query.neq('status', 'archived');
-  if (params?.popularOnly) query = query.eq('is_featured', true);
-  if (params?.search) {
-    const s = `%${params.search.toLowerCase()}%`;
-    query = query.or(`food_name.ilike.${s},food_type.ilike.${s},description.ilike.${s}`);
+  try {
+    let query = supabase.from('menu_items').select('*');
+    if (params?.institution_id) query = query.eq('institution_id', params.institution_id);
+    if (params?.counter && params.counter !== 'ALL') query = query.eq('canteen_id', params.counter);
+    if (params?.category && params.category !== 'ALL') {
+      // Try food_type first, fall back to category column
+      query = query.eq('food_type', params.category);
+    }
+    // availability filter: use is_available if available, else available, else availability
+    if (params?.availableOnly !== false) {
+      query = query.eq('is_available', true);
+    }
+    if (params?.popularOnly) {
+      query = query.eq('popular', true);
+    }
+    if (params?.search) {
+      const s = `%${params.search.toLowerCase()}%`;
+      query = query.or(`item_name.ilike.${s},food_name.ilike.${s},food_type.ilike.${s},description.ilike.${s},category.ilike.${s}`);
+    }
+
+    switch (params?.sortBy) {
+      case 'popular': query = query.order('rating', { ascending: false }); break;
+      case 'newest': query = query.order('created_at', { ascending: false }); break;
+      case 'price_asc': query = query.order('price', { ascending: true }); break;
+      case 'price_desc': query = query.order('price', { ascending: false }); break;
+      case 'prep_time': query = query.order('prep_time', { ascending: true }); break;
+      case 'rating': query = query.order('rating', { ascending: false }); break;
+      default: query = query.order('item_name', { ascending: true });
+    }
+
+    if (params?.limit) query = query.limit(params.limit);
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn('[Supabase] fetchMenuItems query error:', error.message);
+      return [];
+    }
+    return (data || []).map(mapMenuItem);
+  } catch (err) {
+    console.error('[Supabase] fetchMenuItems exception:', err);
+    return [];
   }
-
-  switch (params?.sortBy) {
-    case 'popular': query = query.order('ai_popularity_score', { ascending: false }).order('rating', { ascending: false }); break;
-    case 'newest': query = query.order('created_at', { ascending: false }); break;
-    case 'price_asc': query = query.order('price', { ascending: true }); break;
-    case 'price_desc': query = query.order('price', { ascending: false }); break;
-    case 'prep_time': query = query.order('prep_time', { ascending: true }); break;
-    case 'rating': query = query.order('rating', { ascending: false }); break;
-    default: query = query.order('food_name', { ascending: true });
-  }
-
-  if (params?.limit) query = query.limit(params.limit);
-
-  const { data } = await query;
-  return (data || []).map(mapMenuItem);
 }
 
 export function getItemAvailability(item: MenuItem): {
@@ -421,19 +438,23 @@ export async function findActiveCanteen(
   try {
     let query = supabase
       .from('canteens')
-      .select('id, name, status, counter_code, counter_name')
+      .select('id, name, is_active')
       .eq('institution_id', institutionId);
     if (canteenId) query = query.eq('id', canteenId);
     const { data, error } = await query;
     if (error || !data || data.length === 0) return null;
+    // Filter active canteens in JS (handles both is_active and status column variants)
     const active = data.find(
-      (c: any) => isActiveCanteenStatus(c.status)
+      (c: any) => {
+        if ('is_active' in c) return c.is_active !== false;
+        return true;
+      }
     );
     if (!active?.id) return null;
     return {
       id: active.id,
-      counter_code: active.counter_code || active.counter_name || active.name || 'Counter assignment pending',
-      name: active.name || active.counter_name || active.counter_code || 'Canteen',
+      counter_code: active.name || 'Counter',
+      name: active.name || 'Canteen',
     };
   } catch {
     return null;
@@ -613,11 +634,24 @@ export async function createOrderAfterPayment(params: {
   const pickupType = resolvePickupTypeFromCanteen(activeCanteen);
   const pickupPrefix = getPickupTypePrefix(pickupType);
 
-  const { data: profileRow } = await supabase
+  // Look up student identifiers from profiles OR students table
+  let profileRow: any = null;
+  const { data: profData } = await supabase
     .from('profiles')
     .select('registration_id, student_id')
     .eq('user_id', params.user_id)
     .maybeSingle();
+  if (profData) {
+    profileRow = profData;
+  } else {
+    // For non-auth students, look up from the students table
+    const { data: studentData } = await supabase
+      .from('students')
+      .select('registration_id, student_id')
+      .eq('id', params.user_id)
+      .maybeSingle();
+    if (studentData) profileRow = studentData;
+  }
 
   // Idempotency: never create two orders for the same successful Razorpay payment
   const existingOrderQuery = await supabase
@@ -755,11 +789,23 @@ export async function placeOrder(params: {
 
   const isPaid = Boolean(params.razorpay_payment_id && params.razorpay_signature);
 
-  const { data: profileRow } = await supabase
+  // Look up student identifiers from profiles OR students table
+  let profileRow: any = null;
+  const { data: profData } = await supabase
     .from('profiles')
     .select('registration_id, student_id')
     .eq('user_id', params.user_id)
     .maybeSingle();
+  if (profData) {
+    profileRow = profData;
+  } else {
+    const { data: studentData } = await supabase
+      .from('students')
+      .select('registration_id, student_id')
+      .eq('id', params.user_id)
+      .maybeSingle();
+    if (studentData) profileRow = studentData;
+  }
 
   const payload: Record<string, any> = {
     student_id: params.user_id || null,
@@ -1373,62 +1419,80 @@ export async function fetchCounters(institutionId?: string): Promise<any[]> {
 
 // ==================== SEARCH & FILTER ====================
 export async function searchMenuItems(query: string, institutionId?: string): Promise<MenuItem[]> {
-  let q = supabase.from('menu_items').select('*').neq('status', 'archived');
-  if (institutionId) q = q.eq('institution_id', institutionId);
+  try {
+    let q = supabase.from('menu_items').select('*');
+    if (institutionId) q = q.eq('institution_id', institutionId);
 
-  const searchTerm = `%${query.toLowerCase()}%`;
-  q = q.or(`food_name.ilike.${searchTerm},food_type.ilike.${searchTerm},description.ilike.${searchTerm}`);
+    const searchTerm = `%${query.toLowerCase()}%`;
+    q = q.or(`item_name.ilike.${searchTerm},food_name.ilike.${searchTerm},food_type.ilike.${searchTerm},description.ilike.${searchTerm},category.ilike.${searchTerm}`);
 
-  const { data } = await q.order('food_name', { ascending: true }).limit(50);
-  return (data || []).map(mapMenuItem);
+    const { data, error } = await q.order('item_name', { ascending: true }).limit(50);
+    if (error) {
+      console.warn('[Supabase] searchMenuItems error:', error.message);
+      return [];
+    }
+    return (data || []).map(mapMenuItem);
+  } catch (err) {
+    console.error('[Supabase] searchMenuItems exception:', err);
+    return [];
+  }
 }
 
 export async function filterMenuItems(filters: FoodFilters, institutionId?: string): Promise<MenuItem[]> {
-  let query = supabase.from('menu_items').select('*').neq('status', 'archived');
-  if (institutionId) query = query.eq('institution_id', institutionId);
+  try {
+    let query = supabase.from('menu_items').select('*');
+    if (institutionId) query = query.eq('institution_id', institutionId);
 
-  if (filters.search) {
-    const searchTerm = `%${filters.search.toLowerCase()}%`;
-    query = query.or(`food_name.ilike.${searchTerm},food_type.ilike.${searchTerm},description.ilike.${searchTerm}`);
-  }
-  if (filters.maxPrepTime !== undefined) {
-    query = query.lte('prep_time', filters.maxPrepTime);
-  }
-  if (filters.minPrice !== undefined) {
-    query = query.gte('price', filters.minPrice);
-  }
-  if (filters.maxPrice !== undefined) {
-    query = query.lte('price', filters.maxPrice);
-  }
-  if (filters.category && filters.category !== 'ALL') {
-    query = query.eq('food_type', filters.category);
-  }
-  if (filters.counter && filters.counter !== 'ALL') {
-    query = query.eq('canteen_id', filters.counter);
-  }
+    if (filters.search) {
+      const searchTerm = `%${filters.search.toLowerCase()}%`;
+      query = query.or(`item_name.ilike.${searchTerm},food_name.ilike.${searchTerm},food_type.ilike.${searchTerm},description.ilike.${searchTerm},category.ilike.${searchTerm}`);
+    }
+    if (filters.maxPrepTime !== undefined) {
+      query = query.lte('prep_time', filters.maxPrepTime);
+    }
+    if (filters.minPrice !== undefined) {
+      query = query.gte('price', filters.minPrice);
+    }
+    if (filters.maxPrice !== undefined) {
+      query = query.lte('price', filters.maxPrice);
+    }
+    if (filters.category && filters.category !== 'ALL') {
+      query = query.eq('food_type', filters.category);
+    }
+    if (filters.counter && filters.counter !== 'ALL') {
+      query = query.eq('canteen_id', filters.counter);
+    }
 
-  switch (filters.sortBy) {
-    case 'popular':
-      query = query.order('ai_popularity_score', { ascending: false }).order('rating', { ascending: false });
-      break;
-    case 'newest':
-      query = query.order('created_at', { ascending: false });
-      break;
-    case 'price_asc':
-      query = query.order('price', { ascending: true });
-      break;
-    case 'price_desc':
-      query = query.order('price', { ascending: false });
-      break;
-    case 'prep_time':
-      query = query.order('prep_time', { ascending: true });
-      break;
-    default:
-      query = query.order('food_name', { ascending: true });
-  }
+    switch (filters.sortBy) {
+      case 'popular':
+        query = query.order('rating', { ascending: false });
+        break;
+      case 'newest':
+        query = query.order('created_at', { ascending: false });
+        break;
+      case 'price_asc':
+        query = query.order('price', { ascending: true });
+        break;
+      case 'price_desc':
+        query = query.order('price', { ascending: false });
+        break;
+      case 'prep_time':
+        query = query.order('prep_time', { ascending: true });
+        break;
+      default:
+        query = query.order('item_name', { ascending: true });
+    }
 
-  const { data } = await query.limit(100);
-  return (data || []).map(mapMenuItem);
+    const { data, error } = await query.limit(100);
+    if (error) {
+      console.warn('[Supabase] filterMenuItems error:', error.message);
+      return [];
+    }
+    return (data || []).map(mapMenuItem);
+  } catch (err) {
+    console.error('[Supabase] filterMenuItems exception:', err);
+    return [];
+  }
 }
 
 // ==================== CART CALCULATIONS ====================
@@ -1492,20 +1556,20 @@ export async function fetchNutritionInfo(menuItemId: string): Promise<any> {
 
 export async function fetchAIRecommendations(userId: string, institutionId: string, type: 'healthy' | 'trending' | 'personalized' | 'popular_today' | 'fast_pickup' | 'offers'): Promise<MenuItem[]> {
   try {
-    let query = supabase.from('menu_items').select('*').eq('institution_id', institutionId).neq('status', 'archived').eq('is_available', true);
+    let query = supabase.from('menu_items').select('*').eq('institution_id', institutionId).eq('is_available', true);
 
     switch (type) {
       case 'healthy':
         query = query.order('rating', { ascending: false });
         break;
       case 'trending':
-        query = query.eq('is_featured', true).order('rating', { ascending: false });
+        query = query.eq('popular', true).order('rating', { ascending: false });
         break;
       case 'popular_today':
-        query = query.order('ai_popularity_score', { ascending: false });
+        query = query.order('rating', { ascending: false });
         break;
       case 'fast_pickup':
-        query = query.lte('prep_time', 15).order('prep_time', { ascending: true });
+        query = query.lte('prep_time', '15').order('prep_time', { ascending: true });
         break;
       case 'offers':
         query = query.not('offer_price', 'is', null).order('offer_price', { ascending: true });
@@ -1516,7 +1580,11 @@ export async function fetchAIRecommendations(userId: string, institutionId: stri
         break;
     }
 
-    const { data } = await query.limit(10);
+    const { data, error } = await query.limit(10);
+    if (error) {
+      console.warn('[Supabase] fetchAIRecommendations error:', error.message);
+      return [];
+    }
     return (data || []).map(mapMenuItem);
   } catch {
     return [];

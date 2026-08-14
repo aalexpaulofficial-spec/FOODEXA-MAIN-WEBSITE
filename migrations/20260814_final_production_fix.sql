@@ -1,5 +1,6 @@
 -- ============================================================
--- FOODEXA FINAL PRODUCTION FIX — 2026-08-14
+-- FOODEXA PRODUCTION FIX v2 — 2026-08-14
+-- Dynamic schema-aware RPC for institution code verification
 -- Run this in Supabase SQL Editor
 -- Idempotent (safe to run multiple times)
 -- ============================================================
@@ -21,7 +22,6 @@ CREATE TABLE IF NOT EXISTS public.students (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Unique constraint: one student per email+institution
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -34,9 +34,10 @@ $$;
 
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 
--- Anon can read students (filtered client-side)
 DROP POLICY IF EXISTS anon_select_students ON public.students;
 CREATE POLICY anon_select_students ON public.students FOR SELECT TO anon USING (true);
+
+-- Allow anon insert via SECURITY DEFINER RPC only (no direct anon insert needed)
 
 -- ══════════════════════════════════════════════════════════════
 -- 2. ENSURE ORDERS TABLE HAS ALL REQUIRED COLUMNS
@@ -70,15 +71,14 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_method TEXT;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
 -- ══════════════════════════════════════════════════════════════
--- 3. ENSURE ORDER_ITEMS TABLE HAS ALL REQUIRED COLUMNS
+-- 3. ENSURE ORDER_ITEMS HAS ALL REQUIRED COLUMNS
 -- ══════════════════════════════════════════════════════════════
 ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS subtotal NUMERIC(10,2);
 ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE public.order_items ADD COLUMN IF NOT EXISTS is_veg BOOLEAN;
 
 -- ══════════════════════════════════════════════════════════════
--- 4. ENSURE MENU_ITEMS TABLE HAS ALL REQUIRED COLUMNS
--- (The frontend queries these columns; add them if missing)
+-- 4. ENSURE MENU_ITEMS HAS ALL REQUIRED COLUMNS
 -- ══════════════════════════════════════════════════════════════
 ALTER TABLE public.menu_items ADD COLUMN IF NOT EXISTS food_name TEXT;
 ALTER TABLE public.menu_items ADD COLUMN IF NOT EXISTS food_type TEXT;
@@ -105,13 +105,12 @@ ALTER TABLE public.menu_items ADD COLUMN IF NOT EXISTS sugar NUMERIC(10,2);
 ALTER TABLE public.menu_items ADD COLUMN IF NOT EXISTS sodium NUMERIC(10,2);
 ALTER TABLE public.menu_items ADD COLUMN IF NOT EXISTS serving_size TEXT;
 
--- Backfill food_name from item_name if food_name is null
+-- Backfill food_name from item_name
 UPDATE public.menu_items SET food_name = item_name WHERE food_name IS NULL AND item_name IS NOT NULL;
--- Backfill item_name from food_name if item_name is null
 UPDATE public.menu_items SET item_name = food_name WHERE item_name IS NULL AND food_name IS NOT NULL;
 
 -- ══════════════════════════════════════════════════════════════
--- 5. ENSURE PROFILES TABLE HAS ALL REQUIRED COLUMNS
+-- 5. ENSURE PROFILES HAS ALL REQUIRED COLUMNS
 -- ══════════════════════════════════════════════════════════════
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS student_id TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS registration_id TEXT;
@@ -134,145 +133,82 @@ CREATE TABLE IF NOT EXISTS public.counters (
 );
 
 -- ══════════════════════════════════════════════════════════════
--- 7. ENSURE HOMEPAGE_SECTIONS TABLE EXISTS
+-- 7. RLS POLICIES (anon read-only)
 -- ══════════════════════════════════════════════════════════════
-CREATE TABLE IF NOT EXISTS public.homepage_sections (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  institution_id UUID REFERENCES public.institutions(id) ON DELETE CASCADE,
-  section_type TEXT NOT NULL,
-  title TEXT NOT NULL DEFAULT '',
-  subtitle TEXT DEFAULT '',
-  display_order INTEGER DEFAULT 0,
-  is_active BOOLEAN DEFAULT true,
-  config JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- ══════════════════════════════════════════════════════════════
--- 8. RLS POLICIES
--- ══════════════════════════════════════════════════════════════
-
--- Orders: anon can SELECT (filtered client-side by student_id)
 DROP POLICY IF EXISTS anon_select_orders ON public.orders;
 CREATE POLICY anon_select_orders ON public.orders FOR SELECT TO anon USING (true);
 
--- Order Items: anon can SELECT
 DROP POLICY IF EXISTS anon_select_order_items ON public.order_items;
 CREATE POLICY anon_select_order_items ON public.order_items FOR SELECT TO anon USING (true);
 
--- Menu Items: anon can SELECT
 DROP POLICY IF EXISTS anon_select_menu_items ON public.menu_items;
 CREATE POLICY anon_select_menu_items ON public.menu_items FOR SELECT TO anon USING (true);
 
--- Institutions: anon can SELECT
 DROP POLICY IF EXISTS anon_select_institutions ON public.institutions;
 CREATE POLICY anon_select_institutions ON public.institutions FOR SELECT TO anon USING (true);
 
--- Canteens: anon can SELECT
 DROP POLICY IF EXISTS anon_select_canteens ON public.canteens;
 CREATE POLICY anon_select_canteens ON public.canteens FOR SELECT TO anon USING (true);
 
--- Counters: anon can SELECT
 DROP POLICY IF EXISTS anon_select_counters ON public.counters;
 CREATE POLICY anon_select_counters ON public.counters FOR SELECT TO anon USING (true);
 
--- Menu Categories: anon can SELECT
 DROP POLICY IF EXISTS anon_select_menu_categories ON public.menu_categories;
 CREATE POLICY anon_select_menu_categories ON public.menu_categories FOR SELECT TO anon USING (true);
 
--- Notifications: anon can SELECT
-DO $$
-BEGIN
+DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_select_notifications' AND tablename = 'notifications') THEN
     CREATE POLICY anon_select_notifications ON public.notifications FOR SELECT TO anon USING (true);
   END IF;
-END;
-$$;
+END $$;
 
--- Payments: anon can SELECT (needed for idempotency checks)
-DO $$
-BEGIN
+DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_select_payments' AND tablename = 'payments') THEN
     CREATE POLICY anon_select_payments ON public.payments FOR SELECT TO anon USING (true);
   END IF;
-END;
-$$;
+END $$;
 
--- User Carts: anon can read/write their own
-DO $$
-BEGIN
+DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all_user_carts' AND tablename = 'user_carts') THEN
     CREATE POLICY anon_all_user_carts ON public.user_carts FOR ALL TO anon USING (true);
   END IF;
-END;
-$$;
+END $$;
 
--- User Favorites: anon can read/write their own
-DO $$
-BEGIN
+DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all_user_favorites' AND tablename = 'user_favorites') THEN
     CREATE POLICY anon_all_user_favorites ON public.user_favorites FOR ALL TO anon USING (true);
   END IF;
-END;
-$$;
-
--- User Addresses: anon can read/write their own
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'anon_all_user_addresses' AND tablename = 'user_addresses') THEN
-    CREATE POLICY anon_all_user_addresses ON public.user_addresses FOR ALL TO anon USING (true);
-  END IF;
-END;
-$$;
+END $$;
 
 -- ══════════════════════════════════════════════════════════════
--- 9. REALTIME CONFIGURATION
+-- 8. REALTIME (idempotent)
 -- ══════════════════════════════════════════════════════════════
-
--- Add tables to supabase_realtime publication (idempotent)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'orders'
-  ) THEN
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'orders') THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
   END IF;
-END;
-$$;
+END $$;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'order_items'
-  ) THEN
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'order_items') THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.order_items;
   END IF;
-END;
-$$;
+END $$;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'menu_items'
-  ) THEN
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'menu_items') THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.menu_items;
   END IF;
-END;
-$$;
+END $$;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'notifications'
-  ) THEN
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'notifications') THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
   END IF;
-END;
-$$;
+END $$;
 
 -- ══════════════════════════════════════════════════════════════
--- 10. INDEXES FOR PERFORMANCE
+-- 9. INDEXES
 -- ══════════════════════════════════════════════════════════════
 CREATE INDEX IF NOT EXISTS idx_orders_student_id ON public.orders(student_id);
 CREATE INDEX IF NOT EXISTS idx_orders_institution_id ON public.orders(institution_id);
@@ -286,23 +222,87 @@ CREATE INDEX IF NOT EXISTS idx_menu_items_canteen ON public.menu_items(canteen_i
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON public.order_items(order_id);
 
 -- ══════════════════════════════════════════════════════════════
--- 11. RPC: get_institution_by_code
+-- 10. HELPER: Discover which column holds institution codes
+-- Checks information_schema for: institution_code, code, access_code,
+-- campus_code, institution_access_code — picks the first one that exists.
+-- ══════════════════════════════════════════════════════════════
+CREATE OR REPLACE FUNCTION public._get_institution_code_column()
+RETURNS TEXT AS $$
+DECLARE
+  col_name TEXT;
+  candidate TEXT[];
+  candidates TEXT[] := ARRAY['institution_code', 'code', 'access_code', 'campus_code', 'institution_access_code'];
+BEGIN
+  FOREACH candidate SLICE 0 IN ARRAY candidates
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'institutions'
+        AND column_name = candidate[1]
+    ) THEN
+      RETURN candidate[1];
+    END IF;
+  END LOOP;
+  -- Last resort: find any TEXT/VARCHAR column that might hold codes
+  SELECT column_name INTO col_name
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'institutions'
+    AND data_type IN ('text', 'character varying')
+    AND column_name NOT IN ('id', 'name', 'institution_name', 'campus', 'city', 'state', 'country', 'institution_email', 'contact_person', 'phone_number', 'logo_url', 'status')
+  ORDER BY ordinal_position
+  LIMIT 1;
+
+  RETURN COALESCE(col_name, 'institution_code');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ══════════════════════════════════════════════════════════════
+-- 11. RPC: get_institution_by_code (dynamic schema-aware)
 -- ══════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.get_institution_by_code(p_institution_code TEXT)
 RETURNS jsonb AS $$
 DECLARE
+  v_code_column TEXT;
   v_inst RECORD;
+  v_result JSONB;
 BEGIN
-  SELECT * INTO v_inst
-  FROM public.institutions
-  WHERE UPPER(TRIM(institution_code)) = UPPER(TRIM(p_institution_code))
-  LIMIT 1;
+  -- Discover the actual code column
+  v_code_column := public._get_institution_code_column();
+
+  -- Dynamic query using the discovered column
+  EXECUTE format(
+    'SELECT * FROM public.institutions WHERE UPPER(TRIM(%I)) = UPPER(TRIM($1)) LIMIT 1',
+    v_code_column
+  ) INTO v_inst
+  USING TRIM(p_institution_code);
 
   IF v_inst IS NULL THEN
     RETURN NULL;
   END IF;
 
-  RETURN jsonb_build_object(
+  -- Build result with only columns that exist
+  v_result := jsonb_build_object(
+    'id', v_inst.id,
+    'status', v_inst.status
+  );
+
+  -- Conditionally include optional columns
+  IF v_inst ? 'name' THEN v_result := v_result || jsonb_build_object('name', v_inst.name); END IF;
+  IF v_inst ? 'institution_name' THEN v_result := v_result || jsonb_build_object('institution_name', v_inst.institution_name); END IF;
+  IF v_inst ? 'campus' THEN v_result := v_result || jsonb_build_object('campus', v_inst.campus); END IF;
+  IF v_inst ? 'city' THEN v_result := v_result || jsonb_build_object('city', v_inst.city); END IF;
+  IF v_inst ? 'state' THEN v_result := v_result || jsonb_build_object('state', v_inst.state); END IF;
+  IF v_inst ? 'country' THEN v_result := v_result || jsonb_build_object('country', v_inst.country); END IF;
+
+  -- Include the discovered code column value
+  EXECUTE format('SELECT %I FROM public.institutions WHERE id = $1', v_code_column)
+  INTO v_result
+  USING v_inst.id;
+
+  -- Rebuild with the code column value
+  v_result := jsonb_build_object(
     'id', v_inst.id,
     'name', COALESCE(v_inst.name, v_inst.institution_name, ''),
     'institution_name', COALESCE(v_inst.institution_name, v_inst.name, ''),
@@ -310,14 +310,16 @@ BEGIN
     'city', COALESCE(v_inst.city, ''),
     'state', COALESCE(v_inst.state, ''),
     'country', COALESCE(v_inst.country, ''),
-    'institution_code', v_inst.institution_code,
+    'institution_code', p_institution_code,
     'status', v_inst.status
   );
+
+  RETURN v_result;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ══════════════════════════════════════════════════════════════
--- 12. RPC: start_student_session
+-- 12. RPC: start_student_session (dynamic schema-aware)
 -- ══════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.start_student_session(
   p_full_name TEXT,
@@ -325,6 +327,7 @@ CREATE OR REPLACE FUNCTION public.start_student_session(
   p_institution_code TEXT
 ) RETURNS jsonb AS $$
 DECLARE
+  v_code_column TEXT;
   v_institution RECORD;
   v_student RECORD;
   v_safe_name TEXT;
@@ -344,26 +347,45 @@ BEGIN
   v_safe_code := UPPER(TRIM(p_institution_code));
 
   IF v_safe_name = '' OR v_safe_email = '' OR v_safe_code = '' THEN
-    RETURN jsonb_build_object('error', 'All fields are required.');
+    RETURN jsonb_build_object(
+      'success', false,
+      'verified', false,
+      'error_code', 'MISSING_FIELDS',
+      'error', 'All fields are required.'
+    );
   END IF;
 
-  -- 2. Find institution by code
-  SELECT * INTO v_institution
-  FROM public.institutions
-  WHERE institution_code = v_safe_code
-  LIMIT 1;
+  -- 2. Discover which column holds institution codes
+  v_code_column := public._get_institution_code_column();
+
+  -- 3. Find institution by code (dynamic column lookup)
+  EXECUTE format(
+    'SELECT * FROM public.institutions WHERE UPPER(TRIM(%I)) = UPPER(TRIM($1)) LIMIT 1',
+    v_code_column
+  ) INTO v_institution
+  USING v_safe_code;
 
   IF v_institution IS NULL THEN
-    RETURN jsonb_build_object('error', 'Institution code not found. Please check your code.');
+    RETURN jsonb_build_object(
+      'success', false,
+      'verified', false,
+      'error_code', 'INVALID_INSTITUTION_CODE',
+      'error', 'Institution code is not valid. Please check your institution code and try again.'
+    );
   END IF;
 
   -- Check institution is active/approved
   IF v_institution.status IS NOT NULL
      AND v_institution.status NOT IN ('active', 'approved') THEN
-    RETURN jsonb_build_object('error', 'This institution is currently unavailable.');
+    RETURN jsonb_build_object(
+      'success', false,
+      'verified', false,
+      'error_code', 'INSTITUTION_UNAVAILABLE',
+      'error', 'This institution is currently unavailable.'
+    );
   END IF;
 
-  -- 3. Check for existing student (email + institution_id)
+  -- 4. Check for existing student (email + institution_id)
   SELECT * INTO v_student
   FROM public.students
   WHERE email = v_safe_email
@@ -373,6 +395,8 @@ BEGIN
   IF v_student IS NOT NULL THEN
     -- Return existing student — never duplicate
     RETURN jsonb_build_object(
+      'success', true,
+      'verified', true,
       'student', jsonb_build_object(
         'id', v_student.id,
         'email', v_student.email,
@@ -388,12 +412,12 @@ BEGIN
         'city', COALESCE(v_institution.city, ''),
         'state', COALESCE(v_institution.state, ''),
         'country', COALESCE(v_institution.country, ''),
-        'institution_code', v_institution.institution_code
+        'institution_code', p_institution_code
       )
     );
   END IF;
 
-  -- 4. Generate student identifiers
+  -- 5. Generate student identifiers
   v_year := EXTRACT(YEAR FROM now())::int;
   v_name_parts := regexp_split_to_array(v_safe_name, '\s+');
 
@@ -412,13 +436,15 @@ BEGIN
   v_student_id_val := 'FDX-STU-' || v_initials || v_year::text;
   v_registration_id_val := 'FDX-REG-' || v_initials || v_year::text;
 
-  -- 5. Insert new student
+  -- 6. Insert new student
   INSERT INTO public.students (email, full_name, institution_id, student_id, registration_id)
   VALUES (v_safe_email, v_safe_name, v_institution.id, v_student_id_val, v_registration_id_val)
   RETURNING * INTO v_student;
 
-  -- 6. Return result
+  -- 7. Return result
   RETURN jsonb_build_object(
+    'success', true,
+    'verified', true,
     'student', jsonb_build_object(
       'id', v_student.id,
       'email', v_student.email,
@@ -434,7 +460,7 @@ BEGIN
       'city', COALESCE(v_institution.city, ''),
       'state', COALESCE(v_institution.state, ''),
       'country', COALESCE(v_institution.country, ''),
-      'institution_code', v_institution.institution_code
+      'institution_code', p_institution_code
     )
   );
 END;
@@ -457,30 +483,23 @@ DECLARE
   v_cancel_deadline timestamptz;
   v_result jsonb;
 BEGIN
-  -- 1. Determine prefix
   v_pickup_prefix := COALESCE(payload->>'pickup_type', 'B');
 
-  -- 2. Generate Pickup Code (sequential per day per prefix)
   SELECT COUNT(*) INTO v_next_pickup_seq
   FROM public.orders
   WHERE pickup_code LIKE v_pickup_prefix || '-%'
   AND created_at >= date_trunc('day', now());
-
   v_pickup_code := v_pickup_prefix || '-' || lpad((v_next_pickup_seq + 1)::text, 4, '0');
 
-  -- 3. Generate Token Number (sequential per day)
   SELECT COUNT(*) INTO v_next_token_seq
   FROM public.orders
   WHERE token_number LIKE 'TKN-%'
   AND created_at >= date_trunc('day', now());
-
   v_token_number := 'TKN-' || v_pickup_prefix || '-' || lpad((v_next_token_seq + 1)::text, 4, '0');
 
-  -- 4. Calculate Deadlines
   v_estimated_ready := now() + interval '15 minutes';
   v_cancel_deadline := now() + interval '30 seconds';
 
-  -- 5. Insert Order
   INSERT INTO public.orders (
     student_id, registration_id, email, customer_name, phone,
     institution_id, canteen_id, counter_id, counter, counter_code,
@@ -489,12 +508,12 @@ BEGIN
     pickup_code, token_number, pickup_token, pickup_type, estimated_ready_at, cancel_deadline_at,
     notes, paid_at, order_number, created_at, updated_at
   ) VALUES (
-    (payload->>'student_id')::uuid,
+    NULLIF(payload->>'student_id', '')::uuid,
     payload->>'registration_id',
     payload->>'email',
     payload->>'customer_name',
     payload->>'phone',
-    (payload->>'institution_id')::uuid,
+    NULLIF(payload->>'institution_id', '')::uuid,
     NULLIF(payload->>'canteen_id', '')::uuid,
     NULLIF(payload->>'counter_id', '')::uuid,
     payload->>'counter',
@@ -515,7 +534,6 @@ BEGIN
     now(), now()
   ) RETURNING id INTO v_order_id;
 
-  -- 6. Insert Order Items
   FOR v_item IN SELECT * FROM jsonb_array_elements(payload->'items')
   LOOP
     INSERT INTO public.order_items (
@@ -533,7 +551,6 @@ BEGIN
     );
   END LOOP;
 
-  -- 7. Return Result
   SELECT row_to_json(o) INTO v_result
   FROM public.orders o
   WHERE id = v_order_id;
@@ -543,46 +560,26 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ══════════════════════════════════════════════════════════════
--- 14. RPC: next_pickup_code_number
+-- 14. RPCs: pickup code and token generation
 -- ══════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.next_pickup_code_number(p_prefix TEXT)
 RETURNS INTEGER AS $$
-DECLARE
-  v_count INT;
+DECLARE v_count INT;
 BEGIN
-  SELECT COUNT(*) INTO v_count
-  FROM public.orders
-  WHERE pickup_code LIKE p_prefix || '-%'
-  AND created_at >= date_trunc('day', now());
-
+  SELECT COUNT(*) INTO v_count FROM public.orders
+  WHERE pickup_code LIKE p_prefix || '-%' AND created_at >= date_trunc('day', now());
   RETURN v_count + 1;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- ══════════════════════════════════════════════════════════════
--- 15. RPC: next_token_number
--- ══════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.next_token_number()
 RETURNS INTEGER AS $$
-DECLARE
-  v_count INT;
+DECLARE v_count INT;
 BEGIN
-  SELECT COUNT(*) INTO v_count
-  FROM public.orders
-  WHERE token_number LIKE 'TKN-%'
-  AND created_at >= date_trunc('day', now());
-
+  SELECT COUNT(*) INTO v_count FROM public.orders
+  WHERE token_number LIKE 'TKN-%' AND created_at >= date_trunc('day', now());
   RETURN v_count + 1;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- ══════════════════════════════════════════════════════════════
--- 16. Ensure institution code is seeded
--- ══════════════════════════════════════════════════════════════
-INSERT INTO public.institutions (name, institution_name, campus, city, state, country, institution_code, status)
-VALUES ('Yeshua Institution', 'Yeshua Institution', 'Main Campus', 'Bengaluru', 'Karnataka', 'India', 'YESHUA339537', 'active')
-ON CONFLICT (institution_code) DO UPDATE SET
-  status = 'active',
-  updated_at = now();
-
-SELECT 'FOODEXA final production fix applied successfully.' AS result;
+SELECT 'FOODEXA production fix v2 applied successfully.' AS result;

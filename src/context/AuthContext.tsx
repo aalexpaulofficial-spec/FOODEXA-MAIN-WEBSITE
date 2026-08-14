@@ -483,73 +483,55 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { error: 'Institution Code is required.', data: null };
     }
     try {
-      // Try RPC first
+      // Single canonical RPC — no fallback, no direct queries
       const { data, error: rpcError } = await supabase
         .rpc('get_institution_by_code', { p_institution_code: trimmed.trim() });
 
-      if (!rpcError && data) {
-        const inst = Array.isArray(data) ? data[0] : data;
-        if (!inst || !inst.id) {
-          // RPC returned null/empty - institution not found
-          return { error: 'Institution code not found. Please check your code.', data: null };
-        }
-        if (inst.status && inst.status !== 'approved' && inst.status !== 'active') {
-          return { error: 'This institution is currently unavailable. Please contact your institution administrator.', data: null };
-        }
-        return {
-          error: null,
-          data: {
-            institution_id: inst.id,
-            institution_name: inst.name || inst.institution_name || '',
-            campus: inst.campus || '',
-            city: inst.city || '',
-            state: inst.state || '',
-            country: inst.country || '',
-            institution_code: inst.institution_code || trimmed.toUpperCase(),
-          } as InstitutionData,
-        };
+      // RPC not found — migration hasn't been run
+      if (rpcError && (
+        rpcError.message?.includes('function') ||
+        rpcError.message?.includes('not found') ||
+        rpcError.message?.includes('schema cache')
+      )) {
+        console.error('[Auth] get_institution_by_code RPC not found. Run the SQL migration.');
+        return { error: 'Unable to connect to FOODEXA right now. Please try again.', data: null };
       }
 
-      // Fallback: direct query if RPC not available
-      if (rpcError && (rpcError.message?.includes('function') || rpcError.message?.includes('not found') || rpcError.message?.includes('schema cache'))) {
-        console.warn('[Auth] RPC not available, falling back to direct query');
-        const { data: instRows, error: queryError } = await supabase
-          .from('institutions')
-          .select('id, name, institution_name, campus, city, state, country, institution_code, status')
-          .eq('institution_code', trimmed.trim().toUpperCase())
-          .limit(1);
-
-        if (queryError) {
-          console.error('[Auth] Institution direct query error:', queryError.message);
-          return { error: 'Unable to verify Institution Code. Please try again.', data: null };
-        }
-
-        const inst = instRows?.[0];
-        if (!inst) {
-          return { error: 'Institution code not found. Please check your code.', data: null };
-        }
-        if (inst.status && inst.status !== 'approved' && inst.status !== 'active') {
-          return { error: 'This institution is currently unavailable. Please contact your institution administrator.', data: null };
-        }
-        return {
-          error: null,
-          data: {
-            institution_id: inst.id,
-            institution_name: inst.name || inst.institution_name || '',
-            campus: inst.campus || '',
-            city: inst.city || '',
-            state: inst.state || '',
-            country: inst.country || '',
-            institution_code: inst.institution_code || trimmed.toUpperCase(),
-          } as InstitutionData,
-        };
+      if (rpcError) {
+        console.error('[Auth] validateInstitutionCode RPC error:', rpcError.message);
+        return { error: 'Unable to connect to FOODEXA right now. Please try again.', data: null };
       }
 
-      console.error('[Auth] validateInstitutionCode RPC error:', rpcError.message);
-      return { error: 'Unable to verify Institution Code. Please try again.', data: null };
+      // RPC returns null for invalid codes
+      if (!data) {
+        return { error: 'Institution code not found. Please check your code.', data: null };
+      }
+
+      const inst = Array.isArray(data) ? data[0] : data;
+
+      if (!inst || !inst.id) {
+        return { error: 'Institution code not found. Please check your code.', data: null };
+      }
+
+      if (inst.status && inst.status !== 'approved' && inst.status !== 'active') {
+        return { error: 'This institution is currently unavailable. Please contact your institution administrator.', data: null };
+      }
+
+      return {
+        error: null,
+        data: {
+          institution_id: inst.id,
+          institution_name: inst.name || inst.institution_name || '',
+          campus: inst.campus || '',
+          city: inst.city || '',
+          state: inst.state || '',
+          country: inst.country || '',
+          institution_code: inst.institution_code || trimmed.toUpperCase(),
+        } as InstitutionData,
+      };
     } catch (err: any) {
       console.error('[Auth] Institution code validation exception:', err);
-      return { error: 'Unable to verify Institution Code. Please try again.', data: null };
+      return { error: 'Unable to connect to FOODEXA right now. Please try again.', data: null };
     }
   };
 
@@ -845,59 +827,97 @@ if (safeToken.length !== OTP_LENGTH) {
 
   // ── New student entry flow (NO Supabase Auth) ──────────────────────────────
   // The student provides Name + Email + Institution Code.
-  // A server-side RPC creates/retrieves the student row and returns data.
-  // We store the student UUID locally in sessionStorage as a DirectSession.
+  // The RPC start_student_session is the SINGLE CANONICAL mechanism.
+  // No fallback. No direct table queries. No anonymous auth.
+  // If the RPC doesn't exist, the user must run the SQL migration first.
   const startStudentEntry = useCallback(async (
     fullName: string,
     email: string,
     institutionCode: string
-  ): Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }> => {
+  ): Promise<{
+    error: string | null;
+    profile: Profile | null;
+    institution: InstitutionData | null;
+    verified?: boolean;
+    errorCode?: string;
+  }> => {
     try {
       const safeName = (fullName || '').trim();
       const safeEmail = (email || '').trim().toLowerCase();
       const code = (institutionCode || '').trim().toUpperCase();
 
       if (!safeName) {
-        return { error: 'Please enter your full name.', profile: null, institution: null };
+        return { error: 'Please enter your full name.', profile: null, institution: null, verified: false };
       }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
-        return { error: 'Please enter a valid email address.', profile: null, institution: null };
+        return { error: 'Please enter a valid email address.', profile: null, institution: null, verified: false };
       }
       if (!code) {
-        return { error: 'Institution code is required.', profile: null, institution: null };
+        return { error: 'Institution code is required.', profile: null, institution: null, verified: false };
       }
 
-      // Call the server-side RPC — no auth required
+      // Call the single canonical RPC — no auth required
       const { data, error: rpcError } = await supabase.rpc('start_student_session', {
         p_full_name: safeName,
         p_email: safeEmail,
         p_institution_code: code,
       });
 
-      // Check if RPC doesn't exist in schema cache
-      if (rpcError && (rpcError.message?.includes('function') || rpcError.message?.includes('not found') || rpcError.message?.includes('schema cache'))) {
-        console.warn('[Auth] start_student_session RPC not found, falling back to direct implementation');
-        return await startStudentEntryFallback(safeName, safeEmail, code);
+      // ── ERROR: RPC not found in schema cache ───────────────────────
+      // This means the SQL migration hasn't been run yet.
+      if (rpcError && (
+        rpcError.message?.includes('function') ||
+        rpcError.message?.includes('not found') ||
+        rpcError.message?.includes('schema cache')
+      )) {
+        console.error('[Auth] start_student_session RPC not found. Run the SQL migration in Supabase SQL Editor.');
+        return {
+          error: 'Unable to connect to FOODEXA right now. Please try again.',
+          profile: null,
+          institution: null,
+          verified: false,
+          errorCode: 'RPC_NOT_FOUND',
+        };
       }
 
+      // ── ERROR: Network/database failure ────────────────────────────
       if (rpcError) {
         console.error('[Auth] start_student_session RPC error:', rpcError.message);
-        return { error: 'Unable to connect. Please try again.', profile: null, institution: null };
+        return {
+          error: 'Unable to connect to FOODEXA right now. Please try again.',
+          profile: null,
+          institution: null,
+          verified: false,
+          errorCode: 'DATABASE_ERROR',
+        };
       }
 
-      // The RPC returns {error: string} on failure, or {student: {...}, institution: {...}} on success
+      // ── RPC returned an error response (e.g. invalid code) ─────────
       if (data?.error) {
-        return { error: data.error, profile: null, institution: null };
+        return {
+          error: data.error,
+          profile: null,
+          institution: null,
+          verified: false,
+          errorCode: data.error_code || 'UNKNOWN',
+        };
       }
 
+      // ── RPC returned success ───────────────────────────────────────
       const studentData = data?.student;
       const instData = data?.institution;
 
       if (!studentData || !instData) {
-        return { error: 'Unexpected server response. Please try again.', profile: null, institution: null };
+        return {
+          error: 'Unexpected server response. Please try again.',
+          profile: null,
+          institution: null,
+          verified: false,
+          errorCode: 'UNEXPECTED_RESPONSE',
+        };
       }
 
-      // Build InstitutionData
+      // Build InstitutionData from the RPC response
       const inst: InstitutionData = {
         institution_id: instData.institution_id,
         institution_name: instData.institution_name || '',
@@ -927,7 +947,7 @@ if (safeToken.length !== OTP_LENGTH) {
 
       // Build a Profile-like object from the student data
       const profileLike: Profile = {
-        user_id: studentData.id, // Student UUID — used everywhere as the identity
+        user_id: studentData.id,
         email: studentData.email || safeEmail,
         full_name: studentData.full_name || safeName,
         phone: null,
@@ -944,140 +964,18 @@ if (safeToken.length !== OTP_LENGTH) {
       };
       setProfile(profileLike);
 
-      return { error: null, profile: profileLike, institution: inst };
+      return { error: null, profile: profileLike, institution: inst, verified: true };
     } catch (err: any) {
       console.error('[Auth] startStudentEntry failed:', err);
       return {
-        error: err?.message || 'Something went wrong. Please try again.',
+        error: 'Unable to connect to FOODEXA right now. Please try again.',
         profile: null,
         institution: null,
+        verified: false,
+        errorCode: 'NETWORK_ERROR',
       };
     }
   }, [setInstitutionData]);
-
-  // Fallback: direct Supabase queries when the RPC doesn't exist
-  const startStudentEntryFallback = async (
-    safeName: string,
-    safeEmail: string,
-    code: string
-  ): Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }> => {
-    // 1. Find institution by code
-    const { data: instRows, error: instError } = await supabase
-      .from('institutions')
-      .select('id, name, institution_name, campus, city, state, country, institution_code, status')
-      .eq('institution_code', code)
-      .limit(1);
-
-    if (instError) {
-      console.error('[Auth] Fallback institution lookup error:', instError.message);
-      return { error: 'Unable to connect to FOODEXA right now. Please try again.', profile: null, institution: null };
-    }
-
-    const inst = instRows?.[0];
-    if (!inst) {
-      return { error: 'Institution code not found. Please check your code.', profile: null, institution: null };
-    }
-
-    if (inst.status && inst.status !== 'active' && inst.status !== 'approved') {
-      return { error: 'This institution is currently unavailable.', profile: null, institution: null };
-    }
-
-    // 2. Check for existing student
-    const { data: existingStudents } = await supabase
-      .from('students')
-      .select('id, email, full_name, student_id, registration_id, institution_id')
-      .eq('email', safeEmail)
-      .eq('institution_id', inst.id)
-      .limit(1);
-
-    let studentRow = existingStudents?.[0] || null;
-
-    // 3. Create new student if needed
-    if (!studentRow) {
-      const year = new Date().getFullYear();
-      const nameParts = safeName.split(/\s+/).filter(Boolean);
-      let firstLetter = 'X';
-      let lastLetter = 'X';
-      if (nameParts.length >= 2) {
-        firstLetter = nameParts[0][0].toUpperCase();
-        lastLetter = nameParts[nameParts.length - 1][0].toUpperCase();
-      } else if (nameParts.length === 1) {
-        firstLetter = nameParts[0][0].toUpperCase();
-        lastLetter = nameParts[0][nameParts[0].length - 1].toUpperCase();
-      }
-      const initials = firstLetter + lastLetter;
-      const studentIdVal = `FDX-STU-${initials}${year}`;
-      const registrationIdVal = `FDX-REG-${initials}${year}`;
-
-      const { data: newStudent, error: insertError } = await supabase
-        .from('students')
-        .insert({
-          email: safeEmail,
-          full_name: safeName,
-          institution_id: inst.id,
-          student_id: studentIdVal,
-          registration_id: registrationIdVal,
-        })
-        .select('id, email, full_name, student_id, registration_id, institution_id')
-        .single();
-
-      if (insertError) {
-        console.error('[Auth] Fallback student insert error:', insertError.message);
-        return { error: 'Unable to create your session. Please try again.', profile: null, institution: null };
-      }
-      studentRow = newStudent;
-    }
-
-    if (!studentRow) {
-      return { error: 'Unable to create your session. Please try again.', profile: null, institution: null };
-    }
-
-    const institutionData: InstitutionData = {
-      institution_id: inst.id,
-      institution_name: inst.name || inst.institution_name || '',
-      campus: inst.campus || '',
-      city: inst.city || '',
-      state: inst.state || '',
-      country: inst.country || '',
-      institution_code: inst.institution_code || code,
-    };
-
-    const tempSession: DirectSession = {
-      session_id: studentRow.id,
-      temporarySessionId: studentRow.id,
-      institutionId: institutionData.institution_id,
-      institutionName: institutionData.institution_name,
-      institutionCode: institutionData.institution_code,
-      name: studentRow.full_name || safeName,
-      email: studentRow.email || safeEmail,
-      role: 'student',
-    };
-
-    setDirectSession(tempSession);
-    sessionStorage.setItem(DIRECT_SESSION_KEY, JSON.stringify(tempSession));
-    setInstitutionData(institutionData);
-    setIsEmailVerified(true);
-
-    const profileLike: Profile = {
-      user_id: studentRow.id,
-      email: studentRow.email || safeEmail,
-      full_name: studentRow.full_name || safeName,
-      phone: null,
-      institution_id: institutionData.institution_id,
-      role: 'student',
-      department: null,
-      semester: null,
-      programme: null,
-      campus_block: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      student_id: studentRow.student_id || '',
-      registration_id: studentRow.registration_id || '',
-    };
-    setProfile(profileLike);
-
-    return { error: null, profile: profileLike, institution: institutionData };
-  };
 
   const signOut = async () => {
     if (user) {

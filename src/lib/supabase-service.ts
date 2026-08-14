@@ -540,9 +540,15 @@ async function insertOrderSafely(payload: Record<string, any>): Promise<{ data: 
       msg.includes('razorpay_signature') ||
       msg.includes('payment_id') ||
       msg.includes('transaction_id') ||
-      msg.includes('transaction_reference')
+      msg.includes('transaction_reference') ||
+      msg.includes('cancel_deadline_at') ||
+      msg.includes('pickup_type') ||
+      msg.includes('student_id_display') ||
+      msg.includes('qr_pickup_code')
     )) ||
-    msg.includes('could not find the column');
+    msg.includes('could not find the column') ||
+    msg.includes('pgrst204') ||
+    res.error?.code === 'PGRST204';
   if (missingColumn) {
     const {
       counter, counter_name, counter_id, confirmed_at, user_id, role, items,
@@ -551,6 +557,7 @@ async function insertOrderSafely(payload: Record<string, any>): Promise<{ data: 
       notes, kitchen_status, counter_status, estimated_ready_at, paid_at,
       payment_method, razorpay_order_id, razorpay_payment_id, razorpay_signature,
       payment_id, transaction_id, transaction_reference,
+      cancel_deadline_at, pickup_type, student_id_display, qr_pickup_code,
       ...rest
     } = payload;
     const fallback = await supabase.from('orders').insert([rest]).select('*').single();

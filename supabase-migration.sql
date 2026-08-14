@@ -266,6 +266,7 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS preparing_at TIMESTAMPTZ;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS ready_at TIMESTAMPTZ;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS cancel_deadline_at TIMESTAMPTZ;
 
 -- 9. Add columns to existing menu_items table if missing
 ALTER TABLE public.menu_items ADD COLUMN IF NOT EXISTS category_id UUID;
@@ -383,6 +384,8 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_method TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS diet_preference TEXT DEFAULT 'all' CHECK (diet_preference IN ('all', 'veg', 'non-veg'));
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS designation TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS student_id TEXT UNIQUE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS registration_id TEXT UNIQUE;
 -- Add canteen_id to menu_items if missing
 ALTER TABLE public.menu_items ADD COLUMN IF NOT EXISTS canteen_id UUID REFERENCES public.canteens(id) ON DELETE SET NULL;
 

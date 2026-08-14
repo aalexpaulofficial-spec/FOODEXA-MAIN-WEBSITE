@@ -2013,7 +2013,7 @@ if (!o && paidPendingConfirmation) {
                           {/* Cancel within 30 seconds — use cancel_deadline_at from Supabase */}
                           {(() => {
                             if (!o) return null;
-                            const isNonCancellable = ['confirmed', 'preparing', 'cooking', 'ready', 'completed', 'cancelled'].includes(o.status);
+                            const isNonCancellable = ['preparing', 'cooking', 'ready', 'completed', 'cancelled'].includes(o.status);
                             if (isNonCancellable) return null;
                             const deadline = o.cancel_deadline_at ? new Date(o.cancel_deadline_at).getTime() : 0;
                             if (!deadline) return null;

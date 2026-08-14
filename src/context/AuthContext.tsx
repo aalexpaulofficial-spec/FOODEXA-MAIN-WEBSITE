@@ -51,17 +51,24 @@ const normalizeRole = (value: unknown): UserRole | null => {
 
 // ── Permanent FOODEXA identifiers ──────────────────────────────────────────
 // Generated exactly ONCE at account creation and stored permanently in Supabase.
-// Format: FDX-STU-{FirstLetterOfFirstName}{FirstLetterOfLastName}{YEAR}
-// Example: Alex Paul → FDX-STU-AP2026, Registration ID: FDX-REG-AP2026
+// Format: FDX-STU-{FirstLetterOfFirstName}{LastLetterOfLastName}{YEAR}
+// Example: Alex Paul → FDX-STU-AL2026, Registration ID: FDX-REG-AL2026
 export function generateStudentIdentifiers(userId?: string, fullName?: string): { registration_id: string; student_id: string } {
   const year = new Date().getFullYear();
   let initials = 'XX';
   if (fullName && fullName.trim()) {
     const parts = fullName.trim().split(/\s+/).filter(Boolean);
     if (parts.length >= 2) {
-      initials = (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      // First letter of first name + last letter of last name
+      const firstLetter = parts[0][0].toUpperCase();
+      const lastPart = parts[parts.length - 1];
+      const lastLetter = lastPart[lastPart.length - 1].toUpperCase();
+      initials = firstLetter + lastLetter;
     } else if (parts.length === 1) {
-      initials = (parts[0][0] + parts[0][0]).toUpperCase();
+      // First letter + last letter of the single name
+      const firstLetter = parts[0][0].toUpperCase();
+      const lastLetter = parts[0][parts[0].length - 1].toUpperCase();
+      initials = firstLetter + lastLetter;
     }
   } else if (userId) {
     const source = String(userId).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();

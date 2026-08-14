@@ -521,11 +521,11 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         } else if (instId) {
           const { data: inst } = await supabase
             .from('institutions')
-            .select('institution_name, name, campus, city, institution_code')
+            .select('*')
             .eq('id', instId)
             .maybeSingle();
           if (inst) {
-            const nameField = inst.institution_name || inst.name || '';
+            const nameField = inst.name || '';
             setInstitutionName(`${nameField}${inst.campus ? ` · ${inst.campus}` : ''}`);
             setInstitutionCode(inst.institution_code || '');
             setInstitutionCampus(inst.campus || '');

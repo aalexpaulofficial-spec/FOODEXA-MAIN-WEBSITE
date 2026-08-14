@@ -154,7 +154,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const { data, error } = await supabase
       .from('institutions')
-      .select('id, name, campus, city, state, country, institution_code')
+      .select('*')
       .eq('id', profileData.institution_id)
       .maybeSingle();
 
@@ -486,7 +486,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Direct query against the institutions table — no RPC
       const { data, error: queryError } = await supabase
         .from('institutions')
-        .select('id, name, institution_name, campus, city, state, country, institution_code, status')
+        .select('*')
         .eq('institution_code', trimmed.trim().toUpperCase())
         .maybeSingle();
 
@@ -507,7 +507,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         error: null,
         data: {
           institution_id: data.id,
-          institution_name: data.name || data.institution_name || '',
+          institution_name: data.name || '',
           campus: data.campus || '',
           city: data.city || '',
           state: data.state || '',
@@ -605,12 +605,12 @@ if (safeToken.length !== OTP_LENGTH) {
        if (existingProfile) {
          // Profile already exists — load institution and return
          let fetchedInstitution: InstitutionData | null = null;
-         if (existingProfile.institution_id) {
-           const { data: instData } = await supabase
-             .from('institutions')
-             .select('id, name, campus, city, state, country, institution_code')
-             .eq('id', existingProfile.institution_id)
-             .maybeSingle();
+          if (existingProfile.institution_id) {
+            const { data: instData } = await supabase
+              .from('institutions')
+              .select('*')
+              .eq('id', existingProfile.institution_id)
+              .maybeSingle();
            if (instData) {
              fetchedInstitution = {
                institution_id: instData.id,
@@ -844,7 +844,7 @@ if (safeToken.length !== OTP_LENGTH) {
       // Step 1: Look up institution directly — no RPC
       const { data: instData, error: instError } = await supabase
         .from('institutions')
-        .select('id, name, institution_name, campus, city, state, country, institution_code, status')
+        .select('*')
         .eq('institution_code', code)
         .maybeSingle();
 
@@ -882,7 +882,7 @@ if (safeToken.length !== OTP_LENGTH) {
       // Build InstitutionData from the real database record
       const inst: InstitutionData = {
         institution_id: instData.id,
-        institution_name: instData.name || instData.institution_name || '',
+        institution_name: instData.name || '',
         campus: instData.campus || '',
         city: instData.city || '',
         state: instData.state || '',

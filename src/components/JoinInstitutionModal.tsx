@@ -57,7 +57,7 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
     try {
       const { data, error: queryError } = await supabase
         .from('institutions')
-        .select('id, name, institution_name, campus, city, institution_code, status')
+        .select('*')
         .eq('institution_code', trimmed.trim().toUpperCase())
         .maybeSingle();
 
@@ -84,7 +84,7 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
 
       setValidatedInstitution({
         id: inst.id,
-        name: inst.name || inst.institution_name || '',
+        name: inst.name || '',
         campus: inst.campus || '',
         city: inst.city || '',
         institution_code: inst.institution_code || trimmed.toUpperCase(),

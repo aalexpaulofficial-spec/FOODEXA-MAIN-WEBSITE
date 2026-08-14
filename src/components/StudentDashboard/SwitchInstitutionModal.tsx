@@ -35,7 +35,7 @@ export const SwitchInstitutionModal: React.FC<SwitchInstitutionModalProps> = ({
     try {
       const { data, error: queryError } = await supabase
         .from('institutions')
-        .select('id, name, institution_name, campus, city, institution_code, status')
+        .select('*')
         .eq('institution_code', code.trim().toUpperCase())
         .maybeSingle();
 
@@ -60,7 +60,7 @@ export const SwitchInstitutionModal: React.FC<SwitchInstitutionModalProps> = ({
       }
 
       setValidatedInst({
-        name: inst.name || inst.institution_name || '',
+        name: inst.name || '',
         campus: inst.campus || '',
         city: inst.city || '',
       });

@@ -809,20 +809,19 @@ if (safeToken.length !== OTP_LENGTH) {
     }
   }, [user, validateInstitutionCode, upsertProfileSafely, fetchProfile, setInstitutionData]);
 
-  // ── New student entry flow (anonymous Supabase auth) ──────────────────────
-  // Replaces the old OTP / password login for students. The student never sees
-  // any authentication UI — anonymous sign-in is used purely as the internal
-  // identity layer, and auth.uid() becomes the student's user_id.
-  // Falls back to Direct Session if anonymous auth is unavailable.
+  // ── New student entry flow (NO Supabase Auth) ──────────────────────────────
+  // The student provides Name + Email + Institution Code.
+  // A server-side RPC creates/retrieves the student row and returns data.
+  // We store the student UUID locally in sessionStorage as a DirectSession.
   const startStudentEntry = useCallback(async (
     fullName: string,
     email: string,
     institutionCode: string
   ): Promise<{ error: string | null; profile: Profile | null; institution: InstitutionData | null }> => {
     try {
-      const code = (institutionCode || '').trim().toUpperCase();
       const safeName = (fullName || '').trim();
       const safeEmail = (email || '').trim().toLowerCase();
+      const code = (institutionCode || '').trim().toUpperCase();
 
       if (!safeName) {
         return { error: 'Please enter your full name.', profile: null, institution: null };
@@ -834,166 +833,78 @@ if (safeToken.length !== OTP_LENGTH) {
         return { error: 'Institution code is required.', profile: null, institution: null };
       }
 
-      // Validate institution exists and is active (live Supabase lookup)
-      const { data: instRows, error: instErr } = await supabase
-        .from('institutions')
-        .select('id, name, institution_name, campus, city, state, country, institution_code, status')
-        .eq('institution_code', code)
-        .limit(1);
+      // Call the server-side RPC — no auth required
+      const { data, error: rpcError } = await supabase.rpc('start_student_session', {
+        p_full_name: safeName,
+        p_email: safeEmail,
+        p_institution_code: code,
+      });
 
-      const row = Array.isArray(instRows) ? instRows[0] : null;
-      if (instErr || !row) {
-        return {
-          error: 'Institution code not found. Please check your code.',
-          profile: null,
-          institution: null,
-        };
-      }
-      const rowStatus = String(row.status || '').toLowerCase();
-      if (rowStatus && rowStatus !== 'active' && rowStatus !== 'approved') {
-        return {
-          error: 'This institution is currently unavailable. Please contact your institution administrator.',
-          profile: null,
-          institution: null,
-        };
+      if (rpcError) {
+        console.error('[Auth] start_student_session RPC error:', rpcError.message);
+        return { error: 'Unable to connect. Please try again.', profile: null, institution: null };
       }
 
+      // The RPC returns {error: string} on failure, or {student: {...}, institution: {...}} on success
+      if (data?.error) {
+        return { error: data.error, profile: null, institution: null };
+      }
+
+      const studentData = data?.student;
+      const instData = data?.institution;
+
+      if (!studentData || !instData) {
+        return { error: 'Unexpected server response. Please try again.', profile: null, institution: null };
+      }
+
+      // Build InstitutionData
       const inst: InstitutionData = {
-        institution_id: row.id,
-        institution_name: row.name || row.institution_name || '',
-        campus: row.campus || '',
-        city: row.city || '',
-        state: row.state || '',
-        country: row.country || '',
-        institution_code: row.institution_code || code,
+        institution_id: instData.institution_id,
+        institution_name: instData.institution_name || '',
+        campus: instData.campus || '',
+        city: instData.city || '',
+        state: instData.state || '',
+        country: instData.country || '',
+        institution_code: instData.institution_code || code,
       };
 
-      // Attempt anonymous Supabase auth — the invisible identity layer.
-      // If anonymous auth is disabled, fall back to a Direct Session (no Supabase auth).
-      let authUser = (await supabase.auth.getUser()).data?.user ?? null;
-      let useDirectFallback = false;
+      // Build a DirectSession — the student UUID is the session identifier
+      const tempSession: DirectSession = {
+        session_id: studentData.id,
+        temporarySessionId: studentData.id,
+        institutionId: inst.institution_id,
+        institutionName: inst.institution_name,
+        institutionCode: inst.institution_code,
+        name: studentData.full_name || safeName,
+        email: studentData.email || safeEmail,
+        role: 'student',
+      };
 
-      if (!authUser) {
-        const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
-        if (anonError || !anonData?.user) {
-          // Anonymous auth is disabled or unavailable — fall back to direct session
-          console.warn('[Auth] Anonymous sign-in unavailable, using direct session:', anonError?.message || 'unknown');
-          useDirectFallback = true;
-        } else {
-          authUser = anonData.user;
-        }
-      }
-
-      if (useDirectFallback || !authUser) {
-        // Direct Session fallback — no Supabase auth, no profile row in DB.
-        // The student can still browse menu and place orders via the payment flow.
-        const sessionId = crypto.randomUUID();
-        const tempSession: DirectSession = {
-          session_id: sessionId,
-          temporarySessionId: sessionId,
-          institutionId: inst.institution_id,
-          institutionName: inst.institution_name,
-          institutionCode: inst.institution_code,
-          name: safeName,
-          email: safeEmail,
-          role: 'student',
-        };
-
-        setDirectSession(tempSession);
-        sessionStorage.setItem(DIRECT_SESSION_KEY, JSON.stringify(tempSession));
-        setInstitutionData(inst);
-        setIsEmailVerified(true);
-
-        const profileLike: Profile = {
-          user_id: '',
-          email: safeEmail,
-          full_name: safeName,
-          phone: null,
-          institution_id: inst.institution_id,
-          role: 'student',
-          department: null,
-          semester: null,
-          programme: null,
-          campus_block: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          student_id: generateStudentIdentifiers(undefined, safeName).student_id,
-          registration_id: generateStudentIdentifiers(undefined, safeName).registration_id,
-        };
-        setProfile(profileLike);
-
-        return { error: null, profile: profileLike, institution: inst };
-      }
-
-      // 2. Authenticated anonymous flow — create or restore profile in Supabase
-      let existing = await fetchProfile(authUser.id);
-
-      if (!existing) {
-        const ids = generateStudentIdentifiers(authUser.id, safeName);
-        const { error: upsertError } = await upsertProfileSafely({
-          user_id: authUser.id,
-          email: safeEmail,
-          full_name: safeName,
-          phone: null,
-          role: 'student',
-          designation: 'student',
-          institution_id: inst.institution_id,
-          registration_id: ids.registration_id,
-          student_id: ids.student_id,
-          diet_preference: 'all',
-          account_created_at: new Date().toISOString(),
-          foodexa_plan: 'Free',
-          plan: 'Free',
-        });
-        if (upsertError) {
-          // Profile upsert failed — still open the dashboard in direct mode
-          console.warn('[Auth] Profile upsert failed, opening in limited mode:', upsertError.message);
-          const profileLike: Profile = {
-            user_id: authUser.id,
-            email: safeEmail,
-            full_name: safeName,
-            phone: null,
-            institution_id: inst.institution_id,
-            role: 'student',
-            department: null,
-            semester: null,
-            programme: null,
-            campus_block: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            student_id: generateStudentIdentifiers(authUser.id, safeName).student_id,
-            registration_id: generateStudentIdentifiers(authUser.id, safeName).registration_id,
-          };
-          setUser(authUser);
-          setSession((await supabase.auth.getSession()).data.session ?? null);
-          setIsEmailVerified(true);
-          setInstitutionData(inst);
-          setProfile(profileLike);
-          return { error: null, profile: profileLike, institution: inst };
-        }
-        existing = await fetchProfile(authUser.id);
-      } else {
-        // Reuse the existing session/profile — never overwrite permanent IDs.
-        const updates: Record<string, any> = {};
-        if (!existing.institution_id) updates.institution_id = inst.institution_id;
-        if (!existing.student_id || !existing.registration_id) {
-          const ids = generateStudentIdentifiers(authUser.id, existing.full_name || safeName);
-          updates.student_id = existing.student_id || ids.student_id;
-          updates.registration_id = existing.registration_id || ids.registration_id;
-        }
-        if (Object.keys(updates).length > 0) {
-          await supabase.from('profiles').update(updates).eq('user_id', authUser.id);
-          existing = await fetchProfile(authUser.id);
-        }
-      }
-
-      // 3. Reflect the session in React state so dashboards open correctly
-      setUser(authUser);
-      setSession((await supabase.auth.getSession()).data.session ?? null);
-      setIsEmailVerified(true);
+      setDirectSession(tempSession);
+      sessionStorage.setItem(DIRECT_SESSION_KEY, JSON.stringify(tempSession));
       setInstitutionData(inst);
+      setIsEmailVerified(true);
 
-      return { error: null, profile: existing, institution: inst };
+      // Build a Profile-like object from the student data
+      const profileLike: Profile = {
+        user_id: studentData.id, // Student UUID — used everywhere as the identity
+        email: studentData.email || safeEmail,
+        full_name: studentData.full_name || safeName,
+        phone: null,
+        institution_id: inst.institution_id,
+        role: 'student',
+        department: null,
+        semester: null,
+        programme: null,
+        campus_block: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        student_id: studentData.student_id || '',
+        registration_id: studentData.registration_id || '',
+      };
+      setProfile(profileLike);
+
+      return { error: null, profile: profileLike, institution: inst };
     } catch (err: any) {
       console.error('[Auth] startStudentEntry failed:', err);
       return {
@@ -1002,7 +913,7 @@ if (safeToken.length !== OTP_LENGTH) {
         institution: null,
       };
     }
-  }, [fetchProfile, upsertProfileSafely, setInstitutionData]);
+  }, [setInstitutionData]);
 
   const signOut = async () => {
     if (user) {

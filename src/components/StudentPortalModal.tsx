@@ -928,7 +928,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       console.log('[FOODEXA PAYMENT] Auth user:', authUserId);
     } else if (directSession) {
       isDirect = true;
-      authUserId = `direct_${directSession.temporarySessionId || directSession.institutionId || 'guest'}`;
+      authUserId = directSession.session_id || directSession.temporarySessionId || null;
       authEmail = directSession.email || null;
       console.log('[FOODEXA PAYMENT] Auth user:', authUserId, '(direct session)');
     } else {

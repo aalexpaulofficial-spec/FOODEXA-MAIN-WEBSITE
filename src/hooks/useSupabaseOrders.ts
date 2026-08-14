@@ -179,8 +179,7 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
         if (!err2 && byEmail) {
           // Filter client-side by matching the direct session user pattern
           orderRows = byEmail.filter((row: any) =>
-            row.student_id === userId ||
-            (row.student_id && String(row.student_id).startsWith('direct_'))
+            row.student_id === userId
           );
         } else {
           fetchError = err2 || err1;

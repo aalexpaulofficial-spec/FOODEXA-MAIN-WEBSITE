@@ -77,4 +77,105 @@ BEGIN
 END;
 $$;
 
+-- ── RPC: ORDER CREATION ─────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.create_student_order(payload jsonb)
+RETURNS jsonb AS $$
+DECLARE
+  v_pickup_prefix text;
+  v_next_pickup_seq int;
+  v_pickup_code text;
+  
+  v_next_token_seq int;
+  v_token_number text;
+  
+  v_order_id uuid;
+  v_item jsonb;
+  v_estimated_ready timestamptz;
+  v_cancel_deadline timestamptz;
+  
+  v_result jsonb;
+BEGIN
+  -- 1. Determine prefix
+  v_pickup_prefix := COALESCE(payload->>'pickup_type', 'B');
+
+  -- 2. Generate Pickup Code
+  SELECT COUNT(*) INTO v_next_pickup_seq
+  FROM public.orders
+  WHERE pickup_code LIKE v_pickup_prefix || '-%'
+  AND created_at >= date_trunc('day', now());
+  
+  v_pickup_code := v_pickup_prefix || '-' || lpad((v_next_pickup_seq + 1)::text, 4, '0');
+
+  -- 3. Generate Token Number
+  SELECT COUNT(*) INTO v_next_token_seq
+  FROM public.orders
+  WHERE token_number LIKE 'TKN-%'
+  AND created_at >= date_trunc('day', now());
+  
+  v_token_number := 'TKN-' || lpad((v_next_token_seq + 1)::text, 4, '0');
+
+  -- 4. Calculate Deadlines
+  v_estimated_ready := now() + interval '15 minutes';
+  v_cancel_deadline := now() + interval '30 seconds';
+
+  -- 5. Insert Order
+  INSERT INTO public.orders (
+    student_id, registration_id, email, customer_name, phone,
+    institution_id, canteen_id, counter_id, counter, counter_code,
+    total_amount, transaction_amount, status, order_status, kitchen_status, counter_status,
+    payment_status, payment_method, razorpay_order_id, razorpay_payment_id, razorpay_signature,
+    pickup_code, token_number, pickup_type, estimated_ready_at, cancel_deadline_at,
+    notes, qr_code, qr_pickup_code, locker_number, pickup_pin
+  ) VALUES (
+    (payload->>'student_id')::uuid,
+    payload->>'registration_id',
+    payload->>'email',
+    payload->>'customer_name',
+    payload->>'phone',
+    (payload->>'institution_id')::uuid,
+    (payload->>'canteen_id')::uuid,
+    (payload->>'counter_id')::uuid,
+    payload->>'counter',
+    payload->>'counter_code',
+    (payload->>'total_amount')::numeric,
+    (payload->>'transaction_amount')::numeric,
+    'confirmed', 'confirmed', 'pending', 'pending',
+    'paid',
+    payload->>'payment_method',
+    payload->>'razorpay_order_id',
+    payload->>'razorpay_payment_id',
+    payload->>'razorpay_signature',
+    v_pickup_code, v_token_number, v_pickup_prefix,
+    v_estimated_ready, v_cancel_deadline,
+    payload->>'notes',
+    payload->>'qr_code',
+    payload->>'qr_pickup_code',
+    payload->>'locker_number',
+    payload->>'pickup_pin'
+  ) RETURNING id INTO v_order_id;
+
+  -- 6. Insert Order Items
+  FOR v_item IN SELECT * FROM jsonb_array_elements(payload->'items')
+  LOOP
+    INSERT INTO public.order_items (
+      order_id, menu_item_id, name, variant, quantity, price
+    ) VALUES (
+      v_order_id,
+      (v_item->>'id')::uuid,
+      v_item->>'name',
+      v_item->>'variant',
+      (v_item->>'quantity')::int,
+      (v_item->>'price')::numeric
+    );
+  END LOOP;
+
+  -- 7. Return Result
+  SELECT row_to_json(o) INTO v_result
+  FROM public.orders o
+  WHERE id = v_order_id;
+  
+  RETURN v_result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 SELECT 'FOODEXA migration applied successfully.' AS result;

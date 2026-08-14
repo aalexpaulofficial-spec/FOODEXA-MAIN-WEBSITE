@@ -591,14 +591,6 @@ export async function createOrderAfterPayment(params: {
   payment_method?: string;
   estimated_prep_time_minutes?: number;
 }): Promise<{ data: Order | null; error: string | null }> {
-  const now = new Date();
-  const nowISO = now.toISOString();
-  const dateStr = nowISO.slice(0, 10).replace(/-/g, '');
-
-  const customerName = params.customer_name || params.email?.split('@')[0] || 'Customer';
-  const phone = params.phone || '0000000000';
-  const prepTimeMinutes = params.estimated_prep_time_minutes || 15;
-
   const actualInstitutionId = params.institution_id;
 
   if (!actualInstitutionId) {
@@ -618,20 +610,8 @@ export async function createOrderAfterPayment(params: {
     };
   }
   const activeCanteen = canteenResult.data;
-
-  // Resolve pickup type from canteen configuration
   const pickupType = resolvePickupTypeFromCanteen(activeCanteen);
   const pickupPrefix = getPickupTypePrefix(pickupType);
-
-  // Generate sequential token and pickup code from Supabase
-  const tokenNumber = await generateTokenNumber();
-  const pickupCode = await generatePickupCode(pickupPrefix);
-
-  // QR pickup code for display
-  const qrPickupCode = pickupCode;
-
-  // Cancel deadline: 30 seconds from order creation
-  const cancelDeadlineAt = new Date(now.getTime() + 30 * 1000).toISOString();
 
   const { data: profileRow } = await supabase
     .from('profiles')
@@ -640,7 +620,6 @@ export async function createOrderAfterPayment(params: {
     .maybeSingle();
 
   // Idempotency: never create two orders for the same successful Razorpay payment
-  // (prevents double-charge from refresh / callback / retry / webhook duplication).
   const existingOrderQuery = await supabase
     .from('orders')
     .select(SELECT_ORDER_WITH_ITEMS)
@@ -651,55 +630,41 @@ export async function createOrderAfterPayment(params: {
     return { data: mapOrder(existingOrderQuery.data), error: null };
   }
 
-  const orderPayload: Record<string, any> = {
+  const payload = {
     student_id: params.user_id || null,
     registration_id: profileRow?.registration_id || null,
-    student_id_display: profileRow?.student_id || null,
     email: params.email,
-    customer_name: customerName,
-    phone,
+    customer_name: params.customer_name || params.email?.split('@')[0] || 'Customer',
+    phone: params.phone || '0000000000',
     institution_id: actualInstitutionId,
     canteen_id: activeCanteen.id,
+    counter: activeCanteen.name,
     counter_code: activeCanteen.counter_code,
     total_amount: params.total_amount,
     transaction_amount: params.total_amount,
-    status: 'confirmed',
-    order_status: 'confirmed',
-    payment_status: 'paid',
     payment_method: params.payment_method === 'cash' ? 'cash' : 'razorpay',
-    order_number: Date.now(),
-    pickup_token: tokenNumber,
-    pickup_code: pickupCode,
-    pickup_type: pickupType,
-    qr_pickup_code: qrPickupCode,
-    token_number: tokenNumber,
-    notes: params.notes || null,
-    kitchen_status: 'pending',
-    counter_status: 'incoming',
-    estimated_ready_at: new Date(now.getTime() + prepTimeMinutes * 60000).toISOString(),
-    cancel_deadline_at: cancelDeadlineAt,
-    created_at: nowISO,
-    updated_at: nowISO,
-    paid_at: nowISO,
     razorpay_order_id: params.razorpay_order_id,
     razorpay_payment_id: params.razorpay_payment_id,
     razorpay_signature: params.razorpay_signature,
+    pickup_type: pickupPrefix,
+    notes: params.notes || null,
+    items: params.itemsFull.map(item => ({
+      id: item.id,
+      name: item.name,
+      variant: item.variant,
+      quantity: item.quantity,
+      price: item.price
+    }))
   };
 
-  const { data: orderData, error: orderError } = await insertOrderSafely(orderPayload);
-  if (orderError || !orderData) {
-    console.error('[Supabase] createOrderAfterPayment order insert failed:', orderError?.message, orderError?.code, orderError?.details);
-    return { data: null, error: `Order creation failed: ${orderError?.message || 'Unknown error'}` };
+  const { data: orderData, error: rpcError } = await supabase.rpc('create_student_order', { payload });
+
+  if (rpcError || !orderData) {
+    console.error('[Supabase] create_student_order RPC failed:', rpcError?.message, rpcError?.details);
+    return { data: null, error: `Order creation failed: ${rpcError?.message || 'Unknown error'}` };
   }
 
-  // Insert order_items
-  const orderItemsPayload = createOrderItemsPayload(orderData.id, params.itemsFull);
-  const { error: itemsError } = await supabase.from('order_items').insert(orderItemsPayload);
-  if (itemsError) {
-    console.error('[Supabase] Failed to create order_items:', itemsError);
-  }
-
-  // Insert payments record (best-effort). Keep successful Razorpay status as paid.
+  // Insert payments record (best-effort)
   try {
     await supabase.from('payments').insert([{
       order_id: orderData.id,
@@ -708,30 +673,16 @@ export async function createOrderAfterPayment(params: {
       razorpay_signature: params.razorpay_signature,
       amount: params.total_amount,
       currency: 'INR',
-      payment_status: 'paid',
-      payment_method: 'razorpay',
-      created_at: nowISO,
-      updated_at: nowISO,
+      status: 'captured'
     }]);
-  } catch (_) { /* best-effort */ }
-
-  // Insert order status history (best-effort) — records every important change
-  try {
-    await supabase.from('order_status_history').insert([{
-      order_id: orderData.id,
-      user_id: params.user_id || null,
-      institution_id: actualInstitutionId,
-      from_status: null,
-      to_status: 'confirmed',
-      payment_status: 'paid',
-      note: 'Payment paid and order confirmed.',
-      created_at: nowISO,
-    }]);
-  } catch (_) { /* best-effort */ }
+  } catch (e) {
+    console.error('[Supabase] Non-fatal payment record error:', e);
+  }
 
   // Insert notifications (best-effort)
   try {
     const notifs: Record<string, any>[] = [];
+    const nowISO = new Date().toISOString();
     notifs.push({ type: 'order_confirmed', title: 'Order Confirmed!', message: 'Your order has been confirmed and is being prepared.', user_id: params.user_id, created_at: nowISO, read: false, order_id: orderData.id });
     if (actualInstitutionId) {
       notifs.push({ type: 'new_order', title: 'New Order Received', message: 'A new order has been placed and payment confirmed.', institution_id: actualInstitutionId, created_at: nowISO, read: false, order_id: orderData.id });
@@ -739,9 +690,18 @@ export async function createOrderAfterPayment(params: {
     await supabase.from('notifications').insert(notifs);
   } catch (_) { /* best-effort */ }
 
-  // Re-fetch with joined items to guarantee consistency
-  const { data: finalOrder } = await supabase.from('orders').select(SELECT_ORDER_WITH_ITEMS).eq('id', orderData.id).single();
-  return { data: mapOrder(finalOrder || orderData), error: null };
+  // Refetch complete order just to be absolutely sure we have the nested items in UI format
+  const finalOrderQuery = await supabase
+    .from('orders')
+    .select(SELECT_ORDER_WITH_ITEMS)
+    .eq('id', orderData.id)
+    .single();
+
+  if (finalOrderQuery.data) {
+    return { data: mapOrder(finalOrderQuery.data), error: null };
+  }
+
+  return { data: mapOrder(orderData), error: null };
 }
 
 export async function placeOrder(params: {

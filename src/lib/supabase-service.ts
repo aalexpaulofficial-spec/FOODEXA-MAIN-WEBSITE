@@ -78,7 +78,7 @@ export function formatDateTime(value: string | null | undefined): string {
 
 // ==================== BANNERS ====================
 export async function fetchBanners(): Promise<Banner[]> {
-  const { data } = await supabase.from('banners').select('*').eq('is_active', true).order('display_order', { ascending: true });
+  const { data } = await supabase.from('banners').select('*').eq('is_active', true).order('"order"', { ascending: true });
   return (data || []) as Banner[];
 }
 
@@ -132,11 +132,11 @@ export async function fetchMenuItems(params?: {
       query = query.eq('is_available', true);
     }
     if (params?.popularOnly) {
-      query = query.eq('popular', true);
+      query = query.or('is_featured.eq.true,is_today_special.eq.true');
     }
     if (params?.search) {
       const s = `%${params.search.toLowerCase()}%`;
-      query = query.or(`item_name.ilike.${s},food_name.ilike.${s},food_type.ilike.${s},description.ilike.${s},category.ilike.${s}`);
+      query = query.or(`food_name.ilike.${s},description.ilike.${s},category_name.ilike.${s},food_type.ilike.${s}`);
     }
 
     switch (params?.sortBy) {
@@ -146,7 +146,7 @@ export async function fetchMenuItems(params?: {
       case 'price_desc': query = query.order('price', { ascending: false }); break;
       case 'prep_time': query = query.order('prep_time', { ascending: true }); break;
       case 'rating': query = query.order('rating', { ascending: false }); break;
-      default: query = query.order('item_name', { ascending: true });
+      default: query = query.order('food_name', { ascending: true });
     }
 
     if (params?.limit) query = query.limit(params.limit);
@@ -438,14 +438,18 @@ export async function findActiveCanteen(
   try {
     let query = supabase
       .from('canteens')
-      .select('id, name, is_active')
+      .select('*')
       .eq('institution_id', institutionId);
     if (canteenId) query = query.eq('id', canteenId);
     const { data, error } = await query;
     if (error || !data || data.length === 0) return null;
-    // Filter active canteens in JS (handles both is_active and status column variants)
+    // Filter active canteens — check status column (real schema) with fallback to is_active
     const active = data.find(
       (c: any) => {
+        if ('status' in c) {
+          const s = String(c.status || '').trim().toLowerCase();
+          return !['inactive', 'disabled', 'archived', 'closed'].includes(s);
+        }
         if ('is_active' in c) return c.is_active !== false;
         return true;
       }
@@ -634,7 +638,7 @@ export async function createOrderAfterPayment(params: {
   const pickupType = resolvePickupTypeFromCanteen(activeCanteen);
   const pickupPrefix = getPickupTypePrefix(pickupType);
 
-  // Look up student identifiers from profiles OR students table
+  // Look up student identifiers from profiles
   let profileRow: any = null;
   const { data: profData } = await supabase
     .from('profiles')
@@ -643,14 +647,6 @@ export async function createOrderAfterPayment(params: {
     .maybeSingle();
   if (profData) {
     profileRow = profData;
-  } else {
-    // For non-auth students, look up from the students table
-    const { data: studentData } = await supabase
-      .from('students')
-      .select('registration_id, student_id')
-      .eq('id', params.user_id)
-      .maybeSingle();
-    if (studentData) profileRow = studentData;
   }
 
   // Idempotency: never create two orders for the same successful Razorpay payment
@@ -847,7 +843,7 @@ export async function placeOrder(params: {
 
   const isPaid = Boolean(params.razorpay_payment_id && params.razorpay_signature);
 
-  // Look up student identifiers from profiles OR students table
+  // Look up student identifiers from profiles
   let profileRow: any = null;
   const { data: profData } = await supabase
     .from('profiles')
@@ -856,13 +852,6 @@ export async function placeOrder(params: {
     .maybeSingle();
   if (profData) {
     profileRow = profData;
-  } else {
-    const { data: studentData } = await supabase
-      .from('students')
-      .select('registration_id, student_id')
-      .eq('id', params.user_id)
-      .maybeSingle();
-    if (studentData) profileRow = studentData;
   }
 
   const payload: Record<string, any> = {
@@ -1209,6 +1198,18 @@ export async function verifyRazorpayPayment(params: {
   razorpay_signature: string;
   user_id: string;
   order_id: string;
+  // Optional order data for server-side order creation
+  institution_id?: string;
+  canteen_id?: string;
+  items?: { id: string; name: string; variant?: string | null; quantity: number; price: number }[];
+  total_amount?: number;
+  email?: string;
+  phone?: string;
+  customer_name?: string;
+  pickup_type?: string;
+  notes?: string;
+  counter?: string;
+  counter_code?: string;
 }): Promise<{ success: boolean; error?: string; order_id?: string; order_created?: boolean }> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -1224,10 +1225,51 @@ export async function verifyRazorpayPayment(params: {
     if (!resp.ok || !data.success) {
       return { success: false, error: data.error || 'Payment verification failed.' };
     }
+
+    // If server didn't create order, try server-side order creation endpoint
+    let orderCreated = data.order_created || false;
+    let orderId = data.order_id || undefined;
+
+    if (!orderCreated && params.institution_id && params.canteen_id && params.items && params.items.length > 0) {
+      try {
+        const createResp = await fetch('/api/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            student_id: params.user_id,
+            email: params.email,
+            customer_name: params.customer_name,
+            phone: params.phone,
+            institution_id: params.institution_id,
+            canteen_id: params.canteen_id,
+            counter: params.counter,
+            counter_code: params.counter_code,
+            items: params.items,
+            total_amount: params.total_amount,
+            razorpay_order_id: params.razorpay_order_id,
+            razorpay_payment_id: params.razorpay_payment_id,
+            razorpay_signature: params.razorpay_signature,
+            payment_method: 'razorpay',
+            pickup_type: params.pickup_type,
+            notes: params.notes,
+          }),
+        });
+        const createData = await createResp.json();
+        if (createResp.ok && createData.success) {
+          orderCreated = true;
+          orderId = createData.order_id;
+        } else {
+          console.error('[verifyRazorpayPayment] Server order creation failed:', createData.error);
+        }
+      } catch (createErr: any) {
+        console.error('[verifyRazorpayPayment] Server order creation network error:', createErr?.message);
+      }
+    }
+
     return {
       success: true,
-      order_id: data.order_id || undefined,
-      order_created: data.order_created || false,
+      order_id: orderId,
+      order_created: orderCreated,
     };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Network error during payment verification.' };

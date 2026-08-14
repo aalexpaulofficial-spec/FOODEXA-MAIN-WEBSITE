@@ -130,8 +130,8 @@ function mapOrderRow(r: any): Order {
 }
 
 // Include counter_code, payment_status, order_status, paid_at, cancelled_at, cancel_deadline_at, pickup_type
-const ORDER_COLUMNS = 'id, student_id, registration_id, email, customer_name, phone, institution_id, canteen_id, counter_id, counter, counter_code, total_amount, transaction_amount, status, order_status, order_number, pickup_code, pickup_type, qr_code, qr_pickup_code, token_number, pickup_token, notes, kitchen_status, counter_status, estimated_ready_at, cancel_deadline_at, payment_status, created_at, accepted_at, preparing_at, ready_at, completed_at, updated_at, paid_at, cancelled_at, cancelled_by, payment_method, razorpay_order_id, razorpay_payment_id, razorpay_signature';
-const ORDER_ITEM_COLUMNS = 'id, order_id, menu_item_id, name, variant, quantity, price, subtotal, image_url, is_veg, created_at, menu_items(id, food_name, food_type, category_name, image_url, is_veg, price)';
+const ORDER_COLUMNS = 'id, student_id, registration_id, email, customer_name, phone, institution_id, canteen_id, counter_id, counter_code, total_amount, transaction_amount, status, order_status, order_number, pickup_code, pickup_type, qr_code, qr_pickup_code, token_number, pickup_token, notes, kitchen_status, counter_status, estimated_ready_at, cancel_deadline_at, payment_status, created_at, accepted_at, preparing_at, ready_at, completed_at, updated_at, paid_at, cancelled_at, cancelled_by, payment_method, razorpay_order_id, razorpay_payment_id, razorpay_signature';
+const ORDER_ITEM_COLUMNS = 'id, order_id, menu_item_id, name, variant, quantity, price, image_url, is_veg, created_at, menu_items(id, food_name, food_type, category_name, image_url, is_veg, price)';
 
 export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersOptions): UseSupabaseOrdersReturn {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -323,14 +323,14 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
         resolvedCanteenName = canteenRow?.name || null;
       }
 
-      const counterKey = freshRow.counter_id || freshRow.counter_code || freshRow.counter || '';
+      const counterKey = freshRow.counter_id || freshRow.counter_code || '';
       if (counterKey) {
         const { data: counterRow } = await supabase
           .from('counters')
           .select('name')
           .or(`id.eq.${counterKey},code.eq.${counterKey}`)
           .maybeSingle();
-        resolvedCounterName = counterRow?.name || freshRow.counter_code || freshRow.counter || null;
+        resolvedCounterName = counterRow?.name || freshRow.counter_code || null;
       }
 
       const mapped = mapOrderRow({

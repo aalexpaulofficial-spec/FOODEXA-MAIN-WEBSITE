@@ -164,7 +164,7 @@ Important rules:
 
       // Use the service role key so RLS is bypassed for this public lookup
       // Query with status='active' filter
-      const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/institutions?institution_code=eq.${encodeURIComponent(trimmed)}&status=eq.active&select=id,name,campus,city,state,country,institution_code,status&limit=1`;
+      const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/institutions?institution_code=eq.${encodeURIComponent(trimmed)}&select=id,name,campus,city,state,country,institution_code,status&limit=1`;
       const resp = await fetch(url, {
         headers: {
           'apikey': supabaseServerKey,
@@ -213,14 +213,13 @@ Important rules:
       }
 
       const inst = rows[0];
-      const institutionName = inst.institution_name || inst.name || '';
+      const institutionName = inst.name || '';
       return res.json({
         success: true,
         valid: true,
         institution: {
           id: inst.id,
           name: institutionName,
-          institution_name: institutionName,
           code: inst.institution_code || '',
           status: inst.status || 'active',
           campus: inst.campus || '',
@@ -553,6 +552,130 @@ notes: {
       console.error("[Razorpay Webhook] Error:", error);
       // Still respond 200 to prevent Razorpay retries on processing errors
       return res.status(200).json({ received: true });
+    }
+  });
+
+  // ==================== SERVER-SIDE ORDER CREATION ====================
+  // Creates orders using service-role key (bypasses RLS) for direct-session students.
+  app.post("/api/create-order", async (req, res) => {
+    try {
+      const {
+        student_id, email, customer_name, phone, institution_id,
+        canteen_id, counter, counter_code, items, total_amount,
+        razorpay_order_id, razorpay_payment_id, razorpay_signature,
+        payment_method, pickup_type, notes
+      } = req.body;
+
+      if (!institution_id) {
+        return res.status(400).json({ success: false, error: 'Institution ID is required.' });
+      }
+      if (!canteen_id) {
+        return res.status(400).json({ success: false, error: 'Canteen ID is required.' });
+      }
+      if (!items || !items.length) {
+        return res.status(400).json({ success: false, error: 'Order items are required.' });
+      }
+
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+      if (!supabaseUrl || !supabaseServiceKey) {
+        return res.status(503).json({ success: false, error: 'Server configuration error.' });
+      }
+
+      const nowISO = new Date().toISOString();
+      const orderNumber = Date.now();
+
+      const orderPayload = {
+        student_id: student_id || null,
+        user_id: student_id || null,
+        email: email || '',
+        customer_name: customer_name || email?.split('@')[0] || 'Customer',
+        phone: phone || null,
+        institution_id,
+        canteen_id,
+        counter: counter || '',
+        counter_code: counter_code || '',
+        total_amount: Number(total_amount || 0),
+        transaction_amount: Number(total_amount || 0),
+        status: 'confirmed',
+        order_status: 'confirmed',
+        payment_status: 'paid',
+        payment_method: payment_method || 'razorpay',
+        razorpay_order_id: razorpay_order_id || null,
+        razorpay_payment_id: razorpay_payment_id || null,
+        razorpay_signature: razorpay_signature || null,
+        order_number: orderNumber,
+        pickup_code: `L-${String(orderNumber).slice(-4)}`,
+        qr_pickup_code: `L-${String(orderNumber).slice(-4)}`,
+        token_number: `T-${String(orderNumber).slice(-4)}`,
+        pickup_token: `T-${String(orderNumber).slice(-4)}`,
+        pickup_type: pickup_type || 'lunch',
+        notes: notes || null,
+        paid_at: nowISO,
+        accepted_at: nowISO,
+        kitchen_status: 'pending',
+        counter_status: 'incoming',
+        estimated_ready_at: new Date(Date.now() + 15 * 60000).toISOString(),
+        cancel_deadline_at: new Date(Date.now() + 30 * 1000).toISOString(),
+        created_at: nowISO,
+        updated_at: nowISO,
+      };
+
+      const orderResp = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/rest/v1/orders`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseServiceKey,
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
+        body: JSON.stringify(orderPayload),
+      });
+
+      if (!orderResp.ok) {
+        const errText = await orderResp.text();
+        console.error('[CreateOrder] Order insert failed:', errText);
+        return res.status(500).json({ success: false, error: 'Failed to create order in database.' });
+      }
+
+      const orderRows = await orderResp.json();
+      const orderData = orderRows?.[0];
+      if (!orderData) {
+        return res.status(500).json({ success: false, error: 'Order creation returned no data.' });
+      }
+
+      // Insert order_items
+      if (items && items.length > 0) {
+        const orderItems = items.map((item: any) => ({
+          order_id: orderData.id,
+          menu_item_id: item.id || item.menu_item_id || null,
+          name: item.name || 'Item',
+          variant: item.variant || null,
+          quantity: item.quantity || 1,
+          price: item.price || 0,
+        }));
+        await fetch(`${supabaseUrl.replace(/\/+$/, '')}/rest/v1/order_items`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseServiceKey,
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify(orderItems),
+        }).catch(err => console.error('[CreateOrder] order_items insert failed:', err));
+      }
+
+      console.log('[CreateOrder] Order created successfully:', orderData.id);
+      return res.json({
+        success: true,
+        order_id: orderData.id,
+        order_number: orderData.order_number,
+        status: orderData.status,
+      });
+
+    } catch (err: any) {
+      console.error('[CreateOrder] Error:', err);
+      return res.status(500).json({ success: false, error: err?.message || 'Order creation failed.' });
     }
   });
 

@@ -431,7 +431,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
         const instId = effectiveInstitutionData?.institution_id || profile?.institution_id;
 
           // Fetch banners
-          const { data: bData } = await supabase.from('banners').select('*').eq('is_active', true).order('display_order', { ascending: true });
+          const { data: bData } = await supabase.from('banners').select('*').eq('is_active', true).order('"order"', { ascending: true });
           setBanners((bData || []) as any[]);
 
           // Fetch counters for this institution
@@ -1234,6 +1234,22 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               razorpay_signature,
               user_id: authUserId || '',
               order_id: tempReceiptId,
+              institution_id: liveInstitutionId || undefined,
+              canteen_id: selectedCanteenId || undefined,
+              items: cart.map((e: any) => ({
+                id: e.item.id,
+                name: e.item.name,
+                variant: e.item.category || e.item.food_type || null,
+                quantity: e.quantity,
+                price: e.item.offer_price || e.item.price,
+              })),
+              total_amount: cartGrandTotal,
+              email: validatedEmail,
+              phone: validatedPhone,
+              customer_name: validatedName,
+              pickup_type: 'lunch',
+              notes: kitchenNotes || null,
+              counter: firstItemCounter,
             });
 
             if (!verifyResult.success) {

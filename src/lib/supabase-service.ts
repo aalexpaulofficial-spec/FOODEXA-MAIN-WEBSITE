@@ -694,8 +694,66 @@ export async function createOrderAfterPayment(params: {
   const { data: orderData, error: rpcError } = await supabase.rpc('create_student_order', { payload });
 
   if (rpcError || !orderData) {
-    console.error('[Supabase] create_student_order RPC failed:', rpcError?.message, rpcError?.details);
-    return { data: null, error: `Order creation failed: ${rpcError?.message || 'Unknown error'}` };
+    // RPC not found or failed — fall back to direct insert
+    const isRpcMissing = rpcError && (
+      String(rpcError.message || '').includes('function') ||
+      String(rpcError.message || '').includes('not found') ||
+      String(rpcError.message || '').includes('schema cache')
+    );
+    if (isRpcMissing) {
+      console.warn('[Supabase] create_student_order RPC not found, using direct insert');
+    } else {
+      console.error('[Supabase] create_student_order RPC failed:', rpcError?.message, rpcError?.details);
+    }
+
+    // Direct insert — the server-side verify-payment.js creates orders with service-role key
+    // This client-side path only works if RLS allows it (or for authenticated users)
+    const directPayload = {
+      student_id: params.user_id || null,
+      email: params.email,
+      customer_name: params.customer_name || params.email?.split('@')[0] || 'Customer',
+      phone: params.phone || null,
+      institution_id: params.institution_id,
+      canteen_id: params.canteen_id,
+      counter: activeCanteen.name,
+      counter_code: activeCanteen.counter_code,
+      total_amount: params.total_amount,
+      transaction_amount: params.total_amount,
+      payment_status: 'paid',
+      payment_method: params.payment_method === 'cash' ? 'cash' : 'razorpay',
+      razorpay_order_id: params.razorpay_order_id,
+      razorpay_payment_id: params.razorpay_payment_id,
+      razorpay_signature: params.razorpay_signature,
+      pickup_type: pickupPrefix,
+      notes: params.notes || null,
+      status: 'confirmed',
+      order_status: 'confirmed',
+      order_number: Date.now(),
+      items: params.itemsFull.map(item => ({
+        id: item.id,
+        name: item.name,
+        variant: item.variant,
+        quantity: item.quantity,
+        price: item.price
+      }))
+    };
+
+    const { data: directOrder, error: directError } = await supabase
+      .from('orders')
+      .insert(directPayload)
+      .select('*')
+      .single();
+
+    if (directError || !directOrder) {
+      console.error('[Supabase] Direct order insert failed:', directError?.message);
+      return { data: null, error: directError?.message || 'Order creation failed. Please try again.' };
+    }
+
+    // Insert order_items
+    const orderItemsPayload = createOrderItemsPayload(directOrder.id, params.itemsFull);
+    await supabase.from('order_items').insert(orderItemsPayload);
+
+    return { data: mapOrder(directOrder), error: null };
   }
 
   // Insert payments record (best-effort)

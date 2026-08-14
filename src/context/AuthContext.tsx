@@ -483,55 +483,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { error: 'Institution Code is required.', data: null };
     }
     try {
-      // Single canonical RPC — no fallback, no direct queries
-      const { data, error: rpcError } = await supabase
-        .rpc('get_institution_by_code', { p_institution_code: trimmed.trim() });
+      // Direct query against the institutions table — no RPC
+      const { data, error: queryError } = await supabase
+        .from('institutions')
+        .select('id, name, institution_name, campus, city, state, country, institution_code, status')
+        .eq('institution_code', trimmed.trim().toUpperCase())
+        .maybeSingle();
 
-      // RPC not found — migration hasn't been run
-      if (rpcError && (
-        rpcError.message?.includes('function') ||
-        rpcError.message?.includes('not found') ||
-        rpcError.message?.includes('schema cache')
-      )) {
-        console.error('[Auth] get_institution_by_code RPC not found. Run the SQL migration.');
-        return { error: 'Unable to connect to FOODEXA right now. Please try again.', data: null };
+      if (queryError) {
+        console.error('[Auth] validateInstitutionCode query error:', queryError.message);
+        return { error: 'Unable to verify Institution Code. Please try again.', data: null };
       }
 
-      if (rpcError) {
-        console.error('[Auth] validateInstitutionCode RPC error:', rpcError.message);
-        return { error: 'Unable to connect to FOODEXA right now. Please try again.', data: null };
-      }
-
-      // RPC returns null for invalid codes
-      if (!data) {
+      if (!data || !data.id) {
         return { error: 'Institution code not found. Please check your code.', data: null };
       }
 
-      const inst = Array.isArray(data) ? data[0] : data;
-
-      if (!inst || !inst.id) {
-        return { error: 'Institution code not found. Please check your code.', data: null };
-      }
-
-      if (inst.status && inst.status !== 'approved' && inst.status !== 'active') {
+      if (data.status && data.status !== 'approved' && data.status !== 'active') {
         return { error: 'This institution is currently unavailable. Please contact your institution administrator.', data: null };
       }
 
       return {
         error: null,
         data: {
-          institution_id: inst.id,
-          institution_name: inst.name || inst.institution_name || '',
-          campus: inst.campus || '',
-          city: inst.city || '',
-          state: inst.state || '',
-          country: inst.country || '',
-          institution_code: inst.institution_code || trimmed.toUpperCase(),
+          institution_id: data.id,
+          institution_name: data.name || data.institution_name || '',
+          campus: data.campus || '',
+          city: data.city || '',
+          state: data.state || '',
+          country: data.country || '',
+          institution_code: data.institution_code || trimmed.toUpperCase(),
         } as InstitutionData,
       };
     } catch (err: any) {
       console.error('[Auth] Institution code validation exception:', err);
-      return { error: 'Unable to connect to FOODEXA right now. Please try again.', data: null };
+      return { error: 'Unable to verify Institution Code. Please try again.', data: null };
     }
   };
 
@@ -827,9 +813,8 @@ if (safeToken.length !== OTP_LENGTH) {
 
   // ── New student entry flow (NO Supabase Auth) ──────────────────────────────
   // The student provides Name + Email + Institution Code.
-  // The RPC start_student_session is the SINGLE CANONICAL mechanism.
-  // No fallback. No direct table queries. No anonymous auth.
-  // If the RPC doesn't exist, the user must run the SQL migration first.
+  // Institution is looked up directly from the institutions table.
+  // A local session is stored in sessionStorage — no Supabase Auth is used.
   const startStudentEntry = useCallback(async (
     fullName: string,
     email: string,
@@ -849,42 +834,24 @@ if (safeToken.length !== OTP_LENGTH) {
       if (!safeName) {
         return { error: 'Please enter your full name.', profile: null, institution: null, verified: false };
       }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
+      if (!safeEmail.includes('@') || !safeEmail.includes('.')) {
         return { error: 'Please enter a valid email address.', profile: null, institution: null, verified: false };
       }
       if (!code) {
         return { error: 'Institution code is required.', profile: null, institution: null, verified: false };
       }
 
-      // Call the single canonical RPC — no auth required
-      const { data, error: rpcError } = await supabase.rpc('start_student_session', {
-        p_full_name: safeName,
-        p_email: safeEmail,
-        p_institution_code: code,
-      });
+      // Step 1: Look up institution directly — no RPC
+      const { data: instData, error: instError } = await supabase
+        .from('institutions')
+        .select('id, name, institution_name, campus, city, state, country, institution_code, status')
+        .eq('institution_code', code)
+        .maybeSingle();
 
-      // ── ERROR: RPC not found in schema cache ───────────────────────
-      // This means the SQL migration hasn't been run yet.
-      if (rpcError && (
-        rpcError.message?.includes('function') ||
-        rpcError.message?.includes('not found') ||
-        rpcError.message?.includes('schema cache')
-      )) {
-        console.error('[Auth] start_student_session RPC not found. Run the SQL migration in Supabase SQL Editor.');
+      if (instError) {
+        console.error('[Auth] Institution lookup error:', instError.message);
         return {
-          error: 'Unable to connect to FOODEXA right now. Please try again.',
-          profile: null,
-          institution: null,
-          verified: false,
-          errorCode: 'RPC_NOT_FOUND',
-        };
-      }
-
-      // ── ERROR: Network/database failure ────────────────────────────
-      if (rpcError) {
-        console.error('[Auth] start_student_session RPC error:', rpcError.message);
-        return {
-          error: 'Unable to connect to FOODEXA right now. Please try again.',
+          error: 'FOODEXA could not verify the institution right now. Please try again.',
           profile: null,
           institution: null,
           verified: false,
@@ -892,35 +859,30 @@ if (safeToken.length !== OTP_LENGTH) {
         };
       }
 
-      // ── RPC returned an error response (e.g. invalid code) ─────────
-      if (data?.error) {
+      if (!instData || !instData.id) {
         return {
-          error: data.error,
+          error: 'Invalid institution code. Please enter a valid institution code provided by your institution.',
           profile: null,
           institution: null,
           verified: false,
-          errorCode: data.error_code || 'UNKNOWN',
+          errorCode: 'INVALID_CODE',
         };
       }
 
-      // ── RPC returned success ───────────────────────────────────────
-      const studentData = data?.student;
-      const instData = data?.institution;
-
-      if (!studentData || !instData) {
+      if (instData.status && instData.status !== 'approved' && instData.status !== 'active') {
         return {
-          error: 'Unexpected server response. Please try again.',
+          error: 'This institution is currently unavailable.',
           profile: null,
           institution: null,
           verified: false,
-          errorCode: 'UNEXPECTED_RESPONSE',
+          errorCode: 'INSTITUTION_UNAVAILABLE',
         };
       }
 
-      // Build InstitutionData from the RPC response
+      // Build InstitutionData from the real database record
       const inst: InstitutionData = {
-        institution_id: instData.institution_id,
-        institution_name: instData.institution_name || '',
+        institution_id: instData.id,
+        institution_name: instData.name || instData.institution_name || '',
         campus: instData.campus || '',
         city: instData.city || '',
         state: instData.state || '',
@@ -928,15 +890,16 @@ if (safeToken.length !== OTP_LENGTH) {
         institution_code: instData.institution_code || code,
       };
 
-      // Build a DirectSession — the student UUID is the session identifier
+      // Step 2: Create a local session — no Supabase Auth
+      const sessionId = crypto.randomUUID();
       const tempSession: DirectSession = {
-        session_id: studentData.id,
-        temporarySessionId: studentData.id,
+        session_id: sessionId,
+        temporarySessionId: sessionId,
         institutionId: inst.institution_id,
         institutionName: inst.institution_name,
         institutionCode: inst.institution_code,
-        name: studentData.full_name || safeName,
-        email: studentData.email || safeEmail,
+        name: safeName,
+        email: safeEmail,
         role: 'student',
       };
 
@@ -945,11 +908,11 @@ if (safeToken.length !== OTP_LENGTH) {
       setInstitutionData(inst);
       setIsEmailVerified(true);
 
-      // Build a Profile-like object from the student data
+      // Build a Profile-like object for display purposes
       const profileLike: Profile = {
-        user_id: studentData.id,
-        email: studentData.email || safeEmail,
-        full_name: studentData.full_name || safeName,
+        user_id: sessionId,
+        email: safeEmail,
+        full_name: safeName,
         phone: null,
         institution_id: inst.institution_id,
         role: 'student',
@@ -959,8 +922,6 @@ if (safeToken.length !== OTP_LENGTH) {
         campus_block: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        student_id: studentData.student_id || '',
-        registration_id: studentData.registration_id || '',
       };
       setProfile(profileLike);
 
@@ -968,7 +929,7 @@ if (safeToken.length !== OTP_LENGTH) {
     } catch (err: any) {
       console.error('[Auth] startStudentEntry failed:', err);
       return {
-        error: 'Unable to connect to FOODEXA right now. Please try again.',
+        error: 'FOODEXA could not verify the institution right now. Please try again.',
         profile: null,
         institution: null,
         verified: false,

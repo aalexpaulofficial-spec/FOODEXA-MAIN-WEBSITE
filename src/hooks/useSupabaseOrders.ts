@@ -158,31 +158,42 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
       let orderRows: any[] = [];
       let fetchError: any = null;
 
-      // Try fetching by student_id first (works for anonymous auth users via RLS)
+      // Strip the "direct_" prefix used by direct session users
+      const actualUserId = userId.startsWith('direct_') ? userId.slice(7) : userId;
+
+      // Try fetching by student_id first
       const { data: byStudentId, error: err1 } = await supabase
         .from('orders')
         .select(ORDER_COLUMNS)
-        .eq('student_id', userId)
+        .eq('student_id', actualUserId)
         .order('created_at', { ascending: false });
 
       if (!err1 && byStudentId && byStudentId.length > 0) {
         orderRows = byStudentId;
       } else {
-        // Fallback: fetch by email (works for direct session users)
-        // The direct session stores email in the order row
-        const { data: byEmail, error: err2 } = await supabase
+        // Fallback: fetch by user_id column
+        const { data: byUserId, error: err2 } = await supabase
           .from('orders')
           .select(ORDER_COLUMNS)
-          .not('email', 'is', null)
+          .eq('user_id', actualUserId)
           .order('created_at', { ascending: false });
 
-        if (!err2 && byEmail) {
-          // Filter client-side by matching the direct session user pattern
-          orderRows = byEmail.filter((row: any) =>
-            row.student_id === userId
-          );
+        if (!err2 && byUserId && byUserId.length > 0) {
+          orderRows = byUserId;
         } else {
-          fetchError = err2 || err1;
+          // Last fallback: fetch all orders and filter client-side by matching student_id
+          const { data: allOrders, error: err3 } = await supabase
+            .from('orders')
+            .select(ORDER_COLUMNS)
+            .order('created_at', { ascending: false });
+
+          if (!err3 && allOrders) {
+            orderRows = allOrders.filter((row: any) =>
+              row.student_id === actualUserId || row.user_id === actualUserId
+            );
+          } else {
+            fetchError = err3 || err2 || err1;
+          }
         }
       }
 
@@ -359,6 +370,9 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
       if (!userId || !enabled || !mountedRef.current || isSettingUp) return;
       isSettingUp = true;
 
+      // Strip "direct_" prefix for the Realtime filter
+      const filterUserId = userId.startsWith('direct_') ? userId.slice(7) : userId;
+
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
@@ -382,7 +396,7 @@ export function useSupabaseOrders({ userId, enabled = true }: UseSupabaseOrdersO
 
       const channel = supabase
         .channel(channelName)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `student_id=eq.${userId}` }, handleOrderChange)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `student_id=eq.${filterUserId}` }, handleOrderChange)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, handleOrderItemChange)
         .subscribe((status) => {
           if (!mountedRef.current) return;

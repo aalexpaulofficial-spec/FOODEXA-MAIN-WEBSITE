@@ -100,28 +100,21 @@ export const StartFoodexaModal: React.FC<StartFoodexaModalProps> = ({
 
     setLoading(false);
 
-    // ── CASE 1: RPC not found or network error ────────────────────
-    if (result.errorCode === 'RPC_NOT_FOUND' || result.errorCode === 'NETWORK_ERROR') {
-      setStep('error');
-      setError('Unable to connect to FOODEXA right now. Please try again.');
-      return;
-    }
-
-    // ── CASE 2: Database error ────────────────────────────────────
-    if (result.errorCode === 'DATABASE_ERROR') {
-      setStep('error');
-      setError('Unable to connect to FOODEXA right now. Please try again.');
-      return;
-    }
-
-    // ── CASE 3: Invalid institution code ──────────────────────────
-    if (result.errorCode === 'INVALID_INSTITUTION_CODE' || result.errorCode === 'INSTITUTION_UNAVAILABLE') {
+    // ── CASE 1: Database/network error ────────────────────────
+    if (result.errorCode === 'DATABASE_ERROR' || result.errorCode === 'NETWORK_ERROR') {
       setStep('form');
-      setError(result.error || 'Institution code is not valid. Please check your institution code and try again.');
+      setError('FOODEXA could not verify the institution right now. Please try again.');
       return;
     }
 
-    // ── CASE 4: Generic error (missing fields, etc.) ─────────────
+    // ── CASE 2: Invalid institution code ──────────────────────────
+    if (result.errorCode === 'INVALID_CODE' || result.errorCode === 'INSTITUTION_UNAVAILABLE') {
+      setStep('form');
+      setError(result.error || 'Invalid institution code. Please enter a valid institution code provided by your institution.');
+      return;
+    }
+
+    // ── CASE 3: Generic error (missing fields, etc.) ─────────────
     if (result.error || !result.profile) {
       setStep('form');
       setError(result.error || 'Unable to start your session. Please try again.');

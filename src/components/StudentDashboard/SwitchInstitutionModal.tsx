@@ -33,16 +33,19 @@ export const SwitchInstitutionModal: React.FC<SwitchInstitutionModalProps> = ({
     setValidatedInst(null);
 
     try {
-      const { data, error: rpcError } = await supabase
-        .rpc('get_institution_by_code', { p_institution_code: code.trim() });
+      const { data, error: queryError } = await supabase
+        .from('institutions')
+        .select('id, name, institution_name, campus, city, institution_code, status')
+        .eq('institution_code', code.trim().toUpperCase())
+        .maybeSingle();
 
-      if (rpcError) {
+      if (queryError) {
         setError('Unable to verify institution code. Please try again.');
         setLoading(false);
         return;
       }
 
-      if (!data || (Array.isArray(data) && data.length === 0)) {
+      if (!data || !data.id) {
         setError('Invalid institution code. Please check your code and try again.');
         setLoading(false);
         return;

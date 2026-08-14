@@ -55,17 +55,20 @@ export const JoinInstitutionModal: React.FC<JoinInstitutionModalProps> = ({
     setError(null);
 
     try {
-      const { data, error: rpcError } = await supabase
-        .rpc('get_institution_by_code', { p_institution_code: trimmed });
+      const { data, error: queryError } = await supabase
+        .from('institutions')
+        .select('id, name, institution_name, campus, city, institution_code, status')
+        .eq('institution_code', trimmed.trim().toUpperCase())
+        .maybeSingle();
 
-      if (rpcError) {
-        console.error('[JoinInstitution] RPC error:', rpcError);
+      if (queryError) {
+        console.error('[JoinInstitution] Query error:', queryError);
         setError('We couldn\'t connect to FOODEXA right now. Please try again.');
         setValidating(false);
         return;
       }
 
-      if (!data || (Array.isArray(data) && data.length === 0)) {
+      if (!data || !data.id) {
         setError('Invalid institution code. Please check your code and try again.');
         setValidating(false);
         return;

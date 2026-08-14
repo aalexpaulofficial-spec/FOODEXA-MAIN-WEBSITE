@@ -1832,117 +1832,134 @@ if (!o && paidPendingConfirmation) {
                    const estimatedReadyAt = o?.estimated_ready_at || null;
                    const orderNumber = o?.order_number || o?.order_id || '';
 
-                   return (
-                     <div className="max-w-md mx-auto space-y-4 pb-20">
-                       {/* Top Status Card */}
-                       <div className="bg-gray-50 rounded-3xl p-6 text-black shadow-md relative overflow-hidden">
-                         <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
-                         <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-black/20 rounded-full blur-3xl pointer-events-none"></div>
-                         
-                         <div className="relative z-10">
-                           <div className="flex items-start justify-between mb-4">
-                             <div>
-                               <p className="text-blue-300 text-xs font-bold uppercase tracking-wider mb-1">{label}</p>
-                               <h2 className="text-3xl font-black">{orderNumber}</h2>
-                             </div>
-                             <div className="text-right">
-                               <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1">Pickup Code</p>
-                               <p className="text-xl font-black text-black tracking-wider">
-                                 {pickupCode || 'Generating...'}
-                               </p>
-                             </div>
-                           </div>
+                       return (
+                      <div className="max-w-md mx-auto space-y-4 pb-20">
+                        {/* Top Status Card */}
+                        <div className="bg-gray-50 rounded-3xl p-6 text-black shadow-md relative overflow-hidden">
+                          <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                          <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-black/20 rounded-full blur-3xl pointer-events-none"></div>
+                          
+                          <div className="relative z-10">
+                            <div className="flex items-start justify-between mb-4">
+                              <div>
+                                <p className="text-blue-300 text-xs font-bold uppercase tracking-wider mb-1">{label}</p>
+                                <h2 className="text-3xl font-black">{orderNumber}</h2>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1">Pickup Code</p>
+                                <p className="text-xl font-black text-black tracking-wider">
+                                  {pickupCode || 'Generating...'}
+                                </p>
+                              </div>
+                            </div>
 
-                           <div className="flex items-center gap-3 bg-white/10 rounded-2xl p-3 border border-white/10">
-                             <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center border border-blue-400/30">
-                               <Clock className="w-5 h-5 text-blue-300" />
-                             </div>
-                             <div>
-                               <p className="text-gray-600 text-xs">Estimated Ready Time</p>
-                               <p className="font-bold text-black">
-                                 {estimatedReadyAt 
-                                   ? new Date(estimatedReadyAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                                   : 'Calculating...'}
-                               </p>
-                             </div>
-                           </div>
-                         </div>
-                       </div>
+                            <div className="flex items-center gap-3 bg-white/10 rounded-2xl p-3 border border-white/10">
+                              <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center border border-blue-400/30">
+                                <Clock className="w-5 h-5 text-blue-300" />
+                              </div>
+                              <div>
+                                <p className="text-gray-600 text-xs">Estimated Ready Time</p>
+                                <p className="font-bold text-black">
+                                  {estimatedReadyAt 
+                                    ? new Date(estimatedReadyAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                                    : 'Calculating...'}
+                                </p>
+                              </div>
+                            </div>
 
-{/* Live Detail Grid */}
-                       <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-                         <h3 className="font-bold text-slate-900 mb-4">Order Details</h3>
-                         <div className="grid grid-cols-2 gap-3 text-xs">
-                           <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-gray-500 font-bold uppercase">Token Number</p>
-                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.token_number || o?.pickup_token || '—'}</p>
-                           </div>
-                           <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-gray-500 font-bold uppercase">Pickup Code</p>
-                             <p className="text-sm font-black text-emerald-700 mt-0.5">{pickupCode || '—'}</p>
-                           </div>
-                           <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-                             <p className="text-[10px] text-blue-500 font-bold uppercase">Pickup Counter</p>
-                             <p className="text-sm font-black text-blue-700 mt-0.5">{o?.counter_name || o?.counter || '—'}</p>
-                           </div>
-                           <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-gray-500 font-bold uppercase">Kitchen Status</p>
-                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.kitchen_status || '—'}</p>
-                           </div>
-                           <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-gray-500 font-bold uppercase">Counter Status</p>
-                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.counter_status || '—'}</p>
-                           </div>
-                           <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-gray-500 font-bold uppercase">Student ID</p>
-                             <p className="text-sm font-black text-emerald-700 mt-0.5">{effectiveProfile?.student_id || o?.registration_id || '—'}</p>
-                           </div>
-                           <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-gray-500 font-bold uppercase">Registration ID</p>
-                             <p className="text-sm font-black text-slate-900 mt-0.5">{effectiveProfile?.registration_id || '—'}</p>
-                           </div>
-                           <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-gray-500 font-bold uppercase">Order Status</p>
-                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.order_status || o?.status || '—'}</p>
-                           </div>
-                           <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-gray-500 font-bold uppercase">Completion Time</p>
-                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.completed_at ? new Date(o.completed_at).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'}</p>
-                           </div>
-                           <div className="bg-slate-50 rounded-xl p-3">
-                             <p className="text-[10px] text-gray-500 font-bold uppercase">Items</p>
-                             <p className="text-sm font-black text-slate-900 mt-0.5">{o?.items?.length ?? 0} item(s)</p>
-                           </div>
-                         </div>
-                       </div>
+                            {/* Pickup Counter */}
+                            <div className="flex items-center gap-3 bg-white/10 rounded-2xl p-3 border border-white/10 mt-2">
+                              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-400/30">
+                                <MapPin className="w-5 h-5 text-emerald-300" />
+                              </div>
+                              <div>
+                                <p className="text-gray-600 text-xs">Pickup Counter</p>
+                                <p className="font-bold text-black">{o?.counter_name || o?.counter || 'Assigned on confirmation'}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
 
-                       {/* Items & Counter */}
-                       <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-                         <div className="flex items-center justify-between mb-3">
-                           <h3 className="font-bold text-slate-900">Your Items</h3>
-                           <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-bold border border-blue-100">
-                             {o?.counter_name || o?.counter || 'Counter'}
-                           </span>
-                         </div>
-                         {o && o.items.length > 0 ? (
-                           <div className="space-y-2">
-                             {o.items.map((it, i) => (
-                               <div key={i} className="flex items-center justify-between text-sm">
-                                 <span className="text-slate-800 font-semibold">
-                                   {it.name} <span className="text-blue-600 font-black">x{it.quantity}</span>
-                                 </span>
-                                 <span className="text-slate-900 font-bold">{formatINR(it.price * it.quantity)}</span>
-                               </div>
-                             ))}
-                             <div className="border-t border-slate-100 pt-2 flex items-center justify-between">
-                               <span className="text-xs font-bold text-slate-500 uppercase">Total</span>
-                               <span className="text-base font-black text-slate-900">{formatINR(o.total_amount)}</span>
-                             </div>
-                           </div>
-                         ) : (
-                           <p className="text-sm text-slate-400 font-semibold">Loading order items...</p>
-                         )}
-                       </div>
+                        {/* Live Detail Grid — all values from Supabase */}
+                        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
+                          <h3 className="font-bold text-slate-900 mb-4">Order Details</h3>
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div className="bg-slate-50 rounded-xl p-3">
+                              <p className="text-[10px] text-gray-500 font-bold uppercase">Token Number</p>
+                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.token_number || o?.pickup_token || '—'}</p>
+                            </div>
+                            <div className="bg-slate-50 rounded-xl p-3">
+                              <p className="text-[10px] text-gray-500 font-bold uppercase">Pickup Code</p>
+                              <p className="text-sm font-black text-emerald-700 mt-0.5">{pickupCode || '—'}</p>
+                            </div>
+                            <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+                              <p className="text-[10px] text-blue-500 font-bold uppercase">Pickup Counter</p>
+                              <p className="text-sm font-black text-blue-700 mt-0.5">{o?.counter_name || o?.counter || '—'}</p>
+                            </div>
+                            <div className="bg-violet-50 rounded-xl p-3 border border-violet-100">
+                              <p className="text-[10px] text-violet-500 font-bold uppercase">Kitchen Status</p>
+                              <p className="text-sm font-black text-violet-700 mt-0.5">{o?.kitchen_status || '—'}</p>
+                            </div>
+                            <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+                              <p className="text-[10px] text-blue-500 font-bold uppercase">Counter Status</p>
+                              <p className="text-sm font-black text-blue-700 mt-0.5">{o?.counter_status || '—'}</p>
+                            </div>
+                            <div className="bg-slate-50 rounded-xl p-3">
+                              <p className="text-[10px] text-gray-500 font-bold uppercase">Student ID</p>
+                              <p className="text-sm font-black text-emerald-700 mt-0.5">{effectiveProfile?.student_id || '—'}</p>
+                            </div>
+                            <div className="bg-slate-50 rounded-xl p-3">
+                              <p className="text-[10px] text-gray-500 font-bold uppercase">Registration ID</p>
+                              <p className="text-sm font-black text-slate-900 mt-0.5">{effectiveProfile?.registration_id || '—'}</p>
+                            </div>
+                            <div className="bg-slate-50 rounded-xl p-3">
+                              <p className="text-[10px] text-gray-500 font-bold uppercase">Order Status</p>
+                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.order_status || o?.status || '—'}</p>
+                            </div>
+                            <div className="bg-slate-50 rounded-xl p-3">
+                              <p className="text-[10px] text-gray-500 font-bold uppercase">Completion Time</p>
+                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.completed_at ? new Date(o.completed_at).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'}</p>
+                            </div>
+                            <div className="bg-slate-50 rounded-xl p-3">
+                              <p className="text-[10px] text-gray-500 font-bold uppercase">Items</p>
+                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.items?.length ?? 0} item(s)</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Items & Counter */}
+                        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="font-bold text-slate-900">Your Items</h3>
+                            <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-bold border border-blue-100">
+                              {o?.counter_name || o?.counter || 'Counter'}
+                            </span>
+                          </div>
+                          {o && o.items.length > 0 ? (
+                            <div className="space-y-2">
+                              {o.items.map((it, i) => (
+                                <div key={i} className="flex items-center justify-between text-sm">
+                                  <span className="text-slate-800 font-semibold">
+                                    {it.name} <span className="text-blue-600 font-black">x{it.quantity}</span>
+                                  </span>
+                                  <span className="text-slate-900 font-bold">{formatINR(it.price * it.quantity)}</span>
+                                </div>
+                              ))}
+                              <div className="border-t border-slate-100 pt-2 flex items-center justify-between">
+                                <span className="text-xs font-bold text-slate-500 uppercase">Total</span>
+                                <span className="text-base font-black text-slate-900">{formatINR(o.total_amount)}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-3">
+                              {orderItemsLoading ? (
+                                <p className="text-sm text-slate-400 font-semibold">Loading order items...</p>
+                              ) : (
+                                <p className="text-sm text-slate-400 font-semibold">{o?.items?.length ?? 0} item(s)</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
 
                        {/* 4-Step Vertical Tracker driven by DB status (single source of truth) */}
                        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
@@ -1993,28 +2010,37 @@ if (!o && paidPendingConfirmation) {
                            </button>
                          )}
                          
-                         {/* Cancel within 30 seconds */}
-                         {(() => {
-                           const secs = Math.max(0, 30 - Math.floor((currentTime - new Date(o?.created_at || Date.now()).getTime()) / 1000));
-                           if (secs > 0 && !cancelled) return (
-                             <div className="text-center mt-2">
-                               <button
-                                 onClick={async () => {
-                                   setSubmittingOrder(true);
-                                    const res = await cancelOrder(o!.id, effectiveRole || 'student');
-                                   if (res.success) { triggerToast && triggerToast('Cancelled', 'Order cancelled and refunded.', 'success'); setActiveTab('history'); }
-                                   else { triggerToast && triggerToast('Failed', 'Could not cancel.', 'error'); }
-                                   setSubmittingOrder(false);
-                                 }}
-                                 disabled={submittingOrder}
-                                 className="text-red-500 font-bold text-xs hover:text-red-600 hover:underline transition-all disabled:opacity-50"
-                               >
-                                 Cancel Order within {secs} seconds timing
-                               </button>
-                             </div>
-                           );
-                           return null;
-                         })()}
+                          {/* Cancel within 30 seconds — use cancel_deadline_at from Supabase */}
+                          {(() => {
+                            if (!o) return null;
+                            const isNonCancellable = ['confirmed', 'preparing', 'cooking', 'ready', 'completed', 'cancelled'].includes(o.status);
+                            if (isNonCancellable) return null;
+                            const deadline = o.cancel_deadline_at ? new Date(o.cancel_deadline_at).getTime() : 0;
+                            if (!deadline) return null;
+                            const secs = Math.max(0, Math.floor((deadline - currentTime) / 1000));
+                            if (secs > 0) return (
+                              <div className="text-center mt-2">
+                                <button
+                                  onClick={async () => {
+                                    setSubmittingOrder(true);
+                                     const res = await cancelOrder(o!.id, effectiveRole || 'student');
+                                    if (res.success) { triggerToast && triggerToast('Cancelled', 'Order cancelled and refunded.', 'success'); setActiveTab('history'); }
+                                    else { triggerToast && triggerToast('Failed', 'Could not cancel.', 'error'); }
+                                    setSubmittingOrder(false);
+                                  }}
+                                  disabled={submittingOrder}
+                                  className="text-red-500 font-bold text-xs hover:text-red-600 hover:underline transition-all disabled:opacity-50"
+                                >
+                                  Cancel Order within {secs} seconds
+                                </button>
+                              </div>
+                            );
+                            return (
+                              <div className="text-center mt-2">
+                                <p className="text-gray-400 text-xs font-semibold">Cancellation unavailable</p>
+                              </div>
+                            );
+                          })()}
                        </div>
                      </div>
                    );

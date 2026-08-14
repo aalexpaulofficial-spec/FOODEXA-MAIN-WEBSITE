@@ -358,6 +358,11 @@ export function mapOrder(row: any): Order {
     razorpay_signature: row.razorpay_signature || null,
     cancelled_at: row.cancelled_at || null,
     cancelled_by: row.cancelled_by || null,
+    cancel_deadline_at: row.cancel_deadline_at || null,
+    pickup_type: row.pickup_type || null,
+    counter_name: row.counter_name || row.counter_code || null,
+    canteen_name: row.canteen_name || null,
+    institution_code: row.institution_code || null,
   };
 }
 
@@ -577,14 +582,6 @@ export async function createOrderAfterPayment(params: {
   const nowISO = now.toISOString();
   const dateStr = nowISO.slice(0, 10).replace(/-/g, '');
 
-  // Use timestamp-based unique ID to avoid race conditions on order count
-  const timestampSeq = Date.now().toString(36).toUpperCase().slice(-6);
-  const seqPadded = String(Math.floor(Math.random() * 9999) + 1).padStart(4, '0');
-
-  const tokenNumber = `TKN-${seqPadded}`;
-  const pickupCode = `PICKUP-${seqPadded}`;
-  const qrPickupCode = `QR-FDX-${dateStr}-${seqPadded}`;
-
   const customerName = params.customer_name || params.email?.split('@')[0] || 'Customer';
   const phone = params.phone || '0000000000';
   const prepTimeMinutes = params.estimated_prep_time_minutes || 15;
@@ -609,9 +606,23 @@ export async function createOrderAfterPayment(params: {
   }
   const activeCanteen = canteenResult.data;
 
+  // Resolve pickup type from canteen configuration
+  const pickupType = resolvePickupTypeFromCanteen(activeCanteen);
+  const pickupPrefix = getPickupTypePrefix(pickupType);
+
+  // Generate sequential token and pickup code from Supabase
+  const tokenNumber = await generateTokenNumber();
+  const pickupCode = await generatePickupCode(pickupPrefix);
+
+  // QR pickup code for display
+  const qrPickupCode = pickupCode;
+
+  // Cancel deadline: 30 seconds from order creation
+  const cancelDeadlineAt = new Date(now.getTime() + 30 * 1000).toISOString();
+
   const { data: profileRow } = await supabase
     .from('profiles')
-    .select('registration_id')
+    .select('registration_id, student_id')
     .eq('user_id', params.user_id)
     .maybeSingle();
 
@@ -630,6 +641,7 @@ export async function createOrderAfterPayment(params: {
   const orderPayload: Record<string, any> = {
     student_id: params.user_id || null,
     registration_id: profileRow?.registration_id || null,
+    student_id_display: profileRow?.student_id || null,
     email: params.email,
     customer_name: customerName,
     phone,
@@ -645,12 +657,14 @@ export async function createOrderAfterPayment(params: {
     order_number: Date.now(),
     pickup_token: tokenNumber,
     pickup_code: pickupCode,
+    pickup_type: pickupType,
     qr_pickup_code: qrPickupCode,
     token_number: tokenNumber,
     notes: params.notes || null,
-    kitchen_status: 'Pending',
-    counter_status: 'Incoming',
+    kitchen_status: 'pending',
+    counter_status: 'incoming',
     estimated_ready_at: new Date(now.getTime() + prepTimeMinutes * 60000).toISOString(),
+    cancel_deadline_at: cancelDeadlineAt,
     created_at: nowISO,
     updated_at: nowISO,
     paid_at: nowISO,
@@ -737,25 +751,11 @@ export async function placeOrder(params: {
 }): Promise<{ data: Order | null; error: string | null }> {
   const now = new Date();
   const nowISO = now.toISOString();
-  const dateStr = nowISO.slice(0, 10).replace(/-/g, '');
 
-  // Fetch current order count to generate sequential IDs
-  const { count: orderCount } = await supabase
-    .from('orders')
-    .select('id', { count: 'exact', head: true });
-  const nextSeq = (orderCount || 0) + 1;
-  const seqPadded = String(nextSeq).padStart(4, '0');
-
-  const tokenNumber = `TKN-${seqPadded}`;
-  const pickupCode = `PICKUP-${seqPadded}`;
-  const qrPickupCode = `QR-FDX-${dateStr}-${seqPadded}`;
-
-  const isPaid = Boolean(params.razorpay_payment_id && params.razorpay_signature);
   const customerName = params.customer_name || params.email?.split('@')[0] || 'Customer';
   const phone = params.phone || '0000000000';
   const prepTimeMinutes = params.estimated_prep_time_minutes || 15;
 
-  // CRITICAL FIX: Enforce profiles.institution_id and resolve the active canteen
   const actualInstitutionId = params.institution_id;
 
   if (!actualInstitutionId) {
@@ -773,9 +773,18 @@ export async function placeOrder(params: {
   }
   const activeCanteen = canteenResult.data;
 
+  const pickupType = resolvePickupTypeFromCanteen(activeCanteen);
+  const pickupPrefix = getPickupTypePrefix(pickupType);
+  const tokenNumber = await generateTokenNumber();
+  const pickupCode = await generatePickupCode(pickupPrefix);
+  const qrPickupCode = pickupCode;
+  const cancelDeadlineAt = new Date(now.getTime() + 30 * 1000).toISOString();
+
+  const isPaid = Boolean(params.razorpay_payment_id && params.razorpay_signature);
+
   const { data: profileRow } = await supabase
     .from('profiles')
-    .select('registration_id')
+    .select('registration_id, student_id')
     .eq('user_id', params.user_id)
     .maybeSingle();
 
@@ -793,16 +802,18 @@ export async function placeOrder(params: {
     order_status: isPaid ? 'confirmed' : 'pending',
     payment_status: isPaid ? 'paid' : 'pending',
     payment_method: isPaid ? (params.payment_method === 'cash' ? 'cash' : 'razorpay') : 'razorpay',
-    order_number: nextSeq,
+    order_number: Date.now(),
     pickup_token: tokenNumber,
     pickup_code: pickupCode,
+    pickup_type: pickupType,
     qr_pickup_code: qrPickupCode,
     token_number: tokenNumber,
     counter_code: activeCanteen.counter_code,
     notes: params.notes || null,
-    kitchen_status: 'Pending',
-    counter_status: 'Incoming',
+    kitchen_status: 'pending',
+    counter_status: 'incoming',
     estimated_ready_at: new Date(now.getTime() + prepTimeMinutes * 60000).toISOString(),
+    cancel_deadline_at: cancelDeadlineAt,
     created_at: nowISO,
     updated_at: nowISO,
   };
@@ -930,6 +941,67 @@ export async function fetchOrderById(orderId: string): Promise<Order | null> {
   return mapOrder(data);
 }
 
+// ── PICKUP TYPE PREFIX MAPPING ──────────────────────────────────────────────
+// Maps pickup category to single-letter prefix for pickup codes.
+const PICKUP_TYPE_PREFIX: Record<string, string> = {
+  breakfast: 'B',
+  lunch: 'L',
+  dinner: 'D',
+  faculty: 'F',
+  guest: 'G',
+};
+
+function getPickupTypePrefix(pickupType: string | null | undefined): string {
+  if (!pickupType) return 'B';
+  const normalized = String(pickupType).trim().toLowerCase();
+  return PICKUP_TYPE_PREFIX[normalized] || 'B';
+}
+
+// Generate sequential pickup code like B-0001, L-0002, etc.
+async function generatePickupCode(prefix: string): Promise<string> {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayStr = todayStart.toISOString().slice(0, 10);
+
+  const { count } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .like('pickup_code', `${prefix}-%`)
+    .gte('created_at', todayStr);
+
+  const nextSeq = (count || 0) + 1;
+  return `${prefix}-${String(nextSeq).padStart(4, '0')}`;
+}
+
+// Generate sequential token number like TKN-0001
+async function generateTokenNumber(): Promise<string> {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayStr = todayStart.toISOString().slice(0, 10);
+
+  const { count } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .like('token_number', 'TKN-%')
+    .gte('created_at', todayStr);
+
+  const nextSeq = (count || 0) + 1;
+  return `TKN-${String(nextSeq).padStart(4, '0')}`;
+}
+
+// Resolve the pickup type from the canteen/counter configuration.
+// The canteen's counter_code or counter_name determines the pickup category.
+function resolvePickupTypeFromCanteen(canteen: ActiveCanteenAssignment | null): string {
+  if (!canteen) return 'breakfast';
+  const name = (canteen.counter_code || canteen.name || '').toLowerCase();
+  if (name.includes('lunch')) return 'lunch';
+  if (name.includes('dinner')) return 'dinner';
+  if (name.includes('faculty')) return 'faculty';
+  if (name.includes('guest')) return 'guest';
+  if (name.includes('break')) return 'breakfast';
+  return 'breakfast';
+}
+
 export async function cancelOrder(
   orderId: string,
   cancelledBy?: string
@@ -938,10 +1010,10 @@ export async function cancelOrder(
 
   const updatePayload: Record<string, any> = {
     status: 'cancelled',
-    order_status: 'Cancelled',
+    order_status: 'cancelled',
     payment_status: 'refund_pending', // Assume manual refund if already paid
-    kitchen_status: 'Cancelled',
-    counter_status: 'Cancelled',
+    kitchen_status: 'cancelled',
+    counter_status: 'cancelled',
     cancelled_at: now,
     cancelled_by: cancelledBy || 'unknown',
     updated_at: now,

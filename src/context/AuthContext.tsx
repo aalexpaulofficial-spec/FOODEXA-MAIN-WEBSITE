@@ -51,14 +51,25 @@ const normalizeRole = (value: unknown): UserRole | null => {
 
 // ── Permanent FOODEXA identifiers ──────────────────────────────────────────
 // Generated exactly ONCE at account creation and stored permanently in Supabase.
-// Format examples: FX26-A2A1EF (Registration ID) and ST-A2A1EF (Student ID)
-export function generateStudentIdentifiers(userId?: string): { registration_id: string; student_id: string } {
+// Format: FDX-STU-{FirstLetterOfFirstName}{FirstLetterOfLastName}{YEAR}
+// Example: Alex Paul → FDX-STU-AP2026, Registration ID: FDX-REG-AP2026
+export function generateStudentIdentifiers(userId?: string, fullName?: string): { registration_id: string; student_id: string } {
   const year = new Date().getFullYear();
-  const source = String(userId || crypto.randomUUID()).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  const suffix = source.slice(-10).padStart(10, '0');
+  let initials = 'XX';
+  if (fullName && fullName.trim()) {
+    const parts = fullName.trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      initials = (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    } else if (parts.length === 1) {
+      initials = (parts[0][0] + parts[0][0]).toUpperCase();
+    }
+  } else if (userId) {
+    const source = String(userId).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    initials = source.slice(0, 2) || 'XX';
+  }
   return {
-    registration_id: `FXREG-${year}-${suffix}`,
-    student_id: `FXSTU-${year}-${suffix}`,
+    registration_id: `FDX-REG-${initials}${year}`,
+    student_id: `FDX-STU-${initials}${year}`,
   };
 }
 
@@ -204,7 +215,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (profileData.role !== 'student') return profileData;
       if (profileData.registration_id && profileData.student_id) return profileData;
 
-      const ids = generateStudentIdentifiers(profileData.user_id);
+      const ids = generateStudentIdentifiers(profileData.user_id, profileData.full_name);
       const update = {
         registration_id: profileData.registration_id || ids.registration_id,
         student_id: profileData.student_id || ids.student_id,
@@ -279,8 +290,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const safeEmail = fallbackData?.email || user.email || '';
         const safeFullName = fallbackData?.fullName?.trim() || user.user_metadata?.full_name?.trim() || user.user_metadata?.name?.trim() || pendingOtpProfileRef.current?.fullName?.trim() || safeEmail.split('@')[0]?.trim() || 'FOODEXA Student';
         const safeRole = fallbackData?.role || normalizeRole(user.user_metadata?.role) || pendingOtpProfileRef.current?.role || 'student';
-        const studentIds = safeRole === 'student'
-          ? generateStudentIdentifiers(user.id)
+    const studentIds = safeRole === 'student'
+          ? generateStudentIdentifiers(user.id, safeFullName)
           : { registration_id: null, student_id: null };
 
         const { error: upsertError } = await upsertProfileSafely({

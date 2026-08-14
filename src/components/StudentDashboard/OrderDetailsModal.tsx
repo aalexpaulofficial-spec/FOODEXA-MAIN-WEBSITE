@@ -41,6 +41,8 @@ const statusStyle = (s: Order['status']): string => {
   return m[s] || 'bg-slate-100 text-slate-600 border-slate-200';
 };
 
+const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '—';
+
 export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, onClose, order, institutionName, studentName, studentId, registrationId, itemsLoading, itemsError, onRetryItems }) => {
   if (!isOpen) return null;
 
@@ -116,14 +118,38 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, on
             <div className="rounded-xl bg-blue-50 p-3 border border-blue-100">
               <div className="flex items-center gap-1.5 mb-1">
                 <MapPin className="w-3.5 h-3.5 text-blue-400" />
-                <p className="text-[10px] font-bold text-blue-400 uppercase">Counter</p>
+                <p className="text-[10px] font-bold text-blue-400 uppercase">Pickup Counter</p>
               </div>
               <p className="text-sm font-black text-blue-700 truncate">{counterName}</p>
             </div>
           </div>
 
+          {/* Token & Pickup Code */}
+          {(pickupCode || tokenNumber) && (
+            <div className="grid grid-cols-2 gap-3">
+              {tokenNumber && (
+                <div className="rounded-xl bg-amber-50 p-3 border border-amber-100">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Hash className="w-3.5 h-3.5 text-amber-400" />
+                    <p className="text-[10px] font-bold text-amber-400 uppercase">Token Number</p>
+                  </div>
+                  <p className="text-base font-black text-amber-700">{tokenNumber}</p>
+                </div>
+              )}
+              {pickupCode && (
+                <div className="rounded-xl bg-blue-50 p-3 border border-blue-100">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <QrCode className="w-3.5 h-3.5 text-blue-400" />
+                    <p className="text-[10px] font-bold text-blue-400 uppercase">Pickup Code</p>
+                  </div>
+                  <p className="text-base font-black text-blue-700">{pickupCode}</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Student Identity */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
               <div className="flex items-center gap-1.5 mb-1">
                 <User className="w-3.5 h-3.5 text-slate-400" />
@@ -147,29 +173,41 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, on
             </div>
           </div>
 
-          {/* Pickup & Token */}
-          {(pickupCode || tokenNumber) && (
-            <div className="grid grid-cols-2 gap-3">
-              {pickupCode && (
-                <div className="rounded-xl bg-blue-50 p-3 border border-blue-100">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <QrCode className="w-3.5 h-3.5 text-blue-400" />
-                    <p className="text-[10px] font-bold text-blue-400 uppercase">Pickup Code</p>
-                  </div>
-                  <p className="text-base font-black text-blue-700">{pickupCode}</p>
-                </div>
-              )}
-              {tokenNumber && (
-                <div className="rounded-xl bg-amber-50 p-3 border border-amber-100">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Hash className="w-3.5 h-3.5 text-amber-400" />
-                    <p className="text-[10px] font-bold text-amber-400 uppercase">Token</p>
-                  </div>
-                  <p className="text-base font-black text-amber-700">{tokenNumber}</p>
-                </div>
-              )}
+          {/* Kitchen & Counter Status */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-violet-50 p-2.5 border border-violet-100">
+              <p className="text-[10px] font-bold text-violet-400 uppercase mb-1">Kitchen Status</p>
+              <p className="text-xs font-black text-violet-700">{capitalize(order.kitchen_status || '')}</p>
             </div>
-          )}
+            <div className="rounded-xl bg-blue-50 p-2.5 border border-blue-100">
+              <p className="text-[10px] font-bold text-blue-400 uppercase mb-1">Counter Status</p>
+              <p className="text-xs font-black text-blue-700">{capitalize(order.counter_status || '')}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100">
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Order Status</p>
+              <p className="text-xs font-black text-slate-700">{capitalize(order.order_status || order.status || '')}</p>
+            </div>
+          </div>
+
+          {/* Est. Ready & Completion Time */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Est. Ready</p>
+              </div>
+              <p className="text-sm font-bold text-slate-900">{order.estimated_ready_at ? formatDateTime(order.estimated_ready_at) : '—'}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Completion</p>
+              </div>
+              <p className="text-sm font-bold text-slate-900">
+                {order.completed_at ? formatDateTime(order.completed_at) : '—'}
+              </p>
+            </div>
+          </div>
 
           {/* Payment & Date */}
           <div className="grid grid-cols-2 gap-3">
@@ -180,14 +218,12 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, on
               </div>
               <p className="text-sm font-bold text-slate-900">{paymentMethod}</p>
             </div>
-            <div className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+            <div className="rounded-xl bg-emerald-50 p-3 border border-emerald-100">
               <div className="flex items-center gap-1.5 mb-1">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Completion</p>
+                <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
+                <p className="text-[10px] font-bold text-emerald-400 uppercase">Payment Status</p>
               </div>
-              <p className="text-sm font-bold text-slate-900">
-                {order.completed_at ? formatDateTime(order.completed_at) : formatDateTime(order.created_at)}
-              </p>
+              <p className="text-sm font-black text-emerald-700">{capitalize(order.payment_status || 'pending')}</p>
             </div>
           </div>
 
@@ -241,22 +277,6 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ isOpen, on
                   </div>
                 ))
               )}
-            </div>
-          </div>
-
-          {/* Kitchen & Counter Status */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100">
-              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Kitchen</p>
-              <p className="text-xs font-bold text-slate-900">{order.kitchen_status || order.order_status || '—'}</p>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100">
-              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Counter</p>
-              <p className="text-xs font-bold text-slate-900">{order.counter_status || '—'}</p>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100">
-              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Est. Ready</p>
-              <p className="text-xs font-bold text-slate-900">{order.estimated_ready_at ? formatDateTime(order.estimated_ready_at) : '—'}</p>
             </div>
           </div>
 

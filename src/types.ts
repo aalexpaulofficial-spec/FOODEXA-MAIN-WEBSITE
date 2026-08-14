@@ -330,6 +330,8 @@ export interface Order {
   razorpay_signature?: string | null;
   cancelled_at?: string | null;
   cancelled_by?: string | null;
+  cancel_deadline_at?: string | null;
+  pickup_type?: string | null;
   counter?: string;
   counter_name?: string | null;
   canteen_name?: string | null;

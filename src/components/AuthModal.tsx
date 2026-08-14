@@ -119,7 +119,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 required
                 value={institutionCode}
                 onChange={(e) => setInstitutionCode(e.target.value.toUpperCase())}
-                placeholder="e.g. YWH001"
+                placeholder="e.g. COMP001"
                 className="w-full bg-[#F5F5F7] border border-transparent focus:border-black rounded-xl px-3.5 py-3 text-sm text-black placeholder-[#86868B] focus:outline-none transition-colors uppercase"
               />
             </div>

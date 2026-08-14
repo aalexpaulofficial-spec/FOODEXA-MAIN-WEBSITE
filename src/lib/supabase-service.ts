@@ -598,409 +598,6 @@ async function insertOrderSafely(payload: Record<string, any>): Promise<{ data: 
   return res;
 }
 
-export async function createOrderAfterPayment(params: {
-  user_id: string;
-  email: string;
-  role: UserRole;
-  customer_name?: string;
-  phone?: string;
-  canteen_id?: string;
-  notes?: string;
-  institution_id: string | null;
-  items: { id: string; name: string; variant?: string | null; quantity: number; price: number; subtotal?: number }[];
-  itemsFull: { id: string; name: string; variant?: string | null; quantity: number; price: number; subtotal?: number; image_url?: string; is_veg?: boolean }[];
-  total_amount: number;
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
-  payment_method?: string;
-  estimated_prep_time_minutes?: number;
-}): Promise<{ data: Order | null; error: string | null }> {
-  const actualInstitutionId = params.institution_id;
-
-  if (!actualInstitutionId) {
-    return { data: null, error: 'You must join an institution before placing an order.' };
-  }
-
-  const canteenResult = await resolveOrderCanteenFromMenuItems({
-    institutionId: actualInstitutionId,
-    items: params.itemsFull,
-    requestedCanteenId: params.canteen_id || null,
-  });
-
-  if (canteenResult.error || !canteenResult.data) {
-    return {
-      data: null,
-      error: canteenResult.error || 'Unable to validate the selected canteen for this order.',
-    };
-  }
-  const activeCanteen = canteenResult.data;
-  const pickupType = resolvePickupTypeFromCanteen(activeCanteen);
-  const pickupPrefix = getPickupTypePrefix(pickupType);
-
-  // Look up student identifiers from profiles
-  let profileRow: any = null;
-  const { data: profData } = await supabase
-    .from('profiles')
-    .select('registration_id, student_id')
-    .eq('user_id', params.user_id)
-    .maybeSingle();
-  if (profData) {
-    profileRow = profData;
-  }
-
-  // Idempotency: never create two orders for the same successful Razorpay payment
-  const existingOrderQuery = await supabase
-    .from('orders')
-    .select(SELECT_ORDER_WITH_ITEMS)
-    .or(`razorpay_payment_id.eq.${params.razorpay_payment_id},razorpay_order_id.eq.${params.razorpay_order_id}`)
-    .maybeSingle();
-
-  if (existingOrderQuery.data) {
-    return { data: mapOrder(existingOrderQuery.data), error: null };
-  }
-
-  const payload = {
-    student_id: params.user_id || null,
-    registration_id: profileRow?.registration_id || null,
-    email: params.email,
-    customer_name: params.customer_name || params.email?.split('@')[0] || 'Customer',
-    phone: params.phone || '0000000000',
-    institution_id: actualInstitutionId,
-    canteen_id: activeCanteen.id,
-    counter: activeCanteen.name,
-    counter_code: activeCanteen.counter_code,
-    total_amount: params.total_amount,
-    transaction_amount: params.total_amount,
-    payment_method: params.payment_method === 'cash' ? 'cash' : 'razorpay',
-    razorpay_order_id: params.razorpay_order_id,
-    razorpay_payment_id: params.razorpay_payment_id,
-    razorpay_signature: params.razorpay_signature,
-    pickup_type: pickupPrefix,
-    notes: params.notes || null,
-    items: params.itemsFull.map(item => ({
-      id: item.id,
-      name: item.name,
-      variant: item.variant,
-      quantity: item.quantity,
-      price: item.price
-    }))
-  };
-
-  const { data: orderData, error: rpcError } = await supabase.rpc('create_student_order', { payload });
-
-  if (rpcError || !orderData) {
-    // RPC not found or failed — fall back to direct insert
-    const isRpcMissing = rpcError && (
-      String(rpcError.message || '').includes('function') ||
-      String(rpcError.message || '').includes('not found') ||
-      String(rpcError.message || '').includes('schema cache')
-    );
-    if (isRpcMissing) {
-      console.warn('[Supabase] create_student_order RPC not found, using direct insert');
-    } else {
-      console.error('[Supabase] create_student_order RPC failed:', rpcError?.message, rpcError?.details);
-    }
-
-    // Direct insert — the server-side verify-payment.js creates orders with service-role key
-    // This client-side path only works if RLS allows it (or for authenticated users)
-    const directPayload = {
-      student_id: params.user_id || null,
-      email: params.email,
-      customer_name: params.customer_name || params.email?.split('@')[0] || 'Customer',
-      phone: params.phone || null,
-      institution_id: params.institution_id,
-      canteen_id: params.canteen_id,
-      counter: activeCanteen.name,
-      counter_code: activeCanteen.counter_code,
-      total_amount: params.total_amount,
-      transaction_amount: params.total_amount,
-      payment_status: 'paid',
-      payment_method: params.payment_method === 'cash' ? 'cash' : 'razorpay',
-      razorpay_order_id: params.razorpay_order_id,
-      razorpay_payment_id: params.razorpay_payment_id,
-      razorpay_signature: params.razorpay_signature,
-      pickup_type: pickupPrefix,
-      notes: params.notes || null,
-      status: 'confirmed',
-      order_status: 'confirmed',
-      order_number: Date.now(),
-      items: params.itemsFull.map(item => ({
-        id: item.id,
-        name: item.name,
-        variant: item.variant,
-        quantity: item.quantity,
-        price: item.price
-      }))
-    };
-
-    const { data: directOrder, error: directError } = await supabase
-      .from('orders')
-      .insert(directPayload)
-      .select('*')
-      .single();
-
-    if (directError || !directOrder) {
-      console.error('[Supabase] Direct order insert failed:', directError?.message);
-      return { data: null, error: directError?.message || 'Order creation failed. Please try again.' };
-    }
-
-    // Insert order_items
-    const orderItemsPayload = createOrderItemsPayload(directOrder.id, params.itemsFull);
-    await supabase.from('order_items').insert(orderItemsPayload);
-
-    return { data: mapOrder(directOrder), error: null };
-  }
-
-  // Insert payments record (best-effort)
-  try {
-    await supabase.from('payments').insert([{
-      order_id: orderData.id,
-      razorpay_order_id: params.razorpay_order_id,
-      razorpay_payment_id: params.razorpay_payment_id,
-      razorpay_signature: params.razorpay_signature,
-      amount: params.total_amount,
-      currency: 'INR',
-      status: 'captured'
-    }]);
-  } catch (e) {
-    console.error('[Supabase] Non-fatal payment record error:', e);
-  }
-
-  // Insert notifications (best-effort)
-  try {
-    const notifs: Record<string, any>[] = [];
-    const nowISO = new Date().toISOString();
-    notifs.push({ type: 'order_confirmed', title: 'Order Confirmed!', message: 'Your order has been confirmed and is being prepared.', user_id: params.user_id, created_at: nowISO, read: false, order_id: orderData.id });
-    if (actualInstitutionId) {
-      notifs.push({ type: 'new_order', title: 'New Order Received', message: 'A new order has been placed and payment confirmed.', institution_id: actualInstitutionId, created_at: nowISO, read: false, order_id: orderData.id });
-    }
-    await supabase.from('notifications').insert(notifs);
-  } catch (_) { /* best-effort */ }
-
-  // Refetch complete order just to be absolutely sure we have the nested items in UI format
-  const finalOrderQuery = await supabase
-    .from('orders')
-    .select(SELECT_ORDER_WITH_ITEMS)
-    .eq('id', orderData.id)
-    .single();
-
-  if (finalOrderQuery.data) {
-    return { data: mapOrder(finalOrderQuery.data), error: null };
-  }
-
-  return { data: mapOrder(orderData), error: null };
-}
-
-export async function placeOrder(params: {
-  user_id: string;
-  email: string;
-  role: UserRole;
-  customer_name?: string;
-  phone?: string;
-  canteen_id?: string;
-  notes?: string;
-  institution_id: string | null;
-  items: { id: string; name: string; variant?: string | null; quantity: number; price: number; subtotal?: number }[];
-  itemsFull: { id: string; name: string; variant?: string | null; quantity: number; price: number; subtotal?: number }[];
-  total_amount: number;
-  razorpay_order_id?: string;
-  razorpay_payment_id?: string;
-  razorpay_signature?: string;
-  payment_method?: string;
-  estimated_prep_time_minutes?: number;
-}): Promise<{ data: Order | null; error: string | null }> {
-  const now = new Date();
-  const nowISO = now.toISOString();
-
-  const customerName = params.customer_name || params.email?.split('@')[0] || 'Customer';
-  const phone = params.phone || '0000000000';
-  const prepTimeMinutes = params.estimated_prep_time_minutes || 15;
-
-  const actualInstitutionId = params.institution_id;
-
-  if (!actualInstitutionId) {
-    return { data: null, error: 'You must join an institution before placing an order.' };
-  }
-
-  const canteenResult = await resolveOrderCanteenFromMenuItems({
-    institutionId: actualInstitutionId,
-    items: params.itemsFull,
-    requestedCanteenId: params.canteen_id || null,
-  });
-
-  if (canteenResult.error || !canteenResult.data) {
-    return { data: null, error: canteenResult.error || 'Unable to validate the selected canteen for this order.' };
-  }
-  const activeCanteen = canteenResult.data;
-
-  const pickupType = resolvePickupTypeFromCanteen(activeCanteen);
-  const pickupPrefix = getPickupTypePrefix(pickupType);
-  const tokenNumber = await generateTokenNumber();
-  const pickupCode = await generatePickupCode(pickupPrefix);
-  const qrPickupCode = pickupCode;
-  const cancelDeadlineAt = new Date(now.getTime() + 30 * 1000).toISOString();
-
-  const isPaid = Boolean(params.razorpay_payment_id && params.razorpay_signature);
-
-  // Look up student identifiers from profiles
-  let profileRow: any = null;
-  const { data: profData } = await supabase
-    .from('profiles')
-    .select('registration_id, student_id')
-    .eq('user_id', params.user_id)
-    .maybeSingle();
-  if (profData) {
-    profileRow = profData;
-  }
-
-  const payload: Record<string, any> = {
-    student_id: params.user_id || null,
-    registration_id: profileRow?.registration_id || null,
-    email: params.email,
-    customer_name: customerName,
-    phone: phone,
-    institution_id: actualInstitutionId,
-    canteen_id: activeCanteen.id,
-    total_amount: params.total_amount,
-    transaction_amount: params.total_amount,
-    status: isPaid ? 'confirmed' : 'pending',
-    order_status: isPaid ? 'confirmed' : 'pending',
-    payment_status: isPaid ? 'paid' : 'pending',
-    payment_method: isPaid ? (params.payment_method === 'cash' ? 'cash' : 'razorpay') : 'razorpay',
-    order_number: Date.now(),
-    pickup_token: tokenNumber,
-    pickup_code: pickupCode,
-    pickup_type: pickupType,
-    qr_pickup_code: qrPickupCode,
-    token_number: tokenNumber,
-    counter_code: activeCanteen.counter_code,
-    notes: params.notes || null,
-    kitchen_status: 'pending',
-    counter_status: 'incoming',
-    estimated_ready_at: new Date(now.getTime() + prepTimeMinutes * 60000).toISOString(),
-    cancel_deadline_at: cancelDeadlineAt,
-    created_at: nowISO,
-    updated_at: nowISO,
-  };
-
-  if (isPaid) {
-    payload.paid_at = nowISO;
-  }
-
-  if (params.razorpay_order_id) payload.razorpay_order_id = params.razorpay_order_id;
-  if (params.razorpay_payment_id) payload.razorpay_payment_id = params.razorpay_payment_id;
-  if (params.razorpay_signature) payload.razorpay_signature = params.razorpay_signature;
-
-  const { data: orderData, error: orderError } = await insertOrderSafely(payload);
-  if (orderError || !orderData) {
-    return { data: null, error: orderError?.message || 'Failed to create order.' };
-  }
-
-  // Double check the inserted data as requested
-  if (!orderData.institution_id || !orderData.canteen_id || !orderData.student_id || !orderData.qr_pickup_code) {
-    console.error('[Supabase] CRITICAL: Inserted order has missing required fields!', orderData);
-  }
-
-  const orderItemsPayload = createOrderItemsPayload(orderData.id, params.itemsFull);
-  const { error: itemsError } = await supabase.from('order_items').insert(orderItemsPayload);
-  if (itemsError) {
-    console.error('[Supabase] Failed to create order_items:', itemsError);
-  }
-
-  return { data: mapOrder(orderData), error: null };
-}
-
-export async function updateOrderAfterPayment(params: {
-  order_id: string;
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
-  payment_method?: string;
-  institution_id?: string | null;
-  canteen_id?: string | null;
-  student_id?: string;
-  total_amount?: number;
-  prep_time_minutes?: number;
-}): Promise<{ success: boolean; data?: Order | null; error?: string }> {
-  const now = new Date().toISOString();
-  const prepTime = params.prep_time_minutes || 15;
-
-  // Step A: Update the order row with all payment fields
-  const { data: updatedOrder, error: updateError } = await supabase
-    .from('orders')
-    .update({
-      payment_status: 'paid',
-      status: 'confirmed',
-      order_status: 'confirmed',
-      payment_method: 'razorpay',
-      razorpay_order_id: params.razorpay_order_id,
-      razorpay_payment_id: params.razorpay_payment_id,
-      razorpay_signature: params.razorpay_signature,
-      paid_at: now,
-      accepted_at: now,
-      updated_at: now,
-      kitchen_status: 'pending',
-      counter_status: 'incoming',
-      estimated_ready_at: new Date(Date.now() + prepTime * 60000).toISOString(),
-    })
-    .eq('id', params.order_id)
-    .select()
-    .maybeSingle();
-
-  if (updateError) {
-    return { success: false, error: updateError.message || 'Failed to update order after payment.' };
-  }
-
-  let finalOrder = updatedOrder;
-  if (!finalOrder) {
-    console.warn('[Supabase] updateOrderAfterPayment: update returned no rows (RLS?). Fetching order directly.');
-    const { data: fetchedOrder } = await supabase.from('orders').select('*').eq('id', params.order_id).maybeSingle();
-    finalOrder = fetchedOrder;
-    if (!finalOrder) {
-      return { success: false, error: 'Order not found after payment.' };
-    }
-  }
-
-  // Step B: Insert into payments table (best-effort, do not block on failure)
-  try {
-    const paymentRow: Record<string, any> = {
-      order_id: params.order_id,
-      razorpay_order_id: params.razorpay_order_id,
-      razorpay_payment_id: params.razorpay_payment_id,
-      razorpay_signature: params.razorpay_signature,
-      amount: params.total_amount || finalOrder.total_amount || 0,
-      currency: 'INR',
-      payment_status: 'paid',
-      payment_method: 'razorpay',
-      created_at: now,
-      updated_at: now,
-    };
-    if (params.institution_id) paymentRow.institution_id = params.institution_id;
-    if (params.student_id) paymentRow.user_id = params.student_id;
-    await supabase.from('payments').insert([paymentRow]);
-  } catch (_) { /* best-effort */ }
-
-  // Step C: Insert notifications (best-effort)
-  try {
-    const notifs: Record<string, any>[] = [];
-    const baseNotif = {
-      created_at: now,
-      read: false,
-      order_id: params.order_id,
-    };
-    if (params.student_id) {
-      notifs.push({ ...baseNotif, type: 'order_confirmed', title: 'Order Confirmed!', message: `Your order has been confirmed and is being prepared.`, user_id: params.student_id });
-    }
-    if (params.institution_id) {
-      notifs.push({ ...baseNotif, type: 'new_order', title: 'New Order Received', message: `A new order has been placed and payment confirmed.`, institution_id: params.institution_id });
-    }
-    if (notifs.length > 0) await supabase.from('notifications').insert(notifs);
-  } catch (_) { /* best-effort */ }
-
-  return { success: true, data: mapOrder(finalOrder) };
-}
-
 export async function fetchOrderById(orderId: string): Promise<Order | null> {
   const { data, error } = await supabase.from('orders').select(SELECT_ORDER_WITH_ITEMS).eq('id', orderId).single();
   if (error || !data) return null;
@@ -1146,6 +743,290 @@ export async function updateOrderPaymentStatus(params: {
   await supabase.from('orders').update(update).eq('id', params.order_id);
 }
 
+// ── CENTRAL DATA ACCESS: getInstitutionByCode ──────────────────────────
+// Queries the LIVE Supabase institutions table.
+// Does NOT assume column names — selects * and maps dynamically.
+export async function getInstitutionByCode(code: string): Promise<{
+  data: InstitutionData | null;
+  error: string | null;
+}> {
+  try {
+    const trimmed = (code || '').trim().toUpperCase();
+    if (!trimmed) return { data: null, error: 'Institution code is required.' };
+
+    // Query via the SECURITY DEFINER RPC so RLS is bypassed.
+    // The RPC get_institution_by_code is deployed via migrations/20260814_production_fix_consolidated.sql
+
+// ── CENTRAL DATA ACCESS: getMenuByCanteen ────────────────────────────────
+export async function getMenuByCanteen(canteenId: string): Promise<MenuItem[]> {
+  return fetchMenuItems({ institution_id: undefined, availableOnly: true });
+}
+
+// ── CENTRAL DATA ACCESS: getStudentSession ────────────────────────────────
+// Retrieves or creates a student session via the start_student_session RPC.
+// This replaces the previous approach of storing fake institution data in localStorage.
+export async function getStudentSession(params: {
+  fullName: string;
+  email: string;
+  institutionCode: string;
+}): Promise<{
+  success: boolean;
+  studentId?: string;
+  institutionId?: string;
+  institutionName?: string;
+  institutionCode?: string;
+  error?: string;
+}> {
+  try {
+    // Step 1: Normalize inputs
+    const safeName = (params.fullName || '').trim();
+    const safeEmail = (params.email || '').trim().toLowerCase();
+    const code = (params.institutionCode || '').trim().toUpperCase();
+
+    if (!safeName) return { success: false, error: 'Please enter your full name.' };
+    if (!safeEmail.includes('@')) return { success: false, error: 'Please enter a valid email address.' };
+    if (!code) return { success: false, error: 'Institution code is required.' };
+
+    // Step 2: Call the SECURITY DEFINER RPC start_student_session
+    // This creates or retrieves a student record in the students table,
+    // returning a UUID that can be used for orders.
+    const { data: rpcData, error: rpcError } = await supabase.rpc('start_student_session', {
+      p_full_name: safeName,
+      p_email: safeEmail,
+      p_institution_code: code,
+    });
+
+    if (rpcError) {
+      console.error('[Supabase] start_student_session RPC error:', rpcError.message);
+      // Fallback: try direct lookup, then create student manually
+      const { data: instData, error: instError } = await supabase
+        .from('institutions')
+        .select('*')
+        .eq('institution_code', code)
+        .maybeSingle();
+
+      if (instError || !instData || !instData.id) {
+        return { success: false, error: 'Institution code not found. Please check your code.' };
+      }
+
+      const status = String(instData.status || 'active').toLowerCase();
+      if (status !== 'active' && status !== 'approved') {
+        return { success: false, error: 'This institution is currently unavailable.' };
+      }
+
+      // Try to find existing student
+      const { data: existingStudent } = await supabase
+        .from('students')
+        .select('id')
+        .eq('email', safeEmail)
+        .eq('institution_id', instData.id)
+        .maybeSingle();
+
+      let studentId = existingStudent?.id || null;
+
+      // Create student if not found
+      if (!studentId) {
+        const { data: newStudent } = await supabase
+          .from('students')
+          .insert({ email: safeEmail, full_name: safeName, institution_id: instData.id })
+          .select('id')
+          .single();
+        studentId = newStudent?.id || null;
+      }
+
+      if (!studentId) {
+        return { success: false, error: 'FOODEXA could not start your session. Please try again.' };
+      }
+
+      return {
+        success: true,
+        studentId,
+        institutionId: instData.id,
+        institutionName: instData.name || instData.institution_name || '',
+        institutionCode: instData.institution_code || code,
+      };
+    }
+
+    // RPC succeeded — parse result
+    if (rpcData && typeof rpcData === 'object') {
+      if (rpcData.error) {
+        return { success: false, error: rpcData.error };
+      }
+      const student = rpcData.student || {};
+      const institution = rpcData.institution || {};
+      return {
+        success: true,
+        studentId: student.id,
+        institutionId: institution.institution_id || student.institution_id,
+        institutionName: institution.institution_name || '',
+        institutionCode: institution.institution_code || code,
+      };
+    }
+
+    return { success: false, error: 'Unexpected response from server. Please try again.' };
+  } catch (err: any) {
+    console.error('[Supabase] getStudentSession exception:', err);
+    return { success: false, error: 'FOODEXA could not verify the institution right now. Please try again.' };
+  }
+}
+
+// ── CENTRAL DATA ACCESS: subscribeToOrderUpdates ─────────────────────────
+export function subscribeToOrderUpdates(
+  studentId: string | null | undefined,
+  institutionId: string | null | undefined,
+  callback: RealtimeCallback<any>
+): () => void {
+  const filter = studentId
+    ? { user_id: studentId }
+    : institutionId
+      ? { institution_id: institutionId }
+      : undefined;
+  return subscribeOrders(callback, filter);
+}
+
+// ── CENTRAL DATA ACCESS: getStudentOrders ───────────────────────────────
+export async function getStudentOrders(studentId: string | null | undefined): Promise<Order[]> {
+  if (!studentId) return [];
+  return fetchOrders({ user_id: studentId });
+}
+
+// ── CENTRAL DATA ACCESS: createOrderAfterPayment ──────────────────────────
+// Server-side order creation via /api/create-order (Vercel or Express).
+// This is the SINGLE reliable order-creation path.
+export async function createOrderAfterPayment(params: {
+  user_id: string;
+  email: string;
+  role: UserRole;
+  customer_name?: string;
+  phone?: string;
+  canteen_id?: string;
+  notes?: string;
+  institution_id: string | null;
+  items: { id: string; name: string; variant?: string | null; quantity: number; price: number; subtotal?: number }[];
+  itemsFull: { id: string; name: string; variant?: string | null; quantity: number; price: number; subtotal?: number; image_url?: string; is_veg?: boolean }[];
+  total_amount: number;
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+  payment_method?: string;
+  estimated_prep_time_minutes?: number;
+}): Promise<{ data: Order | null; error: string | null }> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+
+    const resp = await fetch('/api/create-order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({
+        student_id: params.user_id,
+        email: params.email,
+        customer_name: params.customer_name,
+        phone: params.phone,
+        institution_id: params.institution_id,
+        canteen_id: params.canteen_id,
+        items: params.itemsFull,
+        total_amount: params.total_amount,
+        razorpay_order_id: params.razorpay_order_id,
+        razorpay_payment_id: params.razorpay_payment_id,
+        razorpay_signature: params.razorpay_signature,
+        payment_method: params.payment_method || 'razorpay',
+        notes: params.notes || null,
+      }),
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok || !data.success) {
+      return { data: null, error: data.error || 'Order creation failed.' };
+    }
+
+    if (data.order_id) {
+      const order = await fetchOrderById(data.order_id);
+      if (order) return { data: order, error: null };
+    }
+
+    // If we can't fetch the order details, return a minimal order object
+    return { data: { id: data.order_id || '', order_id: data.order_id || '' } as Order, error: null };
+  } catch (err: any) {
+    console.error('[Supabase] createOrderAfterPayment exception:', err);
+    return { data: null, error: err?.message || 'Order creation failed.' };
+  }
+}
+
+// ── CENTRAL DATA ACCESS: verifyRazorpayPayment ────────────────────────────
+// Calls the Vercel serverless function /api/razorpay/verify-payment.
+// This function verifies the HMAC signature AND creates the order server-side.
+export async function verifyRazorpayPayment(params: {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+  user_id: string;
+  order_id: string;
+  institution_id?: string;
+  canteen_id?: string;
+  items?: { id: string; name: string; variant?: string | null; quantity: number; price: number }[];
+  total_amount?: number;
+  email?: string;
+  phone?: string;
+  customer_name?: string;
+  notes?: string;
+  pickup_type?: string;
+  counter?: string;
+  counter_code?: string;
+}): Promise<{ success: boolean; error?: string; order_id?: string; order_created?: boolean }> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+
+    const resp = await fetch('/api/razorpay/verify-payment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({
+        razorpay_order_id: params.razorpay_order_id,
+        razorpay_payment_id: params.razorpay_payment_id,
+        razorpay_signature: params.razorpay_signature,
+        user_id: params.user_id,
+        order_id: params.order_id,
+        institution_id: params.institution_id,
+        canteen_id: params.canteen_id,
+        items: params.items,
+        total_amount: params.total_amount,
+        email: params.email,
+        phone: params.phone,
+        customer_name: params.customer_name,
+        pickup_type: params.pickup_type,
+        notes: params.notes,
+        counter: params.counter,
+        counter_code: params.counter_code,
+      }),
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      return { success: false, error: data.error || 'Payment verification failed.' };
+    }
+
+    if (!data.success) {
+      return { success: false, error: data.error || 'Payment verification failed.' };
+    }
+
+    return {
+      success: true,
+      order_id: data.order_id,
+      order_created: data.order_created || false,
+    };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error during payment verification.' };
+  }
+}
+
+// ── CENTRAL DATA ACCESS: createRazorpayOrder ──────────────────────────────
 export async function createRazorpayOrder(params: {
   amount: number;
   currency?: string;
@@ -1189,90 +1070,6 @@ export async function createRazorpayOrder(params: {
     return { success: true, order_id: data.order_id, razorpay_key_id: data.razorpay_key_id, amount: data.amount, currency: data.currency };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Network error while creating payment order.' };
-  }
-}
-
-export async function verifyRazorpayPayment(params: {
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
-  user_id: string;
-  order_id: string;
-  // Optional order data for server-side order creation
-  institution_id?: string;
-  canteen_id?: string;
-  items?: { id: string; name: string; variant?: string | null; quantity: number; price: number }[];
-  total_amount?: number;
-  email?: string;
-  phone?: string;
-  customer_name?: string;
-  pickup_type?: string;
-  notes?: string;
-  counter?: string;
-  counter_code?: string;
-}): Promise<{ success: boolean; error?: string; order_id?: string; order_created?: boolean }> {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const resp = await fetch('/api/razorpay/verify-payment', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-      },
-      body: JSON.stringify(params),
-    });
-    const data = await resp.json();
-    if (!resp.ok || !data.success) {
-      return { success: false, error: data.error || 'Payment verification failed.' };
-    }
-
-    // If server didn't create order, try server-side order creation endpoint
-    let orderCreated = data.order_created || false;
-    let orderId = data.order_id || undefined;
-
-    if (!orderCreated && params.institution_id && params.canteen_id && params.items && params.items.length > 0) {
-      try {
-        const createResp = await fetch('/api/create-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            student_id: params.user_id,
-            email: params.email,
-            customer_name: params.customer_name,
-            phone: params.phone,
-            institution_id: params.institution_id,
-            canteen_id: params.canteen_id,
-            counter: params.counter,
-            counter_code: params.counter_code,
-            items: params.items,
-            total_amount: params.total_amount,
-            razorpay_order_id: params.razorpay_order_id,
-            razorpay_payment_id: params.razorpay_payment_id,
-            razorpay_signature: params.razorpay_signature,
-            payment_method: 'razorpay',
-            pickup_type: params.pickup_type,
-            notes: params.notes,
-          }),
-        });
-        const createData = await createResp.json();
-        if (createResp.ok && createData.success) {
-          orderCreated = true;
-          orderId = createData.order_id;
-        } else {
-          console.error('[verifyRazorpayPayment] Server order creation failed:', createData.error);
-        }
-      } catch (createErr: any) {
-        console.error('[verifyRazorpayPayment] Server order creation network error:', createErr?.message);
-      }
-    }
-
-    return {
-      success: true,
-      order_id: orderId,
-      order_created: orderCreated,
-    };
-  } catch (err: any) {
-    return { success: false, error: err?.message || 'Network error during payment verification.' };
   }
 }
 

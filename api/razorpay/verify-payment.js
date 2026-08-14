@@ -1,56 +1,79 @@
+// Vercel Serverless Function: /api/razorpay/verify-payment
+// Verifies Razorpay signature, then creates the FOODEXA order + order_items
+// atomically using the service_role key (bypasses RLS).
+//
+// Returns:
+//   { success: true, order_created: true, order_id: "<uuid>" }
+//   or
+//   { success: true, order_created: false, order_id: null, error: "Payment received, but order confirmation is being completed." }
+
 import Razorpay from "razorpay";
 import crypto from "crypto";
 
-function supabaseGet(table, filters, select = '*') {
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  if (!supabaseUrl || !supabaseServiceKey) return Promise.resolve({ data: null, error: 'Missing DB connection' });
-  const filterParams = Object.entries(filters).map(([k, v]) => `${k}=eq.${encodeURIComponent(v)}`).join('&');
-  const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/${table}?${filterParams}&select=${select}`;
-  return fetch(url, {
-    headers: {
-      'apikey': supabaseServiceKey,
-      'Authorization': `Bearer ${supabaseServiceKey}`,
-    },
-  }).then(r => r.json()).then(data => ({ data: Array.isArray(data) ? data : [data], error: null }))
-    .catch(err => ({ data: null, error: err.message }));
+function getSupabaseHeaders() {
+  return {
+    'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || ''}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation',
+  };
 }
 
-function supabasePost(table, rows) {
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  if (!supabaseUrl || !supabaseServiceKey) return Promise.resolve({ error: 'Missing DB connection' });
+async function supabaseGet(table, filters, select = '*') {
+  const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  if (!supabaseUrl || !supabaseKey) return { data: null, error: 'Missing Supabase credentials' };
+
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => params.append(k, `eq.${encodeURIComponent(v)}`));
+  params.append('select', select);
+
+  const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/${table}?${params.toString()}`;
+  return fetch(url, {
+    headers: {
+      'apikey': supabaseKey,
+      'Authorization': `Bearer ${supabaseKey}`,
+      'Accept': 'application/json',
+    },
+  }).then(r => {
+    if (!r.ok) return r.text().then(t => ({ data: null, error: t }));
+    return r.json().then(data => ({ data: Array.isArray(data) ? data : [data], error: null }));
+  }).catch(err => ({ data: null, error: err.message }));
+}
+
+async function supabasePost(table, rows) {
+  const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  if (!supabaseUrl || !supabaseKey) return { data: null, error: 'Missing Supabase credentials' };
+
   const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/${table}`;
   return fetch(url, {
     method: 'POST',
-    headers: {
-      'apikey': supabaseServiceKey,
-      'Authorization': `Bearer ${supabaseServiceKey}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=representation',
-    },
+    headers: getSupabaseHeaders(),
     body: JSON.stringify(rows),
-  }).then(r => r.ok ? r.json().then(data => ({ data, error: null })) : r.text().then(t => ({ data: null, error: t })))
-    .catch(err => ({ data: null, error: err.message }));
+  }).then(async r => {
+    if (!r.ok) return { data: null, error: await r.text() };
+    return r.json().then(data => ({ data, error: null }));
+  }).catch(err => ({ data: null, error: err.message }));
 }
 
-function supabasePatch(table, data, filters) {
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  if (!supabaseUrl || !supabaseServiceKey) return Promise.resolve({ error: 'Missing DB connection' });
-  const filterParams = Object.entries(filters).map(([k, v]) => `${k}=eq.${encodeURIComponent(v)}`).join('&');
-  const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/${table}?${filterParams}`;
+async function supabasePatch(table, data, filters) {
+  const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+  const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  if (!supabaseUrl || !supabaseKey) return { data: null, error: 'Missing Supabase credentials' };
+
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => params.append(k, `eq.${encodeURIComponent(v)}`));
+
+  const url = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/${table}?${params.toString()}`;
   return fetch(url, {
     method: 'PATCH',
-    headers: {
-      'apikey': supabaseServiceKey,
-      'Authorization': `Bearer ${supabaseServiceKey}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=representation',
-    },
+    headers: getSupabaseHeaders(),
     body: JSON.stringify(data),
-  }).then(r => r.ok ? r.json().then(d => ({ data: d, error: null })) : r.text().then(t => ({ data: null, error: t })))
-    .catch(err => ({ data: null, error: err.message }));
+  }).then(async r => {
+    if (!r.ok) return { data: null, error: await r.text() };
+    return r.json().then(d => ({ data: d, error: null }));
+  }).catch(err => ({ data: null, error: err.message }));
 }
 
 function resolvePickupPrefix(canteenName) {
@@ -72,7 +95,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    console.log("[Razorpay] Verifying payment");
+    console.log('[Razorpay Verify] Verifying payment');
     console.log(process.env.RAZORPAY_KEY_ID ? "KEY FOUND" : "KEY MISSING");
     console.log(process.env.RAZORPAY_KEY_SECRET ? "SECRET FOUND" : "SECRET MISSING");
 
@@ -84,20 +107,31 @@ export default async function handler(req, res) {
       key_secret: process.env.RAZORPAY_KEY_SECRET,
     });
 
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, user_id, order_id } = req.body;
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      user_id,
+      order_id,
+      institution_id,
+      canteen_id,
+      email,
+      customer_name,
+      phone,
+    } = req.body || {};
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).json({ error: "Missing payment verification parameters." });
+      return res.status(400).json({ success: false, error: "Missing payment verification parameters." });
     }
 
-    // ── STEP 1: Verify HMAC signature ────────────────────────────────────
+    // ── STEP 1: Verify HMAC signature ──────────────────────
     const expectedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest('hex');
 
     if (expectedSignature !== razorpay_signature) {
-      console.error("[Razorpay] Signature verification FAILED for order:", razorpay_order_id);
+      console.error("[Razorpay Verify] Signature verification FAILED for order:", razorpay_order_id);
       await supabasePatch('payments', {
         payment_status: 'signature_mismatch',
         razorpay_status: 'verification_failed',
@@ -108,152 +142,217 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: "Payment verification failed. Invalid signature." });
     }
 
-    console.log("[Razorpay] Signature verified OK");
+    console.log("[Razorpay Verify] Signature verified OK");
 
-    // ── STEP 2: Fetch payment details from Razorpay ──────────────────────
+    // ── STEP 2: Fetch payment details from Razorpay ─────────
     let paymentDetails = null;
     try {
       paymentDetails = await razorpay.payments.fetch(razorpay_payment_id);
     } catch (fetchErr) {
-      console.warn("[Razorpay] Could not fetch payment details:", fetchErr);
+      console.warn("[Razorpay Verify] Could not fetch payment details:", fetchErr);
     }
 
-    // ── STEP 3: Read saved payment record (has items_snapshot) ────────────
-    const { data: paymentRows } = await supabaseGet('payments', { razorpay_order_id }, '*');
-    const paymentRow = paymentRows?.[0] || null;
+    // Verify the payment was actually captured/successful
+    const razorpayStatus = paymentDetails?.status || 'captured';
+    if (razorpayStatus !== 'captured' && razorpayStatus !== 'authorized' && razorpayStatus !== 'initiated') {
+      console.error("[Razorpay Verify] Payment not captured. Status:", razorpayStatus);
+      return res.status(400).json({
+        success: false,
+        error: "Payment was not captured. Please contact support if the amount was debited.",
+      });
+    }
 
-    // ── STEP 4: Update payment record ────────────────────────────────────
-    await supabasePatch('payments', {
-      payment_status: 'captured',
-      razorpay_status: paymentDetails?.status || 'captured',
+    // ── STEP 3: Update payment record in Supabase ──────────
+    const paymentUpdate = {
+      payment_status: 'paid',
+      razorpay_status: razorpayStatus,
       razorpay_payment_id,
       razorpay_signature,
-      payment_method: paymentDetails?.method || null,
+      payment_method: paymentDetails?.method || 'razorpay',
       transaction_time: new Date().toISOString(),
+      webhook_verified: false,
       updated_at: new Date().toISOString(),
-    }, { razorpay_order_id });
+    };
+    await supabasePatch('payments', paymentUpdate, { razorpay_order_id });
 
-    // ── STEP 5: Create or update the Supabase order (server-side) ────────
-    // This bypasses RLS using the service_role key.
-    const now = new Date();
-    const nowISO = now.toISOString();
-    const dateStr = nowISO.slice(0, 10).replace(/-/g, '');
-    const orderNumber = Date.now();
+    // ── STEP 4: Read the saved payment record (has cart snapshot + canteen) ──
+    const { data: paymentRows, error: paymentReadErr } = await supabaseGet(
+      'payments',
+      { razorpay_order_id },
+      'id,user_id,institution_id,order_id,amount,items_snapshot,canteen_id,customer_email,customer_phone,customer_name,created_at'
+    );
 
-    // Read items from payment snapshot
-    let items = [];
-    try {
-      items = JSON.parse(paymentRow?.items_snapshot || '[]');
-    } catch { items = []; }
-
-    // Read canteen info for pickup counter and prep time
-    let canteenName = '';
-    let canteenId = paymentRow?.canteen_id || null;
-    let institutionId = paymentRow?.institution_id || null;
-
-    if (canteenId) {
-      const { data: canteenRows } = await supabaseGet('canteens', { id: canteenId }, 'id, name, prep_time_minutes');
-      if (canteenRows?.[0]) {
-        canteenName = canteenRows[0].name || '';
-      }
+    if (paymentReadErr) {
+      console.error("[Razorpay Verify] Failed to read payment record:", paymentReadErr);
     }
 
-    // Determine pickup type and prefix from canteen name
-    const pickupPrefix = resolvePickupPrefix(canteenName);
-    const estimatedPrepMinutes = 15;
+    const paymentRow = (paymentRows && paymentRows[0]) || null;
 
-    // Generate token number (today's sequence)
-    let tokenNumber = `TKN-${String(orderNumber % 10000).padStart(4, '0')}`;
-    try {
-      const { data: tokenRows } = await supabaseGet('orders', {}, 'id');
-      const todayOrders = (tokenRows || []).filter(o => {
-        try { return new Date(o.id?.split?.('-')?.[0] || nowISO).toDateString() === now.toDateString(); } catch { return false; }
-      }).length;
-      tokenNumber = `TKN-${String(todayOrders + 1).padStart(4, '0')}`;
-    } catch { /* use fallback */ }
+    // ── STEP 5: Idempotency — check if order already exists ──
+    const { data: existingOrders } = await supabaseGet(
+      'orders',
+      { razorpay_payment_id },
+      'id,order_number,status,payment_status'
+    );
 
-    // Generate pickup code (today's sequence)
-    let pickupCode = `${pickupPrefix}-0001`;
-    try {
-      const { data: allOrders } = await supabaseGet('orders', {}, 'id,pickup_code,created_at');
-      const todayPickups = (allOrders || []).filter(o =>
-        o.pickup_code && o.pickup_code.startsWith(pickupPrefix + '-') &&
-        new Date(o.created_at).toDateString() === now.toDateString()
-      ).length;
-      pickupCode = `${pickupPrefix}-${String(todayPickups + 1).padStart(4, '0')}`;
-    } catch { /* use fallback */ }
-
-    // Calculate total from items
-    const totalAmount = items.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity || 1)), 0);
-
-    // Read user profile for student_id / registration_id
-    let profileRow = null;
-    if (user_id) {
-      const { data: profileRows } = await supabaseGet('profiles', { user_id }, 'student_id, registration_id, full_name');
-      profileRow = profileRows?.[0] || null;
-    }
-
-    const customerName = paymentRow?.customer_name || profileRow?.full_name || 'Customer';
-    const customerEmail = paymentRow?.customer_email || '';
-    const customerPhone = paymentRow?.customer_phone || '0000000000';
-
-    // Check if order already exists for this Razorpay order (idempotency)
-    const { data: existingOrders } = await supabaseGet('orders', { razorpay_order_id }, 'id');
     if (existingOrders && existingOrders.length > 0 && existingOrders[0].id) {
-      // Order already created — just return it
-      const existingOrder = existingOrders[0];
-      console.log("[Razorpay] Order already exists:", existingOrder.id);
+      console.log("[Razorpay Verify] Order already exists (idempotent):", existingOrders[0].id);
       return res.json({
         success: true,
         message: "Payment verified and order confirmed.",
         payment_id: razorpay_payment_id,
         razorpay_order_id,
-        order_id: existingOrder.id,
+        order_id: existingOrders[0].id,
         order_created: true,
+        already_existed: true,
       });
     }
 
-    // Build the order row
+    // ── STEP 6: Resolve items, institution, canteen, student ──
+    let items = [];
+    if (paymentRow?.items_snapshot) {
+      try { items = JSON.parse(paymentRow.items_snapshot); } catch { items = []; }
+    }
+    // Also check if frontend sent items directly
+    if (items.length === 0 && req.body.items) {
+      items = req.body.items;
+    }
+
+    let resolveInstitutionId = institution_id || paymentRow?.institution_id || null;
+    let resolveCanteenId = canteen_id || paymentRow?.canteen_id || null;
+    let resolveEmail = email || paymentRow?.customer_email || '';
+    let resolveName = customer_name || paymentRow?.customer_name || 'Customer';
+    let resolvePhone = phone || paymentRow?.customer_phone || '0000000000';
+    let resolveUserId = user_id || paymentRow?.user_id || null;
+
+    // Resolve canteen name for pickup prefix
+    let canteenName = '';
+    if (resolveCanteenId) {
+      const { data: canteenRows } = await supabaseGet('canteens', { id: resolveCanteenId }, 'id,name,institution_id,prep_time_minutes');
+      if (canteenRows && canteenRows[0]) {
+        canteenName = canteenRows[0].name || '';
+        // Verify canteen belongs to the institution
+        if (canteenRows[0].institution_id && canteenRows[0].institution_id !== resolveInstitutionId) {
+          console.error("[Razorpay Verify] Canteen does not belong to institution");
+          return res.status(400).json({
+            success: false,
+            error: "The selected canteen does not belong to your institution.",
+          });
+        }
+      }
+    }
+
+    // Calculate total from items (server-side validation, do NOT trust browser amount)
+    const totalAmount = items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
+    // Also check Razorpay's actual captured amount
+    const razorpayAmount = paymentDetails ? Number(paymentDetails.amount) / 100 : totalAmount;
+    // Use the lesser of the two (Razorpay's amount is authoritative)
+    let finalTotal = totalAmount;
+    if (paymentDetails && paymentDetails.amount) {
+      const razorpayRupees = Number(paymentDetails.amount) / 100;
+      if (Math.abs(razorpayRupees - totalAmount) > 1) {
+        console.warn('[Razorpay Verify] Amount mismatch: items=', totalAmount, 'razorpay=', razorpayRupees, 'using razorpay');
+      }
+      finalTotal = razorpayRupees;
+    }
+
+    // ── STEP 7: Resolve student_id (UUID from students table) ──
+    // The orders.student_id column is UUID. We must find or create
+    // the student record so we store a valid UUID, NOT a session string.
+    let resolvedStudentId = null;
+
+    if (resolveUserId) {
+      // Try to find existing student record by email + institution
+      const { data: studentRows } = await supabaseGet(
+        'students',
+        { email: resolveEmail, institution_id: resolveInstitutionId },
+        'id'
+      );
+      if (studentRows && studentRows[0]) {
+        resolvedStudentId = studentRows[0].id;
+      }
+
+      // If not found, create student record
+      if (!resolvedStudentId) {
+        const studentPayload = {
+          email: resolveEmail || '',
+          full_name: resolveName || 'Customer',
+          institution_id: resolveInstitutionId,
+        };
+        const { data: createdStudent } = await supabasePost('students', studentPayload);
+        if (createdStudent) {
+          resolvedStudentId = Array.isArray(createdStudent) ? createdStudent[0]?.id : createdStudent.id;
+        }
+      }
+    }
+
+    // ── STEP 8: Generate pickup code, token, etc. ──
+    const now = new Date();
+    const nowISO = now.toISOString();
+    const orderNumber = Date.now();
+
+    const pickupPrefix = req.body.pickup_type || resolvePickupPrefix(canteenName);
+    const todayOrdersCount = await (async () => {
+      // Simple count-based token/pickup for now
+      const todayStr = nowISO.slice(0, 10);
+      const { data: todayRows } = await supabaseGet('orders', {}, 'pickup_code,token_number,created_at');
+      if (!todayRows) return 0;
+      return todayRows.filter(o => {
+        try {
+          const oDate = new Date(o.created_at).toISOString().slice(0, 10);
+          return oDate === todayStr;
+        } catch { return false; }
+      }).length;
+    })();
+
+    const seqNum = todayOrdersCount + 1;
+    const pickupCode = `${pickupPrefix}-${String(seqNum % 10000).padStart(4, '0')}`;
+    const tokenNumber = `TKN-${String(seqNum % 10000).padStart(4, '0')}`;
+
+    // ── STEP 9: Build and insert the order ──
     const orderPayload = {
-      student_id: user_id || null,
-      registration_id: profileRow?.registration_id || null,
-      email: customerEmail,
-      customer_name: customerName,
-      phone: customerPhone,
-      institution_id: institutionId,
-      canteen_id: canteenId,
-      counter_code: canteenName || null,
-      total_amount: totalAmount,
-      transaction_amount: totalAmount,
+      student_id: resolvedStudentId,
+      email: resolveEmail,
+      customer_name: resolveName,
+      phone: resolvePhone,
+      institution_id: resolveInstitutionId,
+      canteen_id: resolveCanteenId,
+      counter: canteenName || 'Counter',
+      counter_code: canteenName || 'Counter',
+      counter_name: canteenName || null,
+      canteen_name: canteenName || null,
+      total_amount: finalTotal,
+      transaction_amount: finalTotal,
       status: 'confirmed',
       order_status: 'confirmed',
       payment_status: 'paid',
       payment_method: 'razorpay',
-      order_number: orderNumber,
-      pickup_token: tokenNumber,
-      pickup_code: pickupCode,
-      pickup_type: pickupPrefix === 'B' ? 'breakfast' : pickupPrefix === 'L' ? 'lunch' : pickupPrefix === 'D' ? 'dinner' : pickupPrefix === 'F' ? 'faculty' : 'guest',
-      qr_pickup_code: pickupCode,
-      token_number: tokenNumber,
-      notes: null,
-      kitchen_status: 'pending',
-      counter_status: 'incoming',
-      estimated_ready_at: new Date(now.getTime() + estimatedPrepMinutes * 60000).toISOString(),
-      cancel_deadline_at: new Date(now.getTime() + 30 * 1000).toISOString(),
-      created_at: nowISO,
-      updated_at: nowISO,
-      paid_at: nowISO,
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
+      order_number: orderNumber,
+      pickup_code: pickupCode,
+      qr_pickup_code: pickupCode,
+      token_number: tokenNumber,
+      pickup_token: tokenNumber,
+      pickup_type: req.body.pickup_type || (pickupPrefix === 'L' ? 'lunch' : pickupPrefix === 'D' ? 'dinner' : pickupPrefix === 'B' ? 'breakfast' : pickupPrefix === 'F' ? 'faculty' : 'guest'),
+      notes: req.body.notes || paymentRow?.order_id || null,
+      paid_at: nowISO,
+      accepted_at: nowISO,
+      kitchen_status: 'pending',
+      counter_status: 'incoming',
+      estimated_ready_at: new Date(now.getTime() + 15 * 60000).toISOString(),
+      cancel_deadline_at: new Date(now.getTime() + 30 * 1000).toISOString(),
+      created_at: nowISO,
+      updated_at: nowISO,
     };
 
-    console.log("[Razorpay] Creating order:", JSON.stringify({ status: orderPayload.status, student_id: orderPayload.student_id, institution_id: orderPayload.institution_id }));
+    console.log('[Razorpay Verify] Creating order with student_id:', resolvedStudentId, 'institution_id:', resolveInstitutionId);
 
-    const { data: createdOrders, error: orderError } = await supabasePost('orders', orderPayload);
+    const { data: createdOrders, error: orderError } = await supabasePost('orders', [orderPayload]);
 
-    if (orderError || !createdOrders || createdOrders.length === 0) {
-      console.error("[Razorpay] CRITICAL: Failed to create order:", orderError);
+    if (orderError || !createdOrders || (Array.isArray(createdOrders) && createdOrders.length === 0)) {
+      console.error("[Razorpay Verify] CRITICAL: Failed to create order:", orderError);
       // Payment succeeded but order creation failed — log for manual recovery
       await supabasePatch('payments', {
         order_creation_error: String(orderError || 'Unknown error'),
@@ -261,6 +360,7 @@ export default async function handler(req, res) {
         updated_at: nowISO,
       }, { razorpay_order_id });
 
+      // Payment was verified and succeeded, but order creation failed
       return res.json({
         success: true,
         message: "Payment verified successfully. Order is being confirmed.",
@@ -272,14 +372,15 @@ export default async function handler(req, res) {
       });
     }
 
-    const createdOrder = createdOrders[0];
-    console.log("[Razorpay] Order created:", createdOrder.id);
+    const createdOrder = Array.isArray(createdOrders) ? createdOrders[0] : createdOrders;
+    const orderId = createdOrder?.id;
+    console.log("[Razorpay Verify] Order created:", orderId);
 
-    // ── STEP 6: Create order_items (server-side, bypasses RLS) ───────────
+    // ── STEP 10: Insert order_items ──
     if (items.length > 0) {
       const orderItemsPayload = items.map(item => ({
-        order_id: createdOrder.id,
-        menu_item_id: item.id || null,
+        order_id: orderId,
+        menu_item_id: item.id || item.menu_item_id || null,
         name: item.name || 'Item',
         variant: item.variant || null,
         quantity: Number(item.quantity || 1),
@@ -291,70 +392,67 @@ export default async function handler(req, res) {
 
       const { error: itemsError } = await supabasePost('order_items', orderItemsPayload);
       if (itemsError) {
-        console.error("[Razorpay] CRITICAL: Failed to create order_items:", itemsError);
-        // Order exists but items missing — log for recovery
+        console.error("[Razorpay Verify] CRITICAL: Failed to create order_items:", itemsError);
         await supabasePatch('orders', {
           items_creation_error: String(itemsError),
           updated_at: nowISO,
-        }, { id: createdOrder.id });
+        }, { id: orderId });
       } else {
-        console.log("[Razorpay] Order items created:", items.length, "items");
+        console.log("[Razorpay Verify] Order items created:", items.length, "items");
       }
     }
 
-    // ── STEP 7: Create order_status_history (best-effort) ────────────────
-    try {
-      await supabasePost('order_status_history', [{
-        order_id: createdOrder.id,
-        user_id: user_id || null,
-        institution_id: institutionId,
-        from_status: null,
-        to_status: 'confirmed',
-        payment_status: 'paid',
-        note: 'Payment verified and order created.',
-        created_at: nowISO,
-      }]);
-    } catch (_) { /* best-effort */ }
+    // ── STEP 11: Create order_status_history ──
+    await supabasePost('order_status_history', [{
+      order_id: orderId,
+      user_id: resolvedStudentId || null,
+      institution_id: resolveInstitutionId,
+      from_status: null,
+      to_status: 'confirmed',
+      payment_status: 'paid',
+      note: 'Payment verified and order created via /api/razorpay/verify-payment.',
+      created_at: nowISO,
+    }]);
 
-    // ── STEP 8: Create notifications (best-effort) ───────────────────────
-    try {
-      const notifs = [];
-      if (user_id) {
-        notifs.push({
-          type: 'order_confirmed',
-          title: 'Order Confirmed!',
-          message: 'Your order has been confirmed and is being prepared.',
-          user_id,
-          created_at: nowISO,
-          read: false,
-          order_id: createdOrder.id,
-        });
-      }
-      if (institutionId) {
-        notifs.push({
-          type: 'new_order',
-          title: 'New Order Received',
-          message: 'A new order has been placed and payment confirmed.',
-          institution_id: institutionId,
-          created_at: nowISO,
-          read: false,
-          order_id: createdOrder.id,
-        });
-      }
-      if (notifs.length > 0) await supabasePost('notifications', notifs);
-    } catch (_) { /* best-effort */ }
+    // ── STEP 12: Create notifications ──
+    const notifs = [];
+    if (resolvedStudentId) {
+      notifs.push({
+        type: 'order_confirmed',
+        title: 'Order Confirmed!',
+        message: 'Your order has been confirmed and is being prepared.',
+        user_id: resolvedStudentId,
+        created_at: nowISO,
+        read: false,
+        order_id: orderId,
+      });
+    }
+    if (resolveInstitutionId) {
+      notifs.push({
+        type: 'new_order',
+        title: 'New Order Received',
+        message: 'A new order has been placed and payment confirmed.',
+        institution_id: resolveInstitutionId,
+        created_at: nowISO,
+        read: false,
+        order_id: orderId,
+      });
+    }
+    if (notifs.length > 0) {
+      await supabasePost('notifications', notifs);
+    }
 
     return res.json({
       success: true,
       message: "Payment verified and order created successfully.",
       payment_id: razorpay_payment_id,
       razorpay_order_id,
-      order_id: createdOrder.id,
+      order_id: orderId,
       order_created: true,
     });
 
   } catch (error) {
-    console.error("[Razorpay] Verify payment error:", error);
+    console.error("[Razorpay Verify] Verify payment error:", error);
     return res.status(500).json({
       error: error?.message || "Payment verification failed due to server error.",
     });

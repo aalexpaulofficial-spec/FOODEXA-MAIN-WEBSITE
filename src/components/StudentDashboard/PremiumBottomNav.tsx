@@ -6,7 +6,8 @@ import {
   Gift,
   Clock,
   User,
-  ShoppingBag
+  ShoppingBag,
+  Zap
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -18,6 +19,8 @@ interface PremiumBottomNavProps {
   activeOrderCount?: number;
   cartCount?: number;
   onOpenCart?: () => void;
+  activeOrderLabel?: string;
+  activeOrderStatus?: string;
 }
 
 export const PremiumBottomNav: React.FC<PremiumBottomNavProps> = ({
@@ -26,6 +29,8 @@ export const PremiumBottomNav: React.FC<PremiumBottomNavProps> = ({
   activeOrderCount = 0,
   cartCount = 0,
   onOpenCart,
+  activeOrderLabel,
+  activeOrderStatus,
 }) => {
   const navItems = [
     { id: 'explore' as PremiumTab, label: 'Explore', icon: <Compass className="w-5 h-5" /> },
@@ -39,8 +44,38 @@ export const PremiumBottomNav: React.FC<PremiumBottomNavProps> = ({
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 px-3 pb-3 pointer-events-none">
       
+      {/* Floating Active Order Banner */}
+      {activeOrderCount > 0 && activeTab !== 'payment_success' && activeTab !== 'checkout' && (
+        <div className="max-w-md mx-auto mb-2 pointer-events-auto">
+          <motion.button
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setActiveTab('payment_success')}
+            className="w-full bg-gradient-to-r from-[#1D1D1F] to-slate-800 text-white rounded-[16px] p-3 shadow-md flex items-center justify-between border border-white/10 backdrop-blur-md"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-[#30D158]/20 border border-[#30D158]/30 flex items-center justify-center">
+                <Zap className="w-4 h-4 text-[#30D158] animate-pulse" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-bold text-white">Active Order</p>
+                <p className="text-[10px] text-slate-400">
+                  {activeOrderLabel || `View Live Tracking`}
+                  {activeOrderStatus ? ` · ${activeOrderStatus}` : ''}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#30D158]">
+              <span>Track</span>
+              <span className="text-white/40">→</span>
+            </div>
+          </motion.button>
+        </div>
+      )}
+
       {/* Floating Quick Cart Bar (if items in cart) */}
-      {cartCount > 0 && onOpenCart && (
+      {cartCount > 0 && onOpenCart && activeOrderCount === 0 && (
         <div className="max-w-md mx-auto mb-2 pointer-events-auto">
           <motion.button
             initial={{ y: 20, opacity: 0 }}

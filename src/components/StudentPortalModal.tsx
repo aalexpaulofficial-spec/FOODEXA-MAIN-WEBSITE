@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import {
   AlertCircle, ArrowRight, Award, BadgeIndianRupee, Bell, BookOpen, Building2, CheckCircle2, ChefHat, Clock,
   CreditCard, Heart, Home, Landmark, Loader2, LogOut, MapPin, QrCode, Receipt, Search, Settings,
@@ -412,6 +413,50 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // ── AUTO-RECOVERY: When payment succeeded but order creation is pending ──
+  // Poll for the order and auto-transition to tracking once it exists.
+  const recoveryPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (!paidPendingConfirmation) {
+      if (recoveryPollRef.current) {
+        clearInterval(recoveryPollRef.current);
+        recoveryPollRef.current = null;
+      }
+      return;
+    }
+    // Start polling every 3 seconds
+    recoveryPollRef.current = setInterval(async () => {
+      await refreshOrders();
+    }, 3000);
+    // Also do an immediate refresh
+    refreshOrders();
+    return () => {
+      if (recoveryPollRef.current) {
+        clearInterval(recoveryPollRef.current);
+        recoveryPollRef.current = null;
+      }
+    };
+  }, [paidPendingConfirmation, refreshOrders]);
+
+  // When orders update during recovery, check if the order now exists and clear pending state
+  useEffect(() => {
+    if (paidPendingConfirmation && activeOrders.length > 0) {
+      setPaidPendingConfirmation(null);
+      if (triggerToast) triggerToast('Order Confirmed!', 'Your FOODEXA order is now being tracked live.', 'success');
+    }
+  }, [activeOrders, paidPendingConfirmation, triggerToast]);
+
+  // ── REFRESH PERSISTENCE: Auto-navigate to tracking if active order exists ──
+  const hasRedirectedToTrackingRef = useRef(false);
+  useEffect(() => {
+    if (hasRedirectedToTrackingRef.current) return;
+    if (ordersLoading) return;
+    if (activeOrders.length > 0 && activeTab === 'explore') {
+      hasRedirectedToTrackingRef.current = true;
+      setActiveTab('payment_success');
+    }
+  }, [activeOrders, ordersLoading, activeTab]);
 
   const liveRole = effectiveRole;
   const displayName = effectiveProfile?.full_name || effectiveProfile?.email || user?.email || 'Student';
@@ -1809,299 +1854,433 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                   </div>
                 )}
 
-                {/* PAYMENT SUCCESS TAB */}
+                {/* PAYMENT SUCCESS / LIVE ORDER TRACKING TAB */}
                 {/* ═══════════════════ LIVE CANTEEN TRACKING ═══════════════════ */}
-                 {activeTab === 'payment_success' && (() => {
-                    const o = activeOrders[0] || orders.find(ord => ['pending','confirmed','preparing','ready','completed'].includes(ord.status)) || orders[0];
-                   const stage = getTimelineStage(o?.status);
-                   const label = o ? getTimelineLabel(o.status) : 'Order Confirmed';
-                   const completed = isOrderCompleted(o?.status);
-                   const cancelled = isOrderCancelled(o?.status);
+                {activeTab === 'payment_success' && (() => {
+                  const o = activeOrders[0] || orders.find(ord => ['pending','confirmed','preparing','ready','completed'].includes(ord.status)) || orders[0];
+                  const stage = getTimelineStage(o?.status);
+                  const label = o ? getTimelineLabel(o.status) : 'Order Confirmed';
+                  const completed = isOrderCompleted(o?.status);
+                  const cancelled = isOrderCancelled(o?.status);
 
-if (!o && paidPendingConfirmation) {
-                      return (
-                        <div className="max-w-md mx-auto space-y-5 py-10 text-center">
-                          <div className="w-24 h-24 mx-auto bg-amber-50 border border-amber-200 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/10">
-                            <AlertCircle className="w-12 h-12 text-amber-500" />
+                  // ── STATE 1: Payment received, order not yet created ──
+                  if (!o && paidPendingConfirmation) {
+                    return (
+                      <div className="max-w-md mx-auto space-y-6 py-10 text-center">
+                        <motion.div
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="space-y-6"
+                        >
+                          {/* Animated loading indicator */}
+                          <div className="relative w-24 h-24 mx-auto">
+                            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-400/20 to-blue-600/20 animate-ping" />
+                            <div className="relative w-24 h-24 bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/10">
+                              <Loader2 className="w-10 h-10 text-[#0071E3] animate-spin" />
+                            </div>
                           </div>
-                          <div className="space-y-2">
-                            <p className="text-xs font-black uppercase tracking-widest text-amber-600">Payment Received</p>
-                            <h2 className="text-2xl font-black text-slate-900">Order Confirmation Pending</h2>
-                            <p className="text-sm text-slate-600 font-semibold">{paidPendingConfirmation.message}</p>
+
+                          <div className="space-y-2.5">
+                            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#0071E3]">Payment Received</p>
+                            <h2 className="text-2xl font-black text-[#1D1D1F] tracking-tight">Confirming Your Order</h2>
+                            <p className="text-sm text-[#6E6E73] font-medium max-w-xs mx-auto">
+                              Your payment was successful. We're confirming your FOODEXA order now.
+                            </p>
                           </div>
-                          <button
-                            onClick={async () => {
-                              await refreshOrders();
-                              setTimeout(() => {
-                                const latestActive = orders.find(ord => ['pending','confirmed','preparing','cooking','quality_check','packed','ready','completed'].includes(ord.status));
-                                if (latestActive) {
-                                  setPaidPendingConfirmation(null);
-                                }
-                              }, 2000);
-                            }}
-                            className="w-full rounded-2xl bg-[#0071E3] py-4 text-sm font-black text-white shadow-lg shadow-blue-500/25 hover:bg-[#0066CC] transition-all"
-                          >
-                            Check Order Status
-                          </button>
+
+                          {/* Progress bar */}
+                          <div className="max-w-xs mx-auto space-y-2">
+                            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                              <motion.div
+                                className="h-full rounded-full bg-gradient-to-r from-[#0071E3] to-blue-400"
+                                animate={{ width: ['0%', '100%'] }}
+                                transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+                              />
+                            </div>
+                            <p className="text-[10px] text-[#86868B] font-semibold">
+                              This usually takes just a few seconds...
+                            </p>
+                          </div>
+
+                          {/* Reconnect message for realtime */}
+                          <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 max-w-xs mx-auto">
+                            <p className="text-xs text-[#6E6E73] font-medium">
+                              Your order will appear automatically once confirmed. You don't need to refresh.
+                            </p>
+                          </div>
+                        </motion.div>
+                      </div>
+                    );
+                  }
+
+                  // ── STATE 2: No order found and no payment pending (shouldn't happen) ──
+                  if (!o) {
+                    return (
+                      <div className="max-w-md mx-auto space-y-6 py-10 text-center">
+                        <div className="w-24 h-24 mx-auto bg-slate-50 border border-slate-200 rounded-full flex items-center justify-center">
+                          <Package className="w-12 h-12 text-slate-300" />
                         </div>
-                      );
-                    }
+                        <div className="space-y-2">
+                          <h2 className="text-2xl font-black text-[#1D1D1F]">No Active Order</h2>
+                          <p className="text-sm text-[#6E6E73] font-medium">Place an order to see live tracking here.</p>
+                        </div>
+                        <button
+                          onClick={() => setActiveTab('explore')}
+                          className="rounded-2xl bg-[#0071E3] px-8 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-500/25 hover:bg-[#0066CC] transition-all"
+                        >
+                          Browse Menu
+                        </button>
+                      </div>
+                    );
+                  }
 
-                    // Show premium completion screen when order is collected
-                    if (completed && o) {
-                      return (
-                        <OrderCompletionScreen
-                          key={`completion-${o.id}`}
-                          order={o}
-                          institutionName={institutionName}
-                          onViewReceipt={(ord) => { setInvoiceOrder(ord); }}
-                          onRateOrder={(ord) => { setRatingOrder(ord); }}
-                          onBackToMenu={() => { setActiveTab('explore'); }}
-                          onOrderAgain={(ord) => {
-                            // Reconstruct previous order into cart using current menu prices
-                            const rebuildCart: { item: MenuItem; quantity: number }[] = [];
-                            for (const orderItem of ord.items) {
-                              const menuItem = menuItems.find(m => m.id === orderItem.menu_item_id);
-                              if (menuItem && !menuItem.is_archived && menuItem.is_available !== false) {
-                                const existing = rebuildCart.find(c => c.item.id === menuItem.id);
-                                if (existing) {
-                                  existing.quantity += orderItem.quantity;
-                                } else {
-                                  rebuildCart.push({ item: menuItem, quantity: orderItem.quantity });
-                                }
+                  // ── STATE 3: Order is completed → Show completion screen ──
+                  if (completed) {
+                    return (
+                      <OrderCompletionScreen
+                        key={`completion-${o.id}`}
+                        order={o}
+                        institutionName={institutionName}
+                        onViewReceipt={(ord) => { setInvoiceOrder(ord); }}
+                        onRateOrder={(ord) => { setRatingOrder(ord); }}
+                        onBackToMenu={() => { setActiveTab('explore'); }}
+                        onOrderAgain={(ord) => {
+                          const rebuildCart: { item: MenuItem; quantity: number }[] = [];
+                          for (const orderItem of ord.items) {
+                            const menuItem = menuItems.find(m => m.id === orderItem.menu_item_id);
+                            if (menuItem && !menuItem.is_archived && menuItem.is_available !== false) {
+                              const existing = rebuildCart.find(c => c.item.id === menuItem.id);
+                              if (existing) {
+                                existing.quantity += orderItem.quantity;
+                              } else {
+                                rebuildCart.push({ item: menuItem, quantity: orderItem.quantity });
                               }
                             }
-                            if (rebuildCart.length > 0) {
-                              setCart(rebuildCart);
-                              setActiveTab('checkout');
-                              triggerToast?.('Order Again', `Added ${rebuildCart.length} item${rebuildCart.length !== 1 ? 's' : ''} to cart with current prices.`, 'success');
-                            } else {
-                              triggerToast?.('Items Unavailable', 'Previous items are no longer available.', 'warning');
-                              setActiveTab('explore');
-                            }
-                          }}
-                        />
-                      );
-                    }
+                          }
+                          if (rebuildCart.length > 0) {
+                            setCart(rebuildCart);
+                            setActiveTab('checkout');
+                            triggerToast?.('Order Again', `Added ${rebuildCart.length} item${rebuildCart.length !== 1 ? 's' : ''} to cart with current prices.`, 'success');
+                          } else {
+                            triggerToast?.('Items Unavailable', 'Previous items are no longer available.', 'warning');
+                            setActiveTab('explore');
+                          }
+                        }}
+                      />
+                    );
+                  }
 
-                   // Read pickup code, estimated time, QR from Supabase order (never generate locally)
-                   const pickupCode = o?.pickup_code || o?.pickup_token || '';
-                   const estimatedReadyAt = o?.estimated_ready_at || null;
-                   const orderNumber = o?.order_number || o?.order_id || '';
+                  // ── STATE 4: Order is cancelled ──
+                  if (cancelled) {
+                    return (
+                      <div className="max-w-md mx-auto space-y-6 py-10 text-center">
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                          <div className="w-24 h-24 mx-auto bg-red-50 border border-red-200 rounded-full flex items-center justify-center shadow-lg shadow-red-500/10">
+                            <XCircle className="w-12 h-12 text-red-500" />
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-red-500">Order Cancelled</p>
+                            <h2 className="text-2xl font-black text-[#1D1D1F]">Order Was Cancelled</h2>
+                            <p className="text-sm text-[#6E6E73] font-medium">
+                              {o.cancelled_by ? `Cancelled by ${o.cancelled_by}.` : 'This order has been cancelled.'}
+                              {o.payment_status === 'refunded' ? ' A refund has been initiated.' : ''}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setActiveTab('explore')}
+                            className="rounded-2xl bg-[#0071E3] px-8 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-500/25 hover:bg-[#0066CC] transition-all"
+                          >
+                            Browse Menu
+                          </button>
+                        </motion.div>
+                      </div>
+                    );
+                  }
 
-                       return (
-                      <div className="max-w-md mx-auto space-y-4 pb-20">
-                        {/* Top Status Card */}
-                        <div className="bg-gray-50 rounded-3xl p-6 text-black shadow-md relative overflow-hidden">
-                          <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
-                          <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-black/20 rounded-full blur-3xl pointer-events-none"></div>
-                          
-                          <div className="relative z-10">
-                            <div className="flex items-start justify-between mb-4">
-                              <div>
-                                <p className="text-blue-300 text-xs font-bold uppercase tracking-wider mb-1">{label}</p>
-                                <h2 className="text-3xl font-black">{orderNumber}</h2>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1">Pickup Code</p>
-                                <p className="text-xl font-black text-black tracking-wider">
-                                  {pickupCode || 'Generating...'}
-                                </p>
-                              </div>
-                            </div>
+                  // ── STATE 5: Active order — Live Tracking Screen ──
+                  const pickupCode = o.pickup_code || o.pickup_token || '';
+                  const estimatedReadyAt = o.estimated_ready_at || null;
+                  const orderNumber = o.order_number ? `#FX-${String(o.order_number).padStart(4, '0')}` : o.order_id || '';
+                  const isReady = o.status === 'ready';
+                  const isPreparing = o.status === 'preparing';
+                  const isConfirmed = o.status === 'confirmed' || o.status === 'pending';
 
-                            <div className="flex items-center gap-3 bg-white/10 rounded-2xl p-3 border border-white/10">
-                              <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center border border-blue-400/30">
-                                <Clock className="w-5 h-5 text-blue-300" />
-                              </div>
-                              <div>
-                                <p className="text-gray-600 text-xs">Estimated Ready Time</p>
-                                <p className="font-bold text-black">
-                                  {estimatedReadyAt 
-                                    ? new Date(estimatedReadyAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                                    : 'Calculating...'}
-                                </p>
-                              </div>
-                            </div>
+                  // Status-specific messages
+                  const statusMessage = isReady
+                    ? 'Your order is ready! Show your pickup code at the counter.'
+                    : isPreparing
+                      ? 'Your order is being prepared by the kitchen.'
+                      : 'Your order has been confirmed and is in the queue.';
 
-                            {/* Pickup Counter */}
-                            <div className="flex items-center gap-3 bg-white/10 rounded-2xl p-3 border border-white/10 mt-2">
-                              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-400/30">
-                                <MapPin className="w-5 h-5 text-emerald-300" />
-                              </div>
-                              <div>
-                                <p className="text-gray-600 text-xs">Pickup Counter</p>
-                                <p className="font-bold text-black">{o?.counter_name || o?.counter || 'Assigned on confirmation'}</p>
-                              </div>
+                  return (
+                    <motion.div
+                      key={`tracking-${o.id}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="max-w-md mx-auto space-y-4 pb-20"
+                    >
+                      {/* ── ORDER CONFIRMED Header ── */}
+                      <div className={`rounded-[24px] p-6 text-white shadow-lg relative overflow-hidden ${
+                        isReady
+                          ? 'bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500'
+                          : isPreparing
+                            ? 'bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-500'
+                            : 'bg-gradient-to-br from-[#1D1D1F] via-slate-800 to-slate-900'
+                      }`}>
+                        <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+                        <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-white/5 rounded-full blur-3xl pointer-events-none" />
+
+                        <div className="relative z-10">
+                          {/* Status badge */}
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-md text-[10px] font-bold uppercase tracking-wider border border-white/20">
+                                {label}
+                              </span>
+                              <span className="px-2 py-1 rounded-full bg-[#30D158]/20 text-[10px] font-bold uppercase tracking-wider border border-[#30D158]/30 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#30D158] animate-pulse" />
+                                PAID
+                              </span>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Live Detail Grid — all values from Supabase */}
-                        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-                          <h3 className="font-bold text-slate-900 mb-4">Order Details</h3>
-                          <div className="grid grid-cols-2 gap-3 text-xs">
-                            <div className="bg-slate-50 rounded-xl p-3">
-                              <p className="text-[10px] text-gray-500 font-bold uppercase">Token Number</p>
-                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.token_number || o?.pickup_token || '—'}</p>
+                          {/* Order number */}
+                          <h2 className="text-3xl font-black tracking-tight mb-1">{orderNumber}</h2>
+                          <p className="text-sm text-white/70 font-medium">{statusMessage}</p>
+
+                          {/* Key info row */}
+                          <div className="grid grid-cols-2 gap-3 mt-5">
+                            <div className="bg-white/10 backdrop-blur-md rounded-[14px] p-3 border border-white/10">
+                              <p className="text-[10px] text-white/50 font-bold uppercase tracking-wider flex items-center gap-1">
+                                <Clock className="w-3 h-3" /> Est. Ready
+                              </p>
+                              <p className="text-sm font-bold text-white mt-0.5">
+                                {estimatedReadyAt
+                                  ? new Date(estimatedReadyAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                                  : 'Calculating...'}
+                              </p>
                             </div>
-                            <div className="bg-slate-50 rounded-xl p-3">
-                              <p className="text-[10px] text-gray-500 font-bold uppercase">Pickup Code</p>
-                              <p className="text-sm font-black text-emerald-700 mt-0.5">{pickupCode || '—'}</p>
-                            </div>
-                            <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-                              <p className="text-[10px] text-blue-500 font-bold uppercase">Pickup Counter</p>
-                              <p className="text-sm font-black text-blue-700 mt-0.5">{o?.counter_name || o?.counter || '—'}</p>
-                            </div>
-                            <div className="bg-violet-50 rounded-xl p-3 border border-violet-100">
-                              <p className="text-[10px] text-violet-500 font-bold uppercase">Kitchen Status</p>
-                              <p className="text-sm font-black text-violet-700 mt-0.5">{o?.kitchen_status || '—'}</p>
-                            </div>
-                            <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-                              <p className="text-[10px] text-blue-500 font-bold uppercase">Counter Status</p>
-                              <p className="text-sm font-black text-blue-700 mt-0.5">{o?.counter_status || '—'}</p>
-                            </div>
-                            <div className="bg-slate-50 rounded-xl p-3">
-                              <p className="text-[10px] text-gray-500 font-bold uppercase">Student ID</p>
-                              <p className="text-sm font-black text-emerald-700 mt-0.5">{effectiveProfile?.student_id || '—'}</p>
-                            </div>
-                            <div className="bg-slate-50 rounded-xl p-3">
-                              <p className="text-[10px] text-gray-500 font-bold uppercase">Registration ID</p>
-                              <p className="text-sm font-black text-slate-900 mt-0.5">{effectiveProfile?.registration_id || '—'}</p>
-                            </div>
-                            <div className="bg-slate-50 rounded-xl p-3">
-                              <p className="text-[10px] text-gray-500 font-bold uppercase">Order Status</p>
-                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.order_status || o?.status || '—'}</p>
-                            </div>
-                            <div className="bg-slate-50 rounded-xl p-3">
-                              <p className="text-[10px] text-gray-500 font-bold uppercase">Completion Time</p>
-                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.completed_at ? new Date(o.completed_at).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'}</p>
-                            </div>
-                            <div className="bg-slate-50 rounded-xl p-3">
-                              <p className="text-[10px] text-gray-500 font-bold uppercase">Items</p>
-                              <p className="text-sm font-black text-slate-900 mt-0.5">{o?.items?.length ?? 0} item(s)</p>
+                            <div className="bg-white/10 backdrop-blur-md rounded-[14px] p-3 border border-white/10">
+                              <p className="text-[10px] text-white/50 font-bold uppercase tracking-wider flex items-center gap-1">
+                                <MapPin className="w-3 h-3" /> Pickup
+                              </p>
+                              <p className="text-sm font-bold text-white mt-0.5">{o.counter_name || o.counter || 'Counter'}</p>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Items & Counter */}
-                        <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-                          <div className="flex items-center justify-between mb-3">
-                            <h3 className="font-bold text-slate-900">Your Items</h3>
-                            <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-bold border border-blue-100">
-                              {o?.counter_name || o?.counter || 'Counter'}
-                            </span>
-                          </div>
-                          {o && o.items.length > 0 ? (
-                            <div className="space-y-2">
-                              {o.items.map((it, i) => (
-                                <div key={i} className="flex items-center justify-between text-sm">
-                                  <span className="text-slate-800 font-semibold">
-                                    {it.name} <span className="text-blue-600 font-black">x{it.quantity}</span>
-                                  </span>
-                                  <span className="text-slate-900 font-bold">{formatINR(it.price * it.quantity)}</span>
+                          {/* Pickup code when ready */}
+                          {isReady && pickupCode && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="mt-4 bg-white/15 backdrop-blur-md rounded-[16px] p-4 border border-white/20"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-[10px] text-white/60 font-bold uppercase tracking-wider">Your Pickup Code</p>
+                                  <p className="text-2xl font-black tracking-wider mt-0.5">{pickupCode}</p>
                                 </div>
-                              ))}
-                              <div className="border-t border-slate-100 pt-2 flex items-center justify-between">
-                                <span className="text-xs font-bold text-slate-500 uppercase">Total</span>
-                                <span className="text-base font-black text-slate-900">{formatINR(o.total_amount)}</span>
+                                {o.token_number && (
+                                  <div className="text-right">
+                                    <p className="text-[10px] text-white/60 font-bold uppercase tracking-wider">Token</p>
+                                    <p className="text-xl font-black mt-0.5">{o.token_number}</p>
+                                  </div>
+                                )}
                               </div>
+                              <p className="text-[11px] text-white/50 mt-2">Show this code at {o.counter_name || o.counter || 'the counter'}</p>
+                            </motion.div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* ── ORDER DETAILS CARD ── */}
+                      <div className="bg-white rounded-[20px] border border-slate-200 p-5 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-sm font-black text-[#1D1D1F]">Order Details</h3>
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${statusColor(o.status)}`}>
+                            {statusLabel(o.status)}
+                          </span>
+                        </div>
+
+                        {/* Quick info grid */}
+                        <div className="grid grid-cols-3 gap-2.5 mb-4">
+                          <div className="bg-slate-50 rounded-xl p-2.5 text-center">
+                            <p className="text-[9px] text-[#86868B] font-bold uppercase tracking-wider">Payment</p>
+                            <p className="text-[11px] font-black text-[#30D158] mt-0.5 uppercase">{o.payment_status || 'Paid'}</p>
+                          </div>
+                          <div className="bg-slate-50 rounded-xl p-2.5 text-center">
+                            <p className="text-[9px] text-[#86868B] font-bold uppercase tracking-wider">Items</p>
+                            <p className="text-[11px] font-black text-[#1D1D1F] mt-0.5">{o.items?.length ?? 0}</p>
+                          </div>
+                          <div className="bg-slate-50 rounded-xl p-2.5 text-center">
+                            <p className="text-[9px] text-[#86868B] font-bold uppercase tracking-wider">Total</p>
+                            <p className="text-[11px] font-black text-[#1D1D1F] mt-0.5">{formatINR(o.total_amount)}</p>
+                          </div>
+                        </div>
+
+                        {/* Institution & Canteen */}
+                        <div className="space-y-2 text-xs">
+                          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50">
+                            <Building2 className="w-3.5 h-3.5 text-[#86868B] shrink-0" />
+                            <span className="font-semibold text-[#1D1D1F] truncate">{institutionName}</span>
+                          </div>
+                          {o.canteen_name && (
+                            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50">
+                              <Coffee className="w-3.5 h-3.5 text-[#86868B] shrink-0" />
+                              <span className="font-semibold text-[#1D1D1F] truncate">{o.canteen_name}</span>
                             </div>
-                          ) : (
-                            <div className="text-center py-3">
-                              {orderItemsLoading ? (
-                                <p className="text-sm text-slate-400 font-semibold">Loading order items...</p>
-                              ) : (
-                                <p className="text-sm text-slate-400 font-semibold">{o?.items?.length ?? 0} item(s)</p>
-                              )}
+                          )}
+                          {pickupCode && (
+                            <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-blue-50 border border-blue-100">
+                              <QrCode className="w-3.5 h-3.5 text-[#0071E3] shrink-0" />
+                              <span className="font-bold text-[#0071E3]">{pickupCode}</span>
+                              <span className="text-[#86868B] ml-auto">{o.counter_name || o.counter || ''}</span>
                             </div>
                           )}
                         </div>
+                      </div>
 
-                       {/* 4-Step Vertical Tracker driven by DB status (single source of truth) */}
-                       <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-                         <div className="flex items-center justify-between mb-5">
-                           <h3 className="font-bold text-slate-900">Live Timeline</h3>
-                           <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold border border-emerald-100 flex items-center gap-1">
-                             <span className="w-1.5 h-1.5 rounded-full bg-black animate-pulse"></span>
-                             Live
-                           </span>
-                         </div>
-                         <div className="space-y-0">
-                           {STUDENT_TIMELINE_LABELS.map((stepLabel, i) => {
-                             const isDone = i < stage;
-                             const isActive = i === stage;
-                             const isPast = stage === -1;
-                             return (
-                               <div key={i} className="flex gap-4">
-                                 <div className="flex flex-col items-center">
-                                   <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 font-bold text-xs transition-all duration-500 z-10 ${
-                                     isPast ? 'border-red-500/40 bg-red-950/30' :
-                                     isDone ? 'bg-[#0071E3] border-blue-600 text-white' :
-                                     isActive ? 'bg-white border-blue-600 text-[#0071E3] shadow-[0_0_10px_rgba(37,99,235,0.3)]' :
-                                     'bg-white border-slate-200 text-gray-600'
-                                   }`}>
-                                     {isPast ? <XCircle className="w-4 h-4 text-red-500" /> : isDone ? <Check className="w-4 h-4" /> : i + 1}
-                                   </div>
-                                   {i < STUDENT_TIMELINE_LABELS.length - 1 && (
-                                     <div className={`w-0.5 h-8 my-0.5 rounded-full transition-all duration-700 ${isDone ? 'bg-[#0071E3]' : 'bg-slate-100'}`} />
-                                   )}
-                                 </div>
-                                 <div className={`pt-1 flex-1 min-w-0 ${i < STUDENT_TIMELINE_LABELS.length - 1 ? 'pb-3' : 'pb-0'}`}>
-                                   <div className="flex items-center gap-2">
-                                     <p className={`text-sm font-bold ${isActive ? 'text-[#0071E3]' : isDone || isPast ? 'text-slate-800' : 'text-gray-500'}`}>{stepLabel}</p>
-                                   </div>
-                                   <p className={`text-[11px] mt-0.5 ${isActive || isDone ? 'text-gray-400' : 'text-gray-600'}`}>{STUDENT_TIMELINE_DESCRIPTIONS[i]}</p>
-                                 </div>
-                               </div>
-                             );
-                           })}
-                         </div>
-                       </div>
-
-                       {/* Actions */}
-                       <div className="pt-2 space-y-3">
-                         {o && (stage >= 2) && (
-                           <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-[#0071E3] text-white font-bold text-sm shadow-lg shadow-blue-600/30 hover:bg-[#0066CC] transition-colors">
-                             <QrCode className="w-5 h-5" /> Show Pickup QR
-                           </button>
-                         )}
-                         
-                          {/* Cancel within 30 seconds — use cancel_deadline_at from Supabase */}
-                          {(() => {
-                            if (!o) return null;
-                            const isNonCancellable = ['preparing', 'cooking', 'ready', 'completed', 'cancelled'].includes(o.status);
-                            if (isNonCancellable) return null;
-                            const deadline = o.cancel_deadline_at ? new Date(o.cancel_deadline_at).getTime() : 0;
-                            if (!deadline) return null;
-                            const secs = Math.max(0, Math.floor((deadline - currentTime) / 1000));
-                            if (secs > 0) return (
-                              <div className="text-center mt-2">
-                                <button
-                                  onClick={async () => {
-                                    setSubmittingOrder(true);
-                                     const res = await cancelOrder(o!.id, effectiveRole || 'student');
-                                    if (res.success) { triggerToast && triggerToast('Cancelled', 'Order cancelled and refunded.', 'success'); setActiveTab('history'); }
-                                    else { triggerToast && triggerToast('Failed', 'Could not cancel.', 'error'); }
-                                    setSubmittingOrder(false);
-                                  }}
-                                  disabled={submittingOrder}
-                                  className="text-red-500 font-bold text-xs hover:text-red-600 hover:underline transition-all disabled:opacity-50"
-                                >
-                                  Cancel Order within {secs} seconds
-                                </button>
+                      {/* ── ITEMS CARD ── */}
+                      <div className="bg-white rounded-[20px] border border-slate-200 p-5 shadow-sm">
+                        <h3 className="text-sm font-black text-[#1D1D1F] mb-3">Items Ordered</h3>
+                        {o.items.length > 0 ? (
+                          <div className="space-y-2.5">
+                            {o.items.map((it, i) => (
+                              <div key={i} className="flex items-center justify-between py-1">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  {it.is_veg !== null && it.is_veg !== undefined && (
+                                    <span className={`w-3 h-3 rounded-sm border flex items-center justify-center shrink-0 ${it.is_veg ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}`}>
+                                      <div className={`w-1.5 h-1.5 rounded-full ${it.is_veg ? 'bg-green-500' : 'bg-red-500'}`} />
+                                    </span>
+                                  )}
+                                  <span className="text-sm font-semibold text-[#1D1D1F] truncate">{it.name}</span>
+                                  <span className="text-[11px] font-bold text-[#0071E3] shrink-0">x{it.quantity}</span>
+                                </div>
+                                <span className="text-sm font-bold text-[#1D1D1F] shrink-0 ml-2">{formatINR(it.price * it.quantity)}</span>
                               </div>
-                            );
+                            ))}
+                            <div className="border-t border-slate-100 pt-2.5 flex items-center justify-between">
+                              <span className="text-xs font-bold text-[#86868B] uppercase tracking-wider">Total Paid</span>
+                              <span className="text-lg font-black text-[#1D1D1F]">{formatINR(o.total_amount)}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center py-3">
+                            {orderItemsLoading ? (
+                              <p className="text-sm text-[#86868B] font-semibold flex items-center justify-center gap-2">
+                                <Loader2 className="w-4 h-4 animate-spin" /> Loading items...
+                              </p>
+                            ) : (
+                              <p className="text-sm text-[#86868B] font-semibold">{o.items?.length ?? 0} item(s)</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ── 5-STEP VERTICAL TIMELINE ── */}
+                      <div className="bg-white rounded-[20px] border border-slate-200 p-5 shadow-sm">
+                        <div className="flex items-center justify-between mb-5">
+                          <h3 className="text-sm font-black text-[#1D1D1F]">Order Progress</h3>
+                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-bold border border-emerald-100 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Live
+                          </span>
+                        </div>
+                        <div className="space-y-0">
+                          {STUDENT_TIMELINE_LABELS.map((stepLabel, i) => {
+                            const isDone = i < stage;
+                            const isActive = i === stage;
+                            const isPast = stage === -1;
                             return (
-                              <div className="text-center mt-2">
-                                <p className="text-gray-400 text-xs font-semibold">Cancellation unavailable</p>
+                              <div key={i} className="flex gap-4">
+                                <div className="flex flex-col items-center">
+                                  <div className={`w-9 h-9 rounded-full border-2 flex items-center justify-center shrink-0 font-bold text-xs transition-all duration-500 z-10 ${
+                                    isPast ? 'border-red-300 bg-red-50 text-red-500' :
+                                    isDone ? 'bg-[#30D158] border-[#30D158] text-white' :
+                                    isActive ? 'bg-white border-[#0071E3] text-[#0071E3] shadow-[0_0_12px_rgba(0,113,227,0.25)]' :
+                                    'bg-white border-slate-200 text-slate-400'
+                                  }`}>
+                                    {isPast ? <XCircle className="w-4 h-4" /> : isDone ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
+                                  </div>
+                                  {i < STUDENT_TIMELINE_LABELS.length - 1 && (
+                                    <div className={`w-0.5 h-7 my-0.5 rounded-full transition-all duration-700 ${
+                                      isDone ? 'bg-[#30D158]' : isActive ? 'bg-gradient-to-b from-[#0071E3] to-slate-200' : 'bg-slate-100'
+                                    }`} />
+                                  )}
+                                </div>
+                                <div className={`pt-1.5 flex-1 min-w-0 ${i < STUDENT_TIMELINE_LABELS.length - 1 ? 'pb-2' : 'pb-0'}`}>
+                                  <p className={`text-sm font-bold ${
+                                    isActive ? 'text-[#0071E3]' : isDone ? 'text-[#1D1D1F]' : 'text-slate-400'
+                                  }`}>{stepLabel}</p>
+                                  <p className={`text-[11px] mt-0.5 ${
+                                    isActive ? 'text-[#6E6E73]' : isDone ? 'text-[#86868B]' : 'text-slate-400'
+                                  }`}>{STUDENT_TIMELINE_DESCRIPTIONS[i]}</p>
+                                  {isActive && (
+                                    <motion.p
+                                      initial={{ opacity: 0 }}
+                                      animate={{ opacity: 1 }}
+                                      className="text-[10px] text-[#0071E3] font-bold mt-1 uppercase tracking-wider"
+                                    >
+                                      ← You are here
+                                    </motion.p>
+                                  )}
+                                </div>
                               </div>
                             );
-                          })()}
-                       </div>
-                     </div>
-                   );
-                 })()}
+                          })}
+                        </div>
+                      </div>
+
+                      {/* ── ACTIONS ── */}
+                      <div className="space-y-3">
+                        {isReady && pickupCode && (
+                          <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2.5 py-4 rounded-[16px] bg-[#0071E3] text-white font-bold text-sm shadow-lg shadow-blue-500/25 hover:bg-[#0066CC] transition-all active:scale-[0.98]">
+                            <QrCode className="w-5 h-5" /> Show Pickup QR
+                          </button>
+                        )}
+
+                        {!isReady && pickupCode && (
+                          <button onClick={() => setQrOrder(o)} className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-[16px] bg-white border border-slate-200 text-[#1D1D1F] font-bold text-sm shadow-sm hover:bg-slate-50 transition-all active:scale-[0.98]">
+                            <QrCode className="w-4.5 h-4.5 text-[#86868B]" /> View Pickup Code
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => setActiveTab('explore')}
+                          className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-[16px] bg-slate-100 text-[#1D1D1F] font-bold text-sm hover:bg-slate-200 transition-all active:scale-[0.98]"
+                        >
+                          Continue Browsing
+                        </button>
+
+                        {/* Cancel order (within deadline) */}
+                        {(() => {
+                          if (cancelled) return null;
+                          const isNonCancellable = ['preparing', 'cooking', 'ready', 'completed', 'cancelled'].includes(o.status);
+                          if (isNonCancellable) return null;
+                          const deadline = o.cancel_deadline_at ? new Date(o.cancel_deadline_at).getTime() : 0;
+                          if (!deadline) return null;
+                          const secs = Math.max(0, Math.floor((deadline - currentTime) / 1000));
+                          if (secs > 0) return (
+                            <button
+                              onClick={async () => {
+                                setSubmittingOrder(true);
+                                const res = await cancelOrder(o.id, effectiveRole || 'student');
+                                if (res.success) { triggerToast && triggerToast('Cancelled', 'Order cancelled and refunded.', 'success'); }
+                                else { triggerToast && triggerToast('Failed', 'Could not cancel.', 'warning'); }
+                                setSubmittingOrder(false);
+                              }}
+                              disabled={submittingOrder}
+                              className="w-full py-3 text-red-500 font-bold text-xs hover:text-red-600 hover:underline transition-all disabled:opacity-50"
+                            >
+                              Cancel Order within {secs} seconds
+                            </button>
+                          );
+                          return null;
+                        })()}
+                      </div>
+                    </motion.div>
+                  );
+                })()}
 
 
 
@@ -2342,12 +2521,11 @@ if (!o && paidPendingConfirmation) {
           if (result.error) {
             return { error: result.error };
           }
-          // Clear active canteen
-          setActiveCanteen(null);
-          activeCanteenIdRef.current = null;
-          return { error: null };
-          return { error: null };
-        }}
+        // Clear active canteen
+        setActiveCanteen(null);
+        activeCanteenIdRef.current = null;
+        return { error: null };
+      }}
         currentInstitutionName={institutionName}
       />
 
@@ -2426,6 +2604,8 @@ if (!o && paidPendingConfirmation) {
         activeOrderCount={activeOrders.length}
         cartCount={cartCount}
         onOpenCart={() => setShowCart(true)}
+        activeOrderLabel={activeOrders[0] ? `Order #${activeOrders[0].order_number ? String(activeOrders[0].order_number).padStart(4, '0') : activeOrders[0].id.slice(-4).toUpperCase()}` : undefined}
+        activeOrderStatus={activeOrders[0] ? getTimelineLabel(activeOrders[0].status) : undefined}
       />
     </div>
   );

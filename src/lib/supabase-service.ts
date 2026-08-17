@@ -756,8 +756,52 @@ export async function getInstitutionByCode(code: string): Promise<{
 
     // Query via the SECURITY DEFINER RPC so RLS is bypassed.
     // The RPC get_institution_by_code is deployed via migrations/20260814_production_fix_consolidated.sql
-
-// ── CENTRAL DATA ACCESS: getMenuByCanteen ────────────────────────────────
+    const { data, error } = await supabase.rpc('get_institution_by_code', { p_institution_code: trimmed });
+    if (error) {
+      console.warn('[Supabase] getInstitutionByCode RPC error:', error.message);
+      // Fallback: direct query
+      const { data: rows, error: rowsErr } = await supabase
+        .from('institutions')
+        .select('*')
+        .eq('institution_code', trimmed)
+        .in('status', ['active', 'approved'])
+        .limit(1);
+      if (rowsErr || !rows || rows.length === 0) {
+        return { data: null, error: rowsErr?.message || 'Institution not found.' };
+      }
+      const row = rows[0];
+      return {
+        data: {
+          institution_id: row.id,
+          institution_name: row.name || row.institution_name || '',
+          campus: row.campus || '',
+          city: row.city || '',
+          state: row.state || '',
+          country: row.country || '',
+          institution_code: row.institution_code || trimmed,
+        },
+        error: null,
+      };
+    }
+    if (!data) return { data: null, error: 'Institution not found.' };
+    // RPC returns a single row
+    const inst = Array.isArray(data) ? data[0] : data;
+    return {
+      data: {
+        institution_id: inst.id,
+        institution_name: inst.name || inst.institution_name || '',
+        campus: inst.campus || '',
+        city: inst.city || '',
+        state: inst.state || '',
+        country: inst.country || '',
+        institution_code: inst.institution_code || trimmed,
+      },
+      error: null,
+    };
+  } catch (err: any) {
+    return { data: null, error: err?.message || 'Failed to look up institution.' };
+  }
+}
 export async function getMenuByCanteen(canteenId: string): Promise<MenuItem[]> {
   return fetchMenuItems({ institution_id: undefined, availableOnly: true });
 }
@@ -937,10 +981,23 @@ export async function createOrderAfterPayment(params: {
       }),
     });
 
-    const data = await resp.json();
+    // Robust JSON parsing — never throw on empty/non-JSON response
+    let data: any = null;
+    try {
+      const text = await resp.text();
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      console.error('[Supabase] createOrderAfterPayment: response is not valid JSON');
+      return { data: null, error: 'Server returned an invalid response. Your payment status is being checked.' };
+    }
 
-    if (!resp.ok || !data.success) {
-      return { data: null, error: data.error || 'Order creation failed.' };
+    if (!resp.ok || !data?.success) {
+      return { data: null, error: data?.error || 'Order creation failed.' };
+    }
+
+    // If the server already returned an order_created: false, treat as pending
+    if (data.order_created === false && !data.order_id) {
+      return { data: null, error: 'Order is still being confirmed. Your payment is secure.' };
     }
 
     if (data.order_id) {
@@ -1006,14 +1063,22 @@ export async function verifyRazorpayPayment(params: {
       }),
     });
 
-    const data = await resp.json();
-
-    if (!resp.ok) {
-      return { success: false, error: data.error || 'Payment verification failed.' };
+    // Robust JSON parsing — never throw on empty/non-JSON response
+    let data: any = null;
+    try {
+      const text = await resp.text();
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      console.error('[Supabase] verifyRazorpayPayment: response is not valid JSON');
+      return { success: false, error: 'Server returned an invalid response.' };
     }
 
-    if (!data.success) {
-      return { success: false, error: data.error || 'Payment verification failed.' };
+    if (!resp.ok) {
+      return { success: false, error: data?.error || 'Payment verification failed.' };
+    }
+
+    if (!data?.success) {
+      return { success: false, error: data?.error || 'Payment verification failed.' };
     }
 
     return {

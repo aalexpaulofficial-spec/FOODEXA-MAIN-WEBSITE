@@ -1,42 +1,58 @@
 // Vercel Serverless Function: /api/create-order
 // Creates a FOODEXA order + order_items using the service_role key (bypasses RLS).
-// This is the SINGLE reliable order-creation path.
+// This is the SECONDARY order-creation path (fallback from verify-payment).
 //
 // Flow:
-//   Frontend -> POST /api/razorpay/verify-payment (verifies signature)
-//            -> POST /api/create-order (creates order + items)
-//   OR
-//   Frontend -> POST /api/razorpay/verify-payment (verifies + creates order atomically)
+//   Frontend -> POST /api/razorpay/verify-payment (primary — verifies + creates order)
+//   IF verify-payment returns order_created: false ->
+//   Frontend -> POST /api/create-order (fallback — verifies + creates order)
 //
-// Idempotency: If an order already exists for the same razorpay_payment_id /
-// razorpay_order_id, the existing order is returned (no duplicates).
+// Idempotency: If an order already exists for the same razorpay_payment_id,
+// the existing order is returned (no duplicates).
 
-import Razorpay from "razorpay";
 import crypto from "crypto";
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
 const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 
-function jsonError(res, status, message) {
-  return res.status(status).json({ success: false, error: message });
+function jsonRes(res, status, body) {
+  return res.status(status).json(body);
 }
 
-async function supabaseFetch(path, options = {}) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Server configuration error: missing Supabase credentials.');
-  }
-  const url = `${SUPABASE_URL.replace(/\/+$/, '')}${path}`;
-  const headers = {
+function getHeaders() {
+  return {
     'apikey': SUPABASE_SERVICE_ROLE_KEY,
     'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
     'Content-Type': 'application/json',
-    ...(options.headers || {}),
+    'Prefer': 'return=representation',
   };
-  const resp = await fetch(url, { ...options, headers });
-  const text = await resp.text();
+}
+
+async function sbGet(table, querystring, select = '*') {
+  const url = `${SUPABASE_URL}/rest/v1/${table}?${querystring}&select=${select}`;
+  const r = await fetch(url, { headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, Accept: 'application/json' } });
+  if (!r.ok) return { data: null, error: await r.text() };
+  const data = await r.json();
+  return { data: Array.isArray(data) ? data : [data], error: null };
+}
+
+async function sbInsert(table, rows) {
+  const url = `${SUPABASE_URL}/rest/v1/${table}`;
+  const r = await fetch(url, { method: 'POST', headers: getHeaders(), body: JSON.stringify(rows) });
+  const text = await r.text();
   let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch { /* not JSON */ }
-  return { resp, data, text };
+  try { data = text ? JSON.parse(text) : null; } catch { /* not json */ }
+  if (!r.ok) return { data: null, error: text };
+  return { data, error: null };
+}
+
+async function sbPatch(table, payload, filter) {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filter)) params.append(k, `eq.${v}`);
+  const url = `${SUPABASE_URL}/rest/v1/${table}?${params.toString()}`;
+  const r = await fetch(url, { method: 'PATCH', headers: getHeaders(), body: JSON.stringify(payload) });
+  if (!r.ok) return { error: await r.text() };
+  return { error: null };
 }
 
 export default async function handler(req, res) {
@@ -46,7 +62,14 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return jsonError(res, 405, 'Method Not Allowed. Use POST.');
+  if (req.method !== 'POST') {
+    return jsonRes(res, 405, { success: false, error: 'Method Not Allowed. Use POST.', code: 'METHOD_NOT_ALLOWED' });
+  }
+
+  // Validate server configuration
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return jsonRes(res, 500, { success: false, error: 'Server configuration error.', code: 'CONFIG_ERROR' });
+  }
 
   try {
     const {
@@ -57,8 +80,6 @@ export default async function handler(req, res) {
       phone,
       institution_id,
       canteen_id,
-      counter,
-      counter_code,
       items,
       itemsFull,
       total_amount,
@@ -72,16 +93,16 @@ export default async function handler(req, res) {
 
     // ── Validate required fields ──────────────────────────────────────
     if (!institution_id) {
-      return jsonError(res, 400, 'Institution ID is required.');
+      return jsonRes(res, 400, { success: false, error: 'Institution ID is required.', code: 'MISSING_INSTITUTION' });
     }
     if (!canteen_id) {
-      return jsonError(res, 400, 'Canteen ID is required.');
+      return jsonRes(res, 400, { success: false, error: 'Canteen ID is required.', code: 'MISSING_CANTEEN' });
     }
     if (!items || !items.length) {
-      return jsonError(res, 400, 'Order items are required.');
+      return jsonRes(res, 400, { success: false, error: 'Order items are required.', code: 'MISSING_ITEMS' });
     }
     if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
-      return jsonError(res, 400, 'Razorpay payment details are required.');
+      return jsonRes(res, 400, { success: false, error: 'Razorpay payment details are required.', code: 'MISSING_RAZORPAY' });
     }
 
     const orderItems = itemsFull || items;
@@ -89,7 +110,7 @@ export default async function handler(req, res) {
     // ── STEP 1: Verify Razorpay signature (server-side) ───────────────
     const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
     if (!razorpayKeySecret) {
-      return jsonError(res, 500, 'Server payment configuration error.');
+      return jsonRes(res, 500, { success: false, error: 'Server payment configuration error.', code: 'SECRET_MISSING' });
     }
 
     const expectedSignature = crypto
@@ -99,13 +120,12 @@ export default async function handler(req, res) {
 
     if (expectedSignature !== razorpay_signature) {
       console.error('[create-order] Signature verification FAILED for order:', razorpay_order_id);
-      return jsonError(res, 400, 'Payment verification failed.');
+      return jsonRes(res, 400, { success: false, error: 'Payment verification failed. Invalid signature.', code: 'SIGNATURE_MISMATCH' });
     }
 
     console.log('[create-order] Signature verified OK for payment:', razorpay_payment_id);
 
     // ── STEP 2: Server-side amount validation ───────────────────────────
-    // Calculate total from cart items (do NOT trust the browser's amount)
     let serverCalculatedTotal = 0;
     for (const item of orderItems) {
       const itemPrice = Number(item.price || item.offer_price || 0);
@@ -115,123 +135,97 @@ export default async function handler(req, res) {
     serverCalculatedTotal = Math.round(serverCalculatedTotal * 100) / 100;
     const sentTotal = Number(total_amount || 0);
 
-    // Allow a small rounding tolerance (1 rupee) to handle currency conversion differences
     if (sentTotal > 0 && Math.abs(serverCalculatedTotal - sentTotal) > 1) {
       console.error('[create-order] Amount mismatch: server=', serverCalculatedTotal, 'client=', sentTotal);
-      return jsonError(res, 400, 'Payment amount verification failed.');
+      return jsonRes(res, 400, { success: false, error: 'Payment amount verification failed.', code: 'AMOUNT_MISMATCH' });
     }
     const finalTotal = serverCalculatedTotal > 0 ? serverCalculatedTotal : sentTotal;
 
     // ── STEP 3: Idempotency check — has this payment already been processed? ──
-    const { resp: existingResp } = await supabaseFetch(
-      `/rest/v1/orders?razorpay_payment_id=eq.${encodeURIComponent(razorpay_payment_id)}&select=id,order_number,status,payment_status&limit=1`
+    const { data: existingByPayment } = await sbGet(
+      'orders',
+      `razorpay_payment_id=eq.${encodeURIComponent(razorpay_payment_id)}`,
+      'id,order_number,status,payment_status'
     );
 
-    if (existingResp.ok) {
-      const existingData = await existingResp.json().catch(() => null);
-      if (existingData && existingData.length > 0 && existingData[0].id) {
-        console.log('[create-order] Order already exists (idempotent):', existingData[0].id);
-        return res.json({
-          success: true,
-          order_created: true,
-          order_id: existingData[0].id,
-          order_number: existingData[0].order_number,
-          status: existingData[0].status,
-          already_existed: true,
-        });
-      }
+    if (existingByPayment && existingByPayment.length > 0 && existingByPayment[0].id) {
+      console.log('[create-order] Order already exists (idempotent):', existingByPayment[0].id);
+      return jsonRes(res, 200, {
+        success: true,
+        order_created: true,
+        order_id: existingByPayment[0].id,
+        order_number: existingByPayment[0].order_number,
+        status: existingByPayment[0].status,
+        already_existed: true,
+      });
     }
 
-    // ── STEP 4: Resolve the correct student_id (UUID from students table) ──
-    // The orders.student_id column references the students table UUID, NOT
-    // a session ID string. We look up or create the student record.
+    // Also check by razorpay_order_id
+    const { data: existingByRpo } = await sbGet(
+      'orders',
+      `razorpay_order_id=eq.${encodeURIComponent(razorpay_order_id)}`,
+      'id,order_number,status,payment_status'
+    );
+
+    if (existingByRpo && existingByRpo.length > 0 && existingByRpo[0].id) {
+      console.log('[create-order] Order already exists by razorpay_order_id (idempotent):', existingByRpo[0].id);
+      return jsonRes(res, 200, {
+        success: true,
+        order_created: true,
+        order_id: existingByRpo[0].id,
+        order_number: existingByRpo[0].order_number,
+        status: existingByRpo[0].status,
+        already_existed: true,
+      });
+    }
+
+    // ── STEP 4: Resolve student_id ─────────────────────────────────────
     const effectiveUserId = student_id || user_id || null;
     let resolvedStudentId = null;
 
-    if (effectiveUserId) {
-      // Try to find existing student record by email or user_id
-      const { resp: studentResp } = await supabaseFetch(
-        `/rest/v1/students?email=eq.${encodeURIComponent(email || '')}&institution_id=eq.${encodeURIComponent(institution_id)}&select=id&limit=1`
+    if (effectiveUserId && email) {
+      const { data: studentRows } = await sbGet(
+        'students',
+        `email=eq.${encodeURIComponent(email)}&institution_id=eq.${encodeURIComponent(institution_id)}`,
+        'id'
       );
-      if (studentResp.ok) {
-        const studentData = await studentResp.json().catch(() => null);
-        if (studentData && studentData.length > 0) {
-          resolvedStudentId = studentData[0].id;
-        }
+      if (studentRows?.[0]) {
+        resolvedStudentId = studentRows[0].id;
       }
-
-      // If not found, create a student record
       if (!resolvedStudentId) {
         const studentName = customer_name || (email ? email.split('@')[0] : 'Customer');
-        const studentPayload = {
+        const { data: created } = await sbInsert('students', {
           email: email || '',
           full_name: studentName,
           institution_id,
-          student_id: null,
-          registration_id: null,
-        };
-        const { resp: createStudentResp, data: createdStudent } = await supabaseFetch('/rest/v1/students', {
-          method: 'POST',
-          body: JSON.stringify(studentPayload),
         });
-        if (createStudentResp.ok && createdStudent && Array.isArray(createdStudent) && createdStudent[0]) {
-          resolvedStudentId = createdStudent[0].id;
-        } else if (createStudentResp.ok && createdStudent) {
-          resolvedStudentId = createdStudent.id;
+        if (created) {
+          resolvedStudentId = Array.isArray(created) ? created[0]?.id : created.id;
         }
       }
     }
 
-    // ── STEP 5: Validate institution and canteen belong together ────────
-    const { resp: canteenResp } = await supabaseFetch(
-      `/rest/v1/canteens?id=eq.${encodeURIComponent(canteen_id)}&select=id,institution_id,name&limit=1`
-    );
+    // ── STEP 5: Validate canteen belongs to institution ────────────────
     let canteenName = '';
-    let canteenInstId = '';
-    if (canteenResp.ok) {
-      const canteenData = await canteenResp.json().catch(() => null);
-      if (canteenData && canteenData.length > 0) {
-        canteenName = canteenData[0].name || '';
-        canteenInstId = canteenData[0].institution_id || '';
-      }
-    }
-    if (canteenInstId && canteenInstId !== institution_id) {
-      return jsonError(res, 400, 'The selected canteen does not belong to your institution.');
-    }
-
-    // ── STEP 6: Validate menu items belong to the institution ────────────
-    const menuItemIds = orderItems.map((i) => i.id || i.menu_item_id).filter(Boolean);
-    if (menuItemIds.length !== orderItems.length) {
-      return jsonError(res, 400, 'One or more cart items are invalid. Please refresh your cart.');
-    }
-
-    const { resp: menuResp } = await supabaseFetch(
-      `/rest/v1/menu_items?${menuItemIds.map((id) => `id=eq.${id}`).join('&')}&select=id,institution_id,canteen_id&limit=100`
-    );
-
-    if (menuResp.ok) {
-      const menuData = await menuResp.json().catch(() => null);
-      if (menuData && menuData.length > 0) {
-        for (const item of orderItems) {
-          const mi = menuData.find((m) => m.id === (item.id || item.menu_item_id));
-          if (!mi) {
-            return jsonError(res, 400, 'One or more cart items are no longer available. Please refresh your cart.');
-          }
-          if (mi.institution_id && mi.institution_id !== institution_id) {
-            return jsonError(res, 400, 'Your cart contains an item from another institution.');
-          }
+    if (canteen_id) {
+      const { data: canteenRows } = await sbGet('canteens', `id=eq.${canteen_id}`, 'id,name,institution_id');
+      if (canteenRows?.[0]) {
+        canteenName = canteenRows[0].name || '';
+        if (canteenRows[0].institution_id && canteenRows[0].institution_id !== institution_id) {
+          return jsonRes(res, 400, { success: false, error: 'The selected canteen does not belong to your institution.', code: 'CANTEEN_MISMATCH' });
         }
       }
     }
 
-    // ── STEP 7: Generate pickup code and token number ──────────────────
+    // ── STEP 6: Generate pickup code and token number ──────────────────
     const now = new Date();
     const nowISO = now.toISOString();
-    const pickupPrefix = pickup_type || (counter_code || customer_name || '').trim().charAt(0).toUpperCase() || 'L';
-    const dateStr = nowISO.slice(0, 10).replace(/-/g, '');
+    const pickupPrefix = pickup_type || 'B';
     const orderNumber = Date.now();
+    const pickupCode = `${pickupPrefix}-${String(orderNumber % 10000).padStart(4, '0')}`;
+    const tokenNumber = `TKN-${String(orderNumber % 10000).padStart(4, '0')}`;
 
-    // ── STEP 8: Build and insert the order ──────────────────────────────
+    // ── STEP 7: Build and insert the order ──────────────────────────────
     const orderPayload = {
       student_id: resolvedStudentId,
       email: email || '',
@@ -239,10 +233,8 @@ export default async function handler(req, res) {
       phone: phone || null,
       institution_id,
       canteen_id,
-      counter: counter || canteenName || 'Counter',
-      counter_code: counter_code || canteenName || 'Counter',
-      counter_name: canteenName || null,
-      canteen_name: canteenName || null,
+      counter: canteenName || 'Counter',
+      counter_code: canteenName || 'Counter',
       total_amount: finalTotal,
       transaction_amount: finalTotal,
       status: 'confirmed',
@@ -253,10 +245,10 @@ export default async function handler(req, res) {
       razorpay_payment_id,
       razorpay_signature,
       order_number: orderNumber,
-      pickup_code: `${pickupPrefix}-${String(orderNumber % 10000).padStart(4, '0')}`,
-      qr_pickup_code: `${pickupPrefix}-${String(orderNumber % 10000).padStart(4, '0')}`,
-      token_number: `TKN-${String(orderNumber % 10000).padStart(4, '0')}`,
-      pickup_token: `TKN-${String(orderNumber % 10000).padStart(4, '0')}`,
+      pickup_code: pickupCode,
+      qr_pickup_code: pickupCode,
+      token_number: tokenNumber,
+      pickup_token: tokenNumber,
       pickup_type: pickup_type || 'lunch',
       notes: notes || null,
       paid_at: nowISO,
@@ -267,33 +259,29 @@ export default async function handler(req, res) {
       cancel_deadline_at: new Date(now.getTime() + 30 * 1000).toISOString(),
       created_at: nowISO,
       updated_at: nowISO,
-      institution_code: null,
     };
 
-    const { resp: orderInsertResp, data: createdOrder, text: orderText } = await supabaseFetch('/rest/v1/orders', {
-      method: 'POST',
-      body: JSON.stringify([orderPayload]),
-    });
+    const { data: createdOrder, error: orderError } = await sbInsert('orders', [orderPayload]);
 
-    if (!orderInsertResp.ok) {
-      console.error('[create-order] Order insert failed:', orderText);
-      return jsonError(res, 500, 'Order creation failed. Please try again.');
+    if (orderError || !createdOrder || (Array.isArray(createdOrder) && createdOrder.length === 0)) {
+      console.error('[create-order] Order insert failed:', orderError);
+      return jsonRes(res, 500, { success: false, error: 'Order creation failed. Your payment status is being checked securely.', code: 'DB_ERROR' });
     }
 
     const orderRow = Array.isArray(createdOrder) ? createdOrder[0] : createdOrder;
-    const orderId = orderRow?.id || orderRow?.[0]?.id;
+    const orderId = orderRow?.id;
     if (!orderId) {
-      return jsonError(res, 500, 'Order creation returned no ID.');
+      return jsonRes(res, 500, { success: false, error: 'Order creation returned no ID.', code: 'NO_ORDER_ID' });
     }
 
     console.log('[create-order] Order created:', orderId);
 
-    // ── STEP 9: Insert order_items ──────────────────────────────────────
+    // ── STEP 8: Insert order_items ──────────────────────────────────────
     const orderItemsPayload = orderItems.map((item) => ({
       order_id: orderId,
       menu_item_id: item.id || item.menu_item_id || null,
       name: item.name || 'Item',
-      variant: item.variant || item.food_type || item.category || null,
+      variant: item.variant || null,
       quantity: Number(item.quantity || 1),
       price: Number(item.price || 0),
       subtotal: Number(item.subtotal || (Number(item.price || 0) * Number(item.quantity || 1))),
@@ -301,33 +289,22 @@ export default async function handler(req, res) {
       is_veg: item.is_veg !== undefined ? item.is_veg : null,
     }));
 
-    const { resp: itemsResp, text: itemsText } = await supabaseFetch('/rest/v1/order_items', {
-      method: 'POST',
-      body: JSON.stringify(orderItemsPayload),
-    });
-
-    if (!itemsResp.ok) {
-      console.error('[create-order] order_items insert failed:', itemsText);
-      // Order was created but items failed. Mark order for recovery.
-      await supabaseFetch(`/rest/v1/orders?id=eq.${orderId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ items_creation_error: itemsText || 'Unknown error', updated_at: new Date().toISOString() }),
-      });
+    const { error: itemsError } = await sbInsert('order_items', orderItemsPayload);
+    if (itemsError) {
+      console.error('[create-order] order_items insert failed:', itemsError);
+      await sbPatch('orders', { items_creation_error: itemsError, updated_at: nowISO }, { id: orderId });
     }
 
-    // ── STEP 10: Update payment record ─────────────────────────────────
+    // ── STEP 9: Update payment record ─────────────────────────────────
     if (razorpay_order_id) {
-      await supabaseFetch(`/rest/v1/payments?razorpay_order_id=eq.${encodeURIComponent(razorpay_order_id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          payment_status: 'paid',
-          order_id: orderId,
-          updated_at: new Date().toISOString(),
-        }),
-      });
+      await sbPatch('payments', {
+        payment_status: 'paid',
+        order_id: orderId,
+        updated_at: nowISO,
+      }, { razorpay_order_id });
     }
 
-    // ── STEP 11: Create notifications (best-effort) ────────────────────
+    // ── STEP 10: Create notifications (best-effort) ────────────────────
     const notifs = [];
     if (resolvedStudentId || student_id) {
       notifs.push({
@@ -352,28 +329,22 @@ export default async function handler(req, res) {
       });
     }
     if (notifs.length > 0) {
-      await supabaseFetch('/rest/v1/notifications', {
-        method: 'POST',
-        body: JSON.stringify(notifs),
-      });
+      await sbInsert('notifications', notifs);
     }
 
-    // ── STEP 12: Create order_status_history entry ─────────────────────
-    await supabaseFetch('/rest/v1/order_status_history', {
-      method: 'POST',
-      body: JSON.stringify([{
-        order_id: orderId,
-        user_id: resolvedStudentId || student_id || null,
-        institution_id,
-        from_status: null,
-        to_status: 'confirmed',
-        payment_status: 'paid',
-        note: 'Payment verified and order created via /api/create-order.',
-        created_at: nowISO,
-      }]),
-    });
+    // ── STEP 11: Create order_status_history entry ─────────────────────
+    await sbInsert('order_status_history', [{
+      order_id: orderId,
+      user_id: resolvedStudentId || student_id || null,
+      institution_id,
+      from_status: null,
+      to_status: 'confirmed',
+      payment_status: 'paid',
+      note: 'Payment verified and order created via /api/create-order.',
+      created_at: nowISO,
+    }]);
 
-    return res.json({
+    return jsonRes(res, 200, {
       success: true,
       order_created: true,
       order_id: orderId,
@@ -383,6 +354,10 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('[create-order] Error:', error);
-    return jsonError(res, 500, 'Order creation failed. Please try again.');
+    return jsonRes(res, 500, {
+      success: false,
+      error: 'Order creation failed. Your payment status is being checked securely.',
+      code: 'SERVER_ERROR',
+    });
   }
 }

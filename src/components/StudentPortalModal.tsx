@@ -1254,10 +1254,19 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
 
             if (!verifyResult.success) {
               console.error('[FOODEXA PAYMENT ERROR] verify', verifyResult.error);
-              setError('We could not verify your payment. Any amount debited will be reconciled automatically.');
-              setActiveTab('payment_failed');
+              // Even if verification fails, the payment might have succeeded.
+              // Show recovery state, not payment failed.
+              const pendingInfo = {
+                razorpay_order_id,
+                razorpay_payment_id,
+                message: 'Your payment status is being verified securely. Your cart is safe.',
+              };
+              setPaidPendingConfirmation(pendingInfo);
+              setCart([]);
+              setShowCart(false);
+              setActiveTab('payment_success');
               resetPaymentButton();
-              if (triggerToast) triggerToast('Payment Verification Failed', verifyResult.error || 'Contact support.', 'warning');
+              if (triggerToast) triggerToast('Payment Processing', 'Your payment is being verified. Please wait a moment.', 'info');
               return;
             }
 
@@ -1280,9 +1289,25 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
             }
 
             // ── CASE 2: Server verified payment but order not created ──
-            // Try client-side fallback (createOrderAfterPayment with RLS)
-            console.warn('[FOODEXA PAYMENT] Server did not create order, trying client-side fallback');
-            const createResult = await createOrderAfterPayment({
+            // Payment succeeded but order creation is pending — show recovery state
+            console.warn('[FOODEXA PAYMENT] Payment verified but order pending, entering recovery mode');
+            const pendingInfo = {
+              razorpay_order_id,
+              razorpay_payment_id,
+              message: 'Payment received. Your FOODEXA order is being confirmed...',
+            };
+            setPaidPendingConfirmation(pendingInfo);
+            setCart([]);
+            setShowCart(false);
+            setCouponDiscount(0);
+            setCouponCode('');
+            setActiveTab('payment_success');
+            resetPaymentButton();
+            setError(null);
+            if (triggerToast) triggerToast('Payment Received', 'Your order is being confirmed. This may take a moment.', 'success');
+
+            // Try client-side fallback in background (don't block UI)
+            createOrderAfterPayment({
               user_id: authUserId || '',
               email: customerEmail,
               role: validatedRole || 'student',
@@ -1299,38 +1324,33 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
               payment_method: 'razorpay',
               estimated_prep_time_minutes: estimatedPrepTime,
               notes: kitchenNotes || null,
+            }).then(async (createResult) => {
+              if (createResult.data) {
+                console.log('[FOODEXA PAYMENT] Background order creation succeeded:', createResult.data.id);
+                setPaidPendingConfirmation(null);
+                await refreshOrders();
+              } else {
+                console.warn('[FOODEXA PAYMENT] Background order creation failed:', createResult.error);
+              }
+            }).catch((bgErr) => {
+              console.warn('[FOODEXA PAYMENT] Background order creation exception:', bgErr);
             });
-
-            if (createResult.error || !createResult.data) {
-              console.error('[FOODEXA PAYMENT ERROR] create-order-after-payment', createResult.error);
-              // Payment was verified but order creation failed both server-side and client-side
-              const errorMsg = 'Payment was received, but we could not create the order. Please retry order confirmation.';
-              setError(errorMsg);
-              setActiveTab('payment_failed');
-              resetPaymentButton();
-              if (triggerToast) triggerToast('Order Pending', errorMsg, 'warning');
-              return;
-            }
-
-            console.log('[FOODEXA PAYMENT] Client-side order created:', createResult.data.id);
-            await refreshOrders();
-            setCart([]);
-            setPaidPendingConfirmation(null);
-            setShowCart(false);
-            setCouponDiscount(0);
-            setCouponCode('');
-            setActiveTab('payment_success');
-            resetPaymentButton();
-            setError(null);
-            if (triggerToast) triggerToast('Order Placed!', 'Your order is being prepared.', 'success');
 
           } catch (verifyErr: any) {
             console.error('[FOODEXA PAYMENT ERROR] confirm', verifyErr?.message || verifyErr);
             // Payment was received but something went wrong during verification
-            setError('Payment was received, but we could not confirm your order. Please retry order confirmation.');
-            setActiveTab('payment_failed');
+            // Show recovery state, not payment failed
+            const pendingInfo = {
+              razorpay_order_id: razorpay_order_id || '',
+              razorpay_payment_id: razorpay_payment_id || '',
+              message: 'Payment received. Your order is being confirmed securely.',
+            };
+            setPaidPendingConfirmation(pendingInfo);
+            setCart([]);
+            setShowCart(false);
+            setActiveTab('payment_success');
             resetPaymentButton();
-            if (triggerToast) triggerToast('Payment Received', 'Order confirmation needs review. Please contact support.', 'warning');
+            if (triggerToast) triggerToast('Payment Received', 'Order confirmation is in progress. Your payment is secure.', 'info');
           }
         },
 
@@ -1812,13 +1832,10 @@ if (!o && paidPendingConfirmation) {
                           <button
                             onClick={async () => {
                               await refreshOrders();
-                              // After refresh, if the order appeared, it will show the live tracking
-                              // If not, show error
                               setTimeout(() => {
                                 const latestActive = orders.find(ord => ['pending','confirmed','preparing','cooking','quality_check','packed','ready','completed'].includes(ord.status));
-                                if (!latestActive) {
-                                  setError('Payment was received, but we could not create the order. Please retry order confirmation.');
-                                  setActiveTab('payment_failed');
+                                if (latestActive) {
+                                  setPaidPendingConfirmation(null);
                                 }
                               }, 2000);
                             }}
@@ -2099,6 +2116,14 @@ if (!o && paidPendingConfirmation) {
                       <p className="text-sm text-red-600 font-semibold">{error || 'Something went wrong during payment.'}</p>
                     </div>
 
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-left">
+                      <p className="text-xs font-bold text-amber-800 mb-1">Important</p>
+                      <p className="text-xs text-amber-700">
+                        If your payment was debited, it will be automatically refunded within 3-5 business days.
+                        You will not be charged again.
+                      </p>
+                    </div>
+
                     <div className="flex gap-4">
                       <button
                         onClick={() => { setError(null); setActiveTab('checkout'); }}
@@ -2110,7 +2135,7 @@ if (!o && paidPendingConfirmation) {
                         onClick={() => { setError(null); setActiveTab('explore'); }}
                         className="flex-1 rounded-2xl border border-slate-200 bg-white py-4 text-sm font-black text-gray-400 hover:bg-slate-50 hover:text-slate-800 transition-all shadow-sm"
                       >
-                        Cancel
+                        Browse Menu
                       </button>
                     </div>
                   </div>

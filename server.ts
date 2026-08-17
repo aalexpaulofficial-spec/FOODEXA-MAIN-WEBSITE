@@ -372,87 +372,228 @@ notes: {
    });
 
   // ==================== RAZORPAY: VERIFY PAYMENT ====================
+  // Verifies Razorpay signature AND creates the FOODEXA order + order_items server-side.
+  // This is the PRIMARY order-creation path (matches the Vercel function behavior).
+  // Idempotent: if an order already exists for this payment, returns the existing order.
   app.post("/api/razorpay/verify-payment", async (req, res) => {
     try {
-      console.log("Verifying Razorpay Payment");
-      console.log(req.body);
-      console.log(process.env.RAZORPAY_KEY_ID ? "KEY FOUND":"KEY MISSING");
-      console.log(process.env.RAZORPAY_KEY_SECRET ? "SECRET FOUND":"SECRET MISSING");
+      console.log("[verify-payment] Verifying Razorpay Payment");
 
       if (!razorpay) {
-        return res.status(503).json({ error: "Payment gateway not configured." });
+        return res.status(503).json({ success: false, error: "Payment gateway not configured.", code: "RAZORPAY_CONFIG_ERROR" });
       }
 
-      const { razorpay_order_id, razorpay_payment_id, razorpay_signature, user_id, order_id } = req.body;
+      const {
+        razorpay_order_id, razorpay_payment_id, razorpay_signature,
+        user_id, order_id, institution_id, canteen_id, email,
+        customer_name, phone, items, total_amount, pickup_type,
+        notes, counter, counter_code,
+      } = req.body || {};
 
       if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-        return res.status(400).json({ error: "Missing payment verification parameters." });
+        return res.status(400).json({ success: false, error: "Missing payment verification parameters.", code: "MISSING_PARAMS" });
       }
 
-      // Verify signature using HMAC SHA256
+      // ── STEP 1: Verify HMAC signature ──
       const expectedSignature = crypto
         .createHmac('sha256', razorpayKeySecret)
         .update(`${razorpay_order_id}|${razorpay_payment_id}`)
         .digest('hex');
 
-      const isSignatureValid = expectedSignature === razorpay_signature;
-
-      if (!isSignatureValid) {
-        // Signature mismatch - do NOT mark as paid
-        console.error("[Razorpay] Signature verification FAILED for order:", razorpay_order_id);
-
-        // Update payment record with failed verification
+      if (expectedSignature !== razorpay_signature) {
+        console.error("[verify-payment] Signature FAILED for order:", razorpay_order_id);
         await supabaseQuery('payments', 'PATCH', {
           payment_status: 'signature_mismatch',
           razorpay_status: 'verification_failed',
-          razorpay_payment_id: razorpay_payment_id,
-          razorpay_signature: razorpay_signature,
+          razorpay_payment_id, razorpay_signature,
           updated_at: new Date().toISOString(),
-        }, { razorpay_order_id: razorpay_order_id });
-
-        // Use query params for Supabase PATCH filter
-        return res.status(400).json({
-          success: false,
-          error: "Payment verification failed. Invalid signature. Please contact support.",
-        });
+        }, { razorpay_order_id });
+        return res.status(400).json({ success: false, error: "Payment verification failed. Invalid signature.", code: "SIGNATURE_MISMATCH" });
       }
 
-      // Signature is valid - fetch payment details from Razorpay
+      // ── STEP 2: Fetch payment details from Razorpay ──
       let paymentDetails: any = null;
       try {
         paymentDetails = await razorpay.payments.fetch(razorpay_payment_id);
-      } catch (fetchErr) {
-        console.warn("[Razorpay] Could not fetch payment details:", fetchErr);
+      } catch (fetchErr: any) {
+        console.warn("[verify-payment] Could not fetch payment details:", fetchErr.message);
       }
 
-      // Update payment record in Supabase as paid/verified
-      const paymentUpdate: any = {
+      const razorpayStatus = paymentDetails?.status || 'captured';
+      if (razorpayStatus !== 'captured' && razorpayStatus !== 'authorized' && razorpayStatus !== 'initiated') {
+        return res.status(400).json({ success: false, error: "Payment was not captured. Please contact support.", code: "PAYMENT_NOT_CAPTURED" });
+      }
+
+      // ── STEP 3: Update payment record as paid ──
+      await supabaseQuery('payments', 'PATCH', {
         payment_status: 'paid',
-        razorpay_status: paymentDetails?.status || 'captured',
-        razorpay_payment_id: razorpay_payment_id,
-        razorpay_signature: razorpay_signature,
-        payment_method: paymentDetails?.method || null,
+        razorpay_status: razorpayStatus,
+        razorpay_payment_id, razorpay_signature,
+        payment_method: paymentDetails?.method || 'razorpay',
         transaction_time: new Date().toISOString(),
         webhook_verified: false,
         updated_at: new Date().toISOString(),
+      }, { razorpay_order_id });
+
+      // ── STEP 4: Read payment record for context ──
+      const paymentResp = await supabaseQuery('payments', 'GET', undefined, { razorpay_order_id });
+      const paymentRow = Array.isArray(paymentResp.data) ? paymentResp.data[0] : paymentResp.data;
+
+      // ── STEP 5: Idempotency — check if order already exists ──
+      const existingByPayment = await supabaseQuery('orders', 'GET', undefined, { razorpay_payment_id });
+      const existingRows = Array.isArray(existingByPayment.data) ? existingByPayment.data : (existingByPayment.data ? [existingByPayment.data] : []);
+      if (existingRows.length > 0 && existingRows[0]?.id) {
+        console.log("[verify-payment] Order already exists (idempotent):", existingRows[0].id);
+        return res.json({
+          success: true, message: "Payment verified and order confirmed.",
+          payment_id: razorpay_payment_id, razorpay_order_id,
+          order_id: existingRows[0].id, order_created: true, already_existed: true,
+        });
+      }
+
+      // ── STEP 6: Resolve items, institution, canteen ──
+      let resolvedItems: any[] = [];
+      if (paymentRow?.items_snapshot) {
+        try { resolvedItems = JSON.parse(paymentRow.items_snapshot); } catch { resolvedItems = []; }
+      }
+      if (resolvedItems.length === 0 && items) resolvedItems = items;
+
+      const resolveInstitutionId = institution_id || paymentRow?.institution_id || null;
+      const resolveCanteenId = canteen_id || paymentRow?.canteen_id || null;
+      const resolveEmail = email || paymentRow?.customer_email || '';
+      const resolveName = customer_name || paymentRow?.customer_name || 'Customer';
+      const resolvePhone = phone || paymentRow?.customer_phone || '0000000000';
+      const resolveUserId = user_id || paymentRow?.user_id || null;
+
+      let canteenName = '';
+      if (resolveCanteenId) {
+        const canteenResp = await supabaseQuery('canteens', 'GET', undefined, { id: resolveCanteenId });
+        const canteenRows = Array.isArray(canteenResp.data) ? canteenResp.data : (canteenResp.data ? [canteenResp.data] : []);
+        if (canteenRows[0]) {
+          canteenName = canteenRows[0].name || '';
+          if (canteenRows[0].institution_id && canteenRows[0].institution_id !== resolveInstitutionId) {
+            return res.status(400).json({ success: false, error: "Canteen does not belong to your institution.", code: "CANTEEN_MISMATCH" });
+          }
+        }
+      }
+
+      const totalFromItems = resolvedItems.reduce((s: number, i: any) => s + (Number(i.price || 0) * Number(i.quantity || 1)), 0);
+      let finalTotal = totalFromItems;
+      if (paymentDetails?.amount) {
+        const razorpayRupees = Number(paymentDetails.amount) / 100;
+        finalTotal = razorpayRupees;
+      }
+
+      // ── STEP 7: Resolve student_id ──
+      let resolvedStudentId: string | null = null;
+      if (resolveUserId) {
+        const studentResp = await supabaseQuery('students', 'GET', undefined, { email: resolveEmail, institution_id: resolveInstitutionId || '' });
+        const studentRows = Array.isArray(studentResp.data) ? studentResp.data : (studentResp.data ? [studentResp.data] : []);
+        if (studentRows[0]?.id) resolvedStudentId = studentRows[0].id;
+
+        if (!resolvedStudentId) {
+          const created = await supabaseQuery('students', 'POST', {
+            email: resolveEmail || '', full_name: resolveName || 'Customer', institution_id: resolveInstitutionId,
+          });
+          if (created.data) {
+            resolvedStudentId = Array.isArray(created.data) ? created.data[0]?.id : created.data.id;
+          }
+        }
+      }
+
+      // ── STEP 8: Generate pickup code ──
+      const now = new Date();
+      const nowISO = now.toISOString();
+      const orderNumber = Date.now();
+      const pickupPrefix = pickup_type || 'B';
+      const pickupCode = `${pickupPrefix}-${String(orderNumber % 10000).padStart(4, '0')}`;
+      const tokenNumber = `TKN-${String(orderNumber % 10000).padStart(4, '0')}`;
+
+      // ── STEP 9: Create order ──
+      const orderPayload = {
+        student_id: resolvedStudentId, email: resolveEmail, customer_name: resolveName, phone: resolvePhone,
+        institution_id: resolveInstitutionId, canteen_id: resolveCanteenId,
+        counter: canteenName || 'Counter', counter_code: canteenName || 'Counter',
+        total_amount: finalTotal, transaction_amount: finalTotal,
+        status: 'confirmed', order_status: 'confirmed',
+        payment_status: 'paid', payment_method: 'razorpay',
+        razorpay_order_id, razorpay_payment_id, razorpay_signature,
+        order_number: orderNumber, pickup_code: pickupCode, qr_pickup_code: pickupCode,
+        token_number: tokenNumber, pickup_token: tokenNumber,
+        pickup_type: pickup_type || 'lunch', notes: notes || null,
+        paid_at: nowISO, accepted_at: nowISO,
+        kitchen_status: 'pending', counter_status: 'incoming',
+        estimated_ready_at: new Date(now.getTime() + 15 * 60000).toISOString(),
+        cancel_deadline_at: new Date(now.getTime() + 30 * 1000).toISOString(),
+        created_at: nowISO, updated_at: nowISO,
       };
 
-      await supabaseQuery('payments', 'PATCH', paymentUpdate, { razorpay_order_id: razorpay_order_id });
+      const { data: createdOrders, error: orderError } = await supabaseQuery('orders', 'POST', [orderPayload]);
 
-       // NOTE: Order creation happens client-side via createOrderAfterPayment after this endpoint returns.
-       // The client inserts the order into Supabase with all Razorpay fields after signature verification succeeds.
+      if (orderError || !createdOrders || (Array.isArray(createdOrders) && createdOrders.length === 0)) {
+        console.error("[verify-payment] CRITICAL: Order insert failed:", orderError);
+        await supabaseQuery('payments', 'PATCH', {
+          order_creation_error: String(orderError || 'Unknown error'),
+          needs_manual_order: true, updated_at: nowISO,
+        }, { razorpay_order_id });
+        return res.json({
+          success: true, message: "Payment verified. Order is being confirmed.",
+          payment_id: razorpay_payment_id, razorpay_order_id,
+          order_id: null, order_created: false, code: "ORDER_PENDING",
+        });
+      }
+
+      const createdOrder = Array.isArray(createdOrders) ? createdOrders[0] : createdOrders;
+      const orderId = createdOrder?.id;
+      console.log("[verify-payment] Order created:", orderId);
+
+      // ── STEP 10: Insert order_items ──
+      if (resolvedItems.length > 0) {
+        const itemsPayload = resolvedItems.map((item: any) => ({
+          order_id: orderId,
+          menu_item_id: item.id || item.menu_item_id || null,
+          name: item.name || 'Item',
+          variant: item.variant || null,
+          quantity: Number(item.quantity || 1),
+          price: Number(item.price || 0),
+          subtotal: Number(item.subtotal || (Number(item.price || 0) * Number(item.quantity || 1))),
+          image_url: item.image_url || null,
+          is_veg: item.is_veg !== undefined ? item.is_veg : null,
+        }));
+        const itemsResult = await supabaseQuery('order_items', 'POST', itemsPayload);
+        if (itemsResult.error) {
+          console.error("[verify-payment] order_items insert failed:", itemsResult.error);
+        }
+      }
+
+      // ── STEP 11: Create order_status_history ──
+      await supabaseQuery('order_status_history', 'POST', [{
+        order_id: orderId, user_id: resolvedStudentId || null,
+        institution_id: resolveInstitutionId, from_status: null, to_status: 'confirmed',
+        payment_status: 'paid', note: 'Payment verified and order created.', created_at: nowISO,
+      }]);
+
+      // ── STEP 12: Create notifications ──
+      const notifs: any[] = [];
+      if (resolvedStudentId) {
+        notifs.push({ type: 'order_confirmed', title: 'Order Confirmed!', message: 'Your order has been confirmed and is being prepared.', user_id: resolvedStudentId, created_at: nowISO, read: false, order_id: orderId });
+      }
+      if (resolveInstitutionId) {
+        notifs.push({ type: 'new_order', title: 'New Order Received', message: 'A new order has been placed and payment confirmed.', institution_id: resolveInstitutionId, created_at: nowISO, read: false, order_id: orderId });
+      }
+      if (notifs.length > 0) await supabaseQuery('notifications', 'POST', notifs);
 
       return res.json({
-        success: true,
-        message: "Payment verified and order updated successfully.",
-        payment_id: razorpay_payment_id,
-        order_id: razorpay_order_id,
+        success: true, message: "Payment verified and order created successfully.",
+        payment_id: razorpay_payment_id, razorpay_order_id,
+        order_id: orderId, order_created: true,
       });
 
     } catch (error: any) {
-      console.error("[Razorpay] Verify payment error:", error);
+      console.error("[verify-payment] Error:", error);
       return res.status(500).json({
-        error: error?.message || "Payment verification failed due to server error.",
+        success: false, error: "Payment verification failed due to server error. Your payment status is being checked securely.",
+        code: "SERVER_ERROR",
       });
     }
   });
@@ -794,10 +935,12 @@ notes: {
       if (!orderResp.ok) {
         const errText = await orderResp.text();
         console.error('[CreateOrder] Order insert failed:', errText);
-        return res.status(500).json({ success: false, error: 'Failed to create order in database.' });
+        return res.status(500).json({ success: false, error: 'Failed to create order in database. Your payment status is being checked securely.', code: 'DB_ERROR' });
       }
 
-      const orderRows = await orderResp.json();
+      const orderText = await orderResp.text();
+      let orderRows: any = null;
+      try { orderRows = orderText ? JSON.parse(orderText) : null; } catch { /* not json */ }
       const orderData = Array.isArray(orderRows) ? orderRows[0] : orderRows;
       const orderId = orderData?.id;
       if (!orderId) {
@@ -912,13 +1055,13 @@ notes: {
         success: true,
         order_created: true,
         order_id: orderId,
-        order_number: orderData.order_number,
-        status: orderData.status || 'confirmed',
+        order_number: orderData?.order_number,
+        status: orderData?.status || 'confirmed',
       });
 
     } catch (err: any) {
       console.error('[CreateOrder] Error:', err);
-      return res.status(500).json({ success: false, error: err?.message || 'Order creation failed.' });
+      return res.status(500).json({ success: false, error: err?.message || 'Order creation failed. Your payment status is being checked securely.', code: 'SERVER_ERROR' });
     }
   });
 

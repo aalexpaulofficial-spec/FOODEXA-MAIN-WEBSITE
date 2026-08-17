@@ -19,7 +19,7 @@ interface OrderDetailsModalProps {
 
 const statusLabel = (s: Order['status']): string => {
   const m: Record<Order['status'], string> = {
-    pending: 'Pending', accepted: 'Accepted', confirmed: 'Confirmed', preparing: 'Preparing', cooking: 'Cooking',
+    pending: 'Payment Successful', payment_successful: 'Payment Successful', accepted: 'Accepted', confirmed: 'Confirmed', preparing: 'Preparing', cooking: 'Cooking',
     quality_check: 'Quality Check', packed: 'Packed', ready: 'Ready', completed: 'Completed', cancelled: 'Cancelled',
   };
   return m[s] || s;
@@ -27,7 +27,7 @@ const statusLabel = (s: Order['status']): string => {
 
 const statusStyle = (s: Order['status']): string => {
   const m: Record<Order['status'], string> = {
-    pending: 'bg-amber-50 text-amber-700 border-amber-200',
+    pending: 'bg-blue-50 text-blue-700 border-blue-200', payment_successful: 'bg-blue-50 text-blue-700 border-blue-200',
     accepted: 'bg-blue-50 text-blue-700 border-blue-200',
     confirmed: 'bg-blue-50 text-blue-700 border-blue-200',
     preparing: 'bg-violet-50 text-violet-700 border-violet-200',

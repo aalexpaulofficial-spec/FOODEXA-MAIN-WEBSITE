@@ -158,21 +158,29 @@ export const ActiveLiveOrder: React.FC<ActiveLiveOrderProps> = ({
       {!isCancelled && (
         <div className="my-4">
           <div className="flex items-center gap-1">
-            {STUDENT_TIMELINE_LABELS.map((label, i) => (
-              <React.Fragment key={i}>
-                <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold transition-all ${
-                  i < stage ? 'bg-white/20 text-white' :
-                  i === stage ? 'bg-white text-[#1D1D1F] shadow-lg' :
-                  'bg-white/5 text-white/40'
-                }`}>
-                  {i < stage ? <CheckCircle2 className="w-3 h-3" /> : <span>{i + 1}</span>}
-                  <span className="hidden sm:inline">{label}</span>
-                </div>
-                {i < STUDENT_TIMELINE_LABELS.length - 1 && (
-                  <div className={`flex-1 h-0.5 rounded-full ${i < stage ? 'bg-white/40' : 'bg-white/10'}`} />
-                )}
-              </React.Fragment>
-            ))}
+            {STUDENT_TIMELINE_LABELS.map((label, i) => {
+              const timestamp = i === 0 ? order.paid_at || order.created_at
+                : i === 1 ? order.accepted_at
+                : i === 2 ? order.preparing_at
+                : i === 3 ? order.ready_at
+                : i === 4 ? order.completed_at
+                : null;
+              return (
+                <React.Fragment key={i}>
+                  <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold transition-all ${
+                    i < stage ? 'bg-white/20 text-white' :
+                    i === stage ? 'bg-white text-[#1D1D1F] shadow-lg' :
+                    'bg-white/5 text-white/40'
+                  }`}>
+                    {i < stage ? <CheckCircle2 className="w-3 h-3" /> : <span>{i + 1}</span>}
+                    <span className="hidden sm:inline">{label}</span>
+                  </div>
+                  {i < STUDENT_TIMELINE_LABELS.length - 1 && (
+                    <div className={`flex-1 h-0.5 rounded-full ${i < stage ? 'bg-white/40' : 'bg-white/10'}`} />
+                  )}
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
       )}

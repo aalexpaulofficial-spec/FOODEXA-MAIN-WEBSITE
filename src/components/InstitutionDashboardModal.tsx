@@ -25,7 +25,7 @@ const STATUS_QUEUE: Record<string, QueueFilter> = {
 
 function normalizeStatus(status: string | null | undefined): string {
   const s = String(status || 'pending').toLowerCase();
-  if (['pending', 'order received'].includes(s)) return 'pending';
+  if (['pending', 'order received', 'payment_successful', 'paid'].includes(s)) return 'pending';
   if (['accepted', 'confirmed'].includes(s)) return 'confirmed';
   if (['preparing', 'preparation', 'cooking', 'quality_check', 'packed'].includes(s)) return 'preparing';
   if (['ready', 'ready for pickup'].includes(s)) return 'ready';
@@ -37,7 +37,7 @@ function normalizeStatus(status: string | null | undefined): string {
 function statusBadgeClass(status: string): string {
   const s = normalizeStatus(status);
   switch (s) {
-    case 'pending': return 'bg-amber-100 text-amber-700 border-amber-200';
+    case 'pending': return 'bg-blue-100 text-blue-700 border-blue-200';
     case 'confirmed': return 'bg-blue-100 text-blue-700 border-blue-200';
     case 'preparing': return 'bg-violet-100 text-violet-700 border-violet-200';
     case 'ready': return 'bg-emerald-100 text-emerald-700 border-emerald-200';

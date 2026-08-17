@@ -269,7 +269,7 @@ export interface MenuCategory {
   description?: string;
 }
 
-export type OrderStatus = 'pending' | 'accepted' | 'confirmed' | 'preparing' | 'cooking' | 'quality_check' | 'packed' | 'ready' | 'completed' | 'cancelled';
+export type OrderStatus = 'pending' | 'payment_successful' | 'accepted' | 'confirmed' | 'preparing' | 'cooking' | 'quality_check' | 'packed' | 'ready' | 'completed' | 'cancelled';
 
 export interface OrderItem {
   id?: string;

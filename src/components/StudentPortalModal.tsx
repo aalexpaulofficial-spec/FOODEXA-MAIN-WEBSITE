@@ -55,7 +55,7 @@ const ACTIVE_STATUSES: OrderStatus[] = ['pending', 'confirmed', 'preparing', 're
 
 const statusLabel = (s: OrderStatus) => {
   const map: Record<OrderStatus, string> = {
-    pending: 'Pending', accepted: 'Accepted', confirmed: 'Confirmed', preparing: 'Preparing', cooking: 'Cooking', quality_check: 'Quality Check', packed: 'Packed',
+    pending: 'Payment Successful', payment_successful: 'Payment Successful', accepted: 'Accepted', confirmed: 'Confirmed', preparing: 'Preparing', cooking: 'Cooking', quality_check: 'Quality Check', packed: 'Packed',
     ready: 'Ready for Pickup', completed: 'Completed', cancelled: 'Cancelled',
   };
   return map[s] || s;
@@ -63,7 +63,7 @@ const statusLabel = (s: OrderStatus) => {
 
 const statusColor = (s: OrderStatus) => {
   const map: Record<OrderStatus, string> = {
-    pending: 'text-amber-300 border-amber-500/40 bg-amber-950/50',
+    pending: 'text-blue-300 border-blue-500/40 bg-blue-950/50', payment_successful: 'text-blue-300 border-blue-500/40 bg-blue-950/50',
     accepted: 'text-blue-300 border-blue-500/40 bg-blue-950/50',
     confirmed: 'text-blue-300 border-blue-500/40 bg-blue-950/50',
     preparing: 'text-violet-300 border-violet-500/40 bg-violet-950/50',
@@ -79,7 +79,7 @@ const statusColor = (s: OrderStatus) => {
 
 const statusDot = (s: OrderStatus) => {
   const map: Record<OrderStatus, string> = {
-    pending: 'bg-amber-400', accepted: 'bg-blue-400', confirmed: 'bg-blue-400', preparing: 'bg-violet-400',
+    pending: 'bg-blue-400', payment_successful: 'bg-blue-400', accepted: 'bg-blue-400', confirmed: 'bg-blue-400', preparing: 'bg-violet-400',
     cooking: 'bg-orange-400', quality_check: 'bg-indigo-400', packed: 'bg-teal-400',
     ready: 'bg-emerald-400', completed: 'bg-slate-400', cancelled: 'bg-red-400',
   };
@@ -646,6 +646,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       if (record.student_id && record.student_id !== effectiveUserId) return;
 
       const statusMap: Record<string, string> = {
+        pending: 'Order Placed',
+        payment_successful: 'Order Placed',
         accepted: 'Order Accepted',
         confirmed: 'Order Confirmed',
         preparing: 'Preparing Your Order',
@@ -673,7 +675,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
       setUnreadNotif(c => c + 1);
 
        // Show toast for real-time order updates
-       if (triggerToast && ['accepted', 'preparing', 'ready', 'completed'].includes(record.status)) {
+       if (triggerToast && ['confirmed', 'preparing', 'ready', 'completed'].includes(record.status)) {
          triggerToast(notifTitle, notifMsg, record.status === 'completed' ? 'success' : 'info');
        }
      }, { user_id: effectiveUserId });
@@ -2010,7 +2012,9 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                     ? 'Your order is ready! Show your pickup code at the counter.'
                     : isPreparing
                       ? 'Your order is being prepared by the kitchen.'
-                      : 'Your order has been confirmed and is in the queue.';
+                      : o.status === 'confirmed'
+                        ? 'Institution confirmed your order. Kitchen will start soon.'
+                        : 'Your order has been placed and payment confirmed.';
 
                   return (
                     <motion.div
@@ -2191,6 +2195,15 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                             const isDone = i < stage;
                             const isActive = i === stage;
                             const isPast = stage === -1;
+                            const timestamp = i === 0 ? (o.paid_at || o.created_at)
+                              : i === 1 ? o.accepted_at
+                              : i === 2 ? o.preparing_at
+                              : i === 3 ? o.ready_at
+                              : i === 4 ? o.completed_at
+                              : null;
+                            const formattedTime = timestamp
+                              ? new Date(timestamp).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+                              : null;
                             return (
                               <div key={i} className="flex gap-4">
                                 <div className="flex flex-col items-center">
@@ -2209,9 +2222,14 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({ isOpen, 
                                   )}
                                 </div>
                                 <div className={`pt-1.5 flex-1 min-w-0 ${i < STUDENT_TIMELINE_LABELS.length - 1 ? 'pb-2' : 'pb-0'}`}>
-                                  <p className={`text-sm font-bold ${
-                                    isActive ? 'text-[#0071E3]' : isDone ? 'text-[#1D1D1F]' : 'text-slate-400'
-                                  }`}>{stepLabel}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className={`text-sm font-bold ${
+                                      isActive ? 'text-[#0071E3]' : isDone ? 'text-[#1D1D1F]' : 'text-slate-400'
+                                    }`}>{stepLabel}</p>
+                                    {formattedTime && (isDone || isActive) && (
+                                      <span className="text-[10px] text-[#86868B] font-semibold">{formattedTime}</span>
+                                    )}
+                                  </div>
                                   <p className={`text-[11px] mt-0.5 ${
                                     isActive ? 'text-[#6E6E73]' : isDone ? 'text-[#86868B]' : 'text-slate-400'
                                   }`}>{STUDENT_TIMELINE_DESCRIPTIONS[i]}</p>

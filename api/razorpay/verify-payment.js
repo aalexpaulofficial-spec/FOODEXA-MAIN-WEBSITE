@@ -283,8 +283,8 @@ export default async function handler(req, res) {
       counter_code: canteenName || 'Counter',
       total_amount: finalTotal,
       transaction_amount: finalTotal,
-      status: 'confirmed',
-      order_status: 'confirmed',
+      status: 'pending',
+      order_status: 'pending',
       payment_status: 'paid',
       payment_method: 'razorpay',
       razorpay_order_id,
@@ -298,7 +298,7 @@ export default async function handler(req, res) {
       pickup_type: pickup_type || (pickupPrefix === 'L' ? 'lunch' : pickupPrefix === 'D' ? 'dinner' : pickupPrefix === 'B' ? 'breakfast' : 'lunch'),
       notes: notes || null,
       paid_at: nowISO,
-      accepted_at: nowISO,
+      accepted_at: null,
       kitchen_status: 'pending',
       counter_status: 'incoming',
       estimated_ready_at: new Date(now.getTime() + 15 * 60000).toISOString(),
@@ -364,9 +364,9 @@ export default async function handler(req, res) {
       user_id: resolvedStudentId || null,
       institution_id: resolveInstitutionId,
       from_status: null,
-      to_status: 'confirmed',
+      to_status: 'pending',
       payment_status: 'paid',
-      note: 'Payment verified and order created.',
+      note: 'Payment verified and order created. Awaiting institution confirmation.',
       created_at: nowISO,
     }]);
 
@@ -374,9 +374,9 @@ export default async function handler(req, res) {
     const notifs = [];
     if (resolvedStudentId) {
       notifs.push({
-        type: 'order_confirmed',
-        title: 'Order Confirmed!',
-        message: 'Your order has been confirmed and is being prepared.',
+        type: 'order_placed',
+        title: 'Order Placed!',
+        message: 'Your order has been placed and payment confirmed. Waiting for institution confirmation.',
         user_id: resolvedStudentId,
         created_at: nowISO,
         read: false,

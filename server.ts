@@ -515,13 +515,13 @@ notes: {
         institution_id: resolveInstitutionId, canteen_id: resolveCanteenId,
         counter: canteenName || 'Counter', counter_code: canteenName || 'Counter',
         total_amount: finalTotal, transaction_amount: finalTotal,
-        status: 'confirmed', order_status: 'confirmed',
+        status: 'pending', order_status: 'pending',
         payment_status: 'paid', payment_method: 'razorpay',
         razorpay_order_id, razorpay_payment_id, razorpay_signature,
         order_number: orderNumber, pickup_code: pickupCode, qr_pickup_code: pickupCode,
         token_number: tokenNumber, pickup_token: tokenNumber,
         pickup_type: pickup_type || 'lunch', notes: notes || null,
-        paid_at: nowISO, accepted_at: nowISO,
+        paid_at: nowISO, accepted_at: null,
         kitchen_status: 'pending', counter_status: 'incoming',
         estimated_ready_at: new Date(now.getTime() + 15 * 60000).toISOString(),
         cancel_deadline_at: new Date(now.getTime() + 30 * 1000).toISOString(),
@@ -569,14 +569,14 @@ notes: {
       // ── STEP 11: Create order_status_history ──
       await supabaseQuery('order_status_history', 'POST', [{
         order_id: orderId, user_id: resolvedStudentId || null,
-        institution_id: resolveInstitutionId, from_status: null, to_status: 'confirmed',
-        payment_status: 'paid', note: 'Payment verified and order created.', created_at: nowISO,
+        institution_id: resolveInstitutionId, from_status: null, to_status: 'pending',
+        payment_status: 'paid', note: 'Payment verified and order created. Awaiting institution confirmation.', created_at: nowISO,
       }]);
 
       // ── STEP 12: Create notifications ──
       const notifs: any[] = [];
       if (resolvedStudentId) {
-        notifs.push({ type: 'order_confirmed', title: 'Order Confirmed!', message: 'Your order has been confirmed and is being prepared.', user_id: resolvedStudentId, created_at: nowISO, read: false, order_id: orderId });
+        notifs.push({ type: 'order_placed', title: 'Order Placed!', message: 'Your order has been placed and payment confirmed. Waiting for institution confirmation.', user_id: resolvedStudentId, created_at: nowISO, read: false, order_id: orderId });
       }
       if (resolveInstitutionId) {
         notifs.push({ type: 'new_order', title: 'New Order Received', message: 'A new order has been placed and payment confirmed.', institution_id: resolveInstitutionId, created_at: nowISO, read: false, order_id: orderId });
@@ -647,10 +647,9 @@ notes: {
         }, { razorpay_order_id });
 
         // Update order as paid (idempotent - already done by verify endpoint)
+        // Do NOT override status - preserve the current order status set by verify-payment
         await supabaseQuery('orders', 'PATCH', {
           payment_status: 'paid',
-          status: 'confirmed',
-          order_status: 'confirmed',
           razorpay_payment_id: razorpay_payment_id,
           payment_method: 'razorpay',
           updated_at: new Date().toISOString(),
@@ -671,10 +670,9 @@ notes: {
       } else if (event === 'order.paid') {
         const orderEntity = payload?.payload?.order?.entity;
         if (orderEntity) {
+        // Do NOT override status - preserve the current order status
         await supabaseQuery('orders', 'PATCH', {
           payment_status: 'paid',
-          status: 'confirmed',
-          order_status: 'confirmed',
           updated_at: new Date().toISOString(),
         }, { id: orderEntity.id || '' });
 
@@ -897,8 +895,8 @@ notes: {
         canteen_name: canteenName || null,
         total_amount: finalTotal,
         transaction_amount: finalTotal,
-        status: 'confirmed',
-        order_status: 'confirmed',
+        status: 'pending',
+        order_status: 'pending',
         payment_status: 'paid',
         payment_method: payment_method === 'cash' ? 'cash' : 'razorpay',
         razorpay_order_id,
@@ -912,7 +910,7 @@ notes: {
         pickup_type: pickup_type || 'lunch',
         notes: notes || null,
         paid_at: nowISO,
-        accepted_at: nowISO,
+        accepted_at: null,
         kitchen_status: 'pending',
         counter_status: 'incoming',
         estimated_ready_at: new Date(now.getTime() + 15 * 60000).toISOString(),
